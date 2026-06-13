@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 import re
 from time import monotonic
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -29,6 +30,7 @@ report_service = ClaimReportService()
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGES_PER_REQUEST = 8
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 _request_log: dict[str, list[float]] = {}
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
@@ -61,35 +63,55 @@ def api_health_check() -> dict[str, object]:
 
 
 @router.post("/api/assess", response_model=AssessmentResponse)
-async def assess_damage(request: Request, file: UploadFile = File(...)) -> AssessmentResponse:
+async def assess_damage(
+    request: Request,
+    files: list[UploadFile] = File(default=[]),
+    file: Optional[UploadFile] = File(default=None),
+) -> AssessmentResponse:
     _enforce_optional_api_token(request)
     _enforce_rate_limit(request)
 
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="A file is required.")
+    # Accept either the multi-image field ("files") or the legacy single field ("file").
+    uploads = [upload for upload in files if upload and upload.filename]
+    if not uploads and file and file.filename:
+        uploads = [file]
 
-    original_filename = _safe_display_filename(file.filename)
-    extension = Path(original_filename).suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Supported formats: .jpg, .jpeg, .png, .webp")
+    if not uploads:
+        raise HTTPException(status_code=400, detail="At least one image file is required.")
+    if len(uploads) > MAX_IMAGES_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Upload at most {MAX_IMAGES_PER_REQUEST} images per assessment.",
+        )
 
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(status_code=400, detail="Uploaded file must be a JPEG, PNG, or WebP image.")
+    _validate_content_length(request, count=len(uploads))
 
-    _validate_content_length(request)
+    filenames: list[str] = []
+    destinations: list[Path] = []
+    for upload in uploads:
+        original_filename = _safe_display_filename(upload.filename)
+        extension = Path(original_filename).suffix.lower()
+        if extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Supported formats: .jpg, .jpeg, .png, .webp")
+        if upload.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(
+                status_code=400, detail="Uploaded files must be JPEG, PNG, or WebP images."
+            )
 
-    safe_name = f"{uuid4().hex}{extension}"
-    destination = UPLOAD_DIR / safe_name
-    content = await _read_limited_upload(file)
-    _validate_upload_size(content)
-    content = _validate_image_content(content)
-    destination.write_bytes(content)
+        content = await _read_limited_upload(upload)
+        _validate_upload_size(content)
+        content = _validate_image_content(content)
 
-    regions = segmentation_service.analyze(destination, original_filename)
+        destination = UPLOAD_DIR / f"{uuid4().hex}{extension}"
+        destination.write_bytes(content)
+        filenames.append(original_filename)
+        destinations.append(destination)
+
+    regions = segmentation_service.analyze_images(destinations, filenames)
     segmentation_provider = regions[0].source if regions else segmentation_service.provider_name
     return report_service.build_assessment(
-        original_filename,
-        destination,
+        filenames,
+        destinations,
         regions,
         segmentation_provider,
     )
@@ -126,7 +148,7 @@ def _validate_upload_size(content: bytes) -> None:
         raise HTTPException(status_code=413, detail=f"Image must be smaller than {max_mb:.0f} MB.")
 
 
-def _validate_content_length(request: Request) -> None:
+def _validate_content_length(request: Request, count: int = 1) -> None:
     header = request.headers.get("content-length")
     if not header:
         return
@@ -136,10 +158,14 @@ def _validate_content_length(request: Request) -> None:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Content-Length header.") from None
 
-    # Multipart overhead is small, but allow a little room above the raw image limit.
-    if content_length > MAX_UPLOAD_BYTES + 1024 * 1024:
+    # Per-image cap times the number of images, plus a little multipart overhead room.
+    limit = MAX_UPLOAD_BYTES * max(1, count) + 1024 * 1024
+    if content_length > limit:
         max_mb = MAX_UPLOAD_BYTES / (1024 * 1024)
-        raise HTTPException(status_code=413, detail=f"Image must be smaller than {max_mb:.0f} MB.")
+        raise HTTPException(
+            status_code=413,
+            detail=f"Each image must be smaller than {max_mb:.0f} MB.",
+        )
 
 
 async def _read_limited_upload(file: UploadFile) -> bytes:

@@ -614,6 +614,94 @@ dd {
   grid-template-columns: 1fr 1fr;
 }
 
+/* ── thumbnail strip (multi-image) ───────────────────────────── */
+.thumb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.thumb-strip.hidden { display: none; }
+
+.thumb {
+  position: relative;
+  width: 84px;
+  height: 60px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color .15s, transform .15s;
+}
+.thumb:hover { transform: translateY(-2px); }
+.thumb.active { border-color: var(--accent); }
+
+.thumb-index {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.65);
+  color: var(--ink);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.thumb-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: .9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ── parts table ─────────────────────────────────────────────── */
+.regions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9rem;
+}
+.regions-table th {
+  text-align: left;
+  padding: 12px 18px;
+  color: var(--muted);
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+.regions-table td {
+  padding: 14px 18px;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--line);
+}
+.regions-table tbody tr {
+  cursor: pointer;
+  transition: background .15s;
+}
+.regions-table tbody tr:hover { background: rgba(255,255,255,.03); }
+.regions-table td:first-child { font-weight: 800; color: var(--accent); }
+
+.regions-table td.sev-high     { color: var(--danger);  font-weight: 700; text-transform: capitalize; }
+.regions-table td.sev-moderate { color: var(--warning); font-weight: 700; text-transform: capitalize; }
+.regions-table td.sev-low      { color: var(--ink-soft);                  text-transform: capitalize; }
+
 /* ── scroll-reveal ───────────────────────────────────────────── */
 .reveal {
   opacity: 0;
