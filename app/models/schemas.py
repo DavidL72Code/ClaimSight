@@ -19,6 +19,9 @@ class DamageRegion(BaseModel):
     source: str
     image_index: int = 0
     ai_assessor_model: str = ""
+    # Vehicle-level context (same across a vehicle's regions; 0/"" when unknown).
+    vehicle_value_usd: int = 0
+    vehicle_label: str = ""
 
 
 class AssessmentMeta(BaseModel):
@@ -32,6 +35,7 @@ class AssessmentResponse(BaseModel):
     filename: str
     filenames: list[str] = []
     vehicle_type: str
+    estimated_vehicle_value_usd: int = 0
     overall_severity: str
     repairability: str
     estimated_total_cost_usd: int

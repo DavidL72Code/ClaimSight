@@ -15,6 +15,8 @@ const elements = {
   imageState: document.getElementById("image-state"),
   status: document.getElementById("status"),
   filename: document.getElementById("filename"),
+  vehicleType: document.getElementById("vehicle-type"),
+  vehicleValue: document.getElementById("vehicle-value"),
   severity: document.getElementById("overall-severity"),
   repairability: document.getElementById("repairability"),
   estimatedCost: document.getElementById("estimated-cost"),
@@ -192,6 +194,10 @@ const updateSummary = (payload) => {
   const imageCount = payload.meta?.image_count || 1;
   elements.filename.textContent =
     imageCount > 1 ? `${imageCount} images` : payload.filename;
+  elements.vehicleType.textContent = payload.vehicle_type || "—";
+  const vehicleValue = payload.estimated_vehicle_value_usd || 0;
+  elements.vehicleValue.textContent =
+    vehicleValue > 0 ? `$${vehicleValue.toLocaleString()}` : "Unknown";
   elements.severity.textContent = payload.overall_severity;
   elements.repairability.textContent = payload.repairability;
   elements.estimatedCost.textContent = `$${payload.estimated_total_cost_usd.toLocaleString()}`;

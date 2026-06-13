@@ -16,10 +16,25 @@ class ClaimReportService:
         total_cost = sum(region.estimated_repair_cost_usd for region in regions)
         high_count = sum(region.severity == "high" for region in regions)
         overall_severity = "high" if high_count else "moderate" if total_cost >= 1000 else "low"
-        repairability = "repair" if total_cost < 5000 else "review for total loss"
+
+        # Vehicle value comes from the detector (same across a vehicle's regions).
+        vehicle_value = max((region.vehicle_value_usd for region in regions), default=0)
+        vehicle_label = next(
+            (region.vehicle_label for region in regions if region.vehicle_label), ""
+        )
+
+        # Total-loss rule: repairs above ~75% of the vehicle's actual cash value (ACV).
+        # When the value is unknown (e.g. classical fallback), fall back to a flat threshold.
+        total_loss_ratio = 0.75
+        if vehicle_value > 0:
+            is_total_loss = total_cost >= total_loss_ratio * vehicle_value
+        else:
+            is_total_loss = total_cost >= 5000
+        repairability = "review for total loss" if is_total_loss else "repair"
+
         recommended_action = (
             "Send to fast-track repair estimate"
-            if overall_severity in {"low", "moderate"}
+            if overall_severity in {"low", "moderate"} and not is_total_loss
             else "Escalate to adjuster for detailed review"
         )
 
@@ -32,7 +47,8 @@ class ClaimReportService:
         return AssessmentResponse(
             filename=filenames[0] if filenames else "",
             filenames=filenames,
-            vehicle_type="passenger vehicle",
+            vehicle_type=vehicle_label or "passenger vehicle",
+            estimated_vehicle_value_usd=vehicle_value,
             overall_severity=overall_severity,
             repairability=repairability,
             estimated_total_cost_usd=total_cost,
