@@ -31,6 +31,12 @@ const elements = {
   reportProvider: document.getElementById("report-provider"),
   fallbackNote: document.getElementById("fallback-note"),
   summaryText: document.getElementById("summary-text"),
+  evidence: document.getElementById("evidence"),
+  reasonBlock: document.getElementById("reason-block"),
+  totalLossReason: document.getElementById("total-loss-reason"),
+  sourcesBlock: document.getElementById("sources-block"),
+  sourcesList: document.getElementById("sources-list"),
+  searchQueries: document.getElementById("search-queries"),
   regions: document.getElementById("regions-list"),
   regionCount: document.getElementById("region-count"),
   downloadReport: document.getElementById("download-report"),
@@ -292,6 +298,44 @@ const updateSummary = (payload) => {
     ? "Fallback summary used."
     : "Narrative generated from visual review.";
   elements.summaryText.textContent = payload.summary;
+  renderEvidence(payload);
+};
+
+// Show the reasoning and the web sources behind the valuation / total-loss call,
+// so the AI decision is backed by evidence an adjuster can check.
+const renderEvidence = (payload) => {
+  const reason = payload.total_loss_reason || "";
+  const sources = payload.sources || [];
+  const queries = payload.search_queries || [];
+
+  if (reason) {
+    elements.totalLossReason.textContent = reason;
+    elements.reasonBlock.classList.remove("hidden");
+  } else {
+    elements.reasonBlock.classList.add("hidden");
+  }
+
+  elements.sourcesList.innerHTML = "";
+  if (sources.length) {
+    sources.forEach((src) => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = src.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = src.title || src.url;
+      li.appendChild(a);
+      elements.sourcesList.appendChild(li);
+    });
+    elements.searchQueries.textContent = queries.length
+      ? `Searches: ${queries.join(" · ")}`
+      : "";
+    elements.sourcesBlock.classList.remove("hidden");
+  } else {
+    elements.sourcesBlock.classList.add("hidden");
+  }
+
+  elements.evidence.classList.toggle("hidden", !reason && !sources.length);
 };
 
 const renderRegions = (regions) => {

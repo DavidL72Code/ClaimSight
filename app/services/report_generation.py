@@ -25,6 +25,14 @@ class ClaimReportService:
         # The detector's holistic total-loss verdict (catches structural/unrepairable
         # cases the cost-vs-value ratio alone would miss).
         ai_total_loss = any(region.vehicle_total_loss for region in regions)
+        total_loss_reason = next(
+            (region.total_loss_reason for region in regions if region.total_loss_reason), ""
+        )
+        sources = next((region.vehicle_sources for region in regions if region.vehicle_sources), [])
+        search_queries = next(
+            (region.vehicle_search_queries for region in regions if region.vehicle_search_queries),
+            [],
+        )
 
         # Total-loss when EITHER the model flags it OR repairs exceed ~75% of ACV.
         # When value is unknown (classical fallback), fall back to a flat threshold.
@@ -54,12 +62,15 @@ class ClaimReportService:
             vehicle_type=vehicle_label or "passenger vehicle",
             estimated_vehicle_value_usd=vehicle_value,
             total_loss=is_total_loss,
+            total_loss_reason=total_loss_reason,
             overall_severity=overall_severity,
             repairability=repairability,
             estimated_total_cost_usd=total_cost,
             recommended_action=recommended_action,
             summary=summary,
             regions=regions,
+            sources=sources,
+            search_queries=search_queries,
             meta=AssessmentMeta(
                 segmentation_provider=segmentation_provider,
                 report_provider=self._narrator.provider_name,

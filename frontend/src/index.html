@@ -104,6 +104,19 @@
         <p id="summary-text" class="summary-text">
           The assessment narrative will appear here after the backend reviews the claim image.
         </p>
+
+        <div id="evidence" class="evidence hidden">
+          <div id="reason-block" class="reason-block hidden">
+            <span class="evidence-label">Total-loss reasoning</span>
+            <p id="total-loss-reason"></p>
+          </div>
+          <div id="sources-block" class="sources-block hidden">
+            <span class="evidence-label">Valuation sources (web-grounded)</span>
+            <ul id="sources-list" class="sources-list"></ul>
+            <p id="search-queries" class="search-queries"></p>
+          </div>
+        </div>
+
         <div class="report-actions">
           <button id="download-report" class="secondary-action hidden" type="button">
             Download report JSON
