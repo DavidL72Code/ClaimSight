@@ -237,10 +237,80 @@ class GeminiClaimNarrator:
                 len(regions) if regions else 0,
                 len(image_paths),
             )
+
+            # Refine the vehicle value / total-loss call with web-grounded search,
+            # since market value isn't visible in the image. Best-effort: if grounding
+            # isn't supported or fails, keep the from-pixels estimates.
+            if regions:
+                self._ground_vehicle_value(image_paths, regions)
+
             return regions
         except Exception as exc:
             logger.exception("Gemini detection failed: %s", exc)
             return None
+
+    def _ground_vehicle_value(
+        self, image_paths: list[Path], regions: list[DamageRegion]
+    ) -> None:
+        """Look up the vehicle's real market value via Google Search grounding and
+        overwrite the from-pixels vehicle value / total-loss verdict on each region.
+
+        The search tool cannot be combined with forced-JSON schema, so this is a
+        separate grounded call whose JSON is parsed leniently. No-ops on any failure.
+        """
+        damaged = ", ".join(sorted({r.panel for r in regions})) or "visible body damage"
+        prompt = (
+            "Identify the exact make, model, and approximate year of the vehicle in these images. "
+            "Use Google Search to estimate its current actual cash value (ACV) in US dollars — the "
+            "typical pre-accident resale/market value for that specific vehicle. The vehicle has this "
+            f"visible damage: {damaged}. Decide whether it is an economic or structural total loss "
+            "(repairs approach/exceed its value, or the structure — chassis, carbon-fiber tub, frame — "
+            "or fire damage makes it unrepairable). "
+            'Respond with ONLY JSON: {"vehicle_label": str, "estimated_vehicle_value_usd": int, '
+            '"total_loss": bool, "total_loss_reason": str}.'
+        )
+        try:
+            from google.genai import types
+
+            contents: list = [
+                types.Part.from_bytes(
+                    data=path.read_bytes(), mime_type=self._guess_mime_type(path)
+                )
+                for path in image_paths
+            ]
+            contents.append(prompt)
+
+            response = self._client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())]
+                ),
+            )
+            text = getattr(response, "text", None)
+            logger.warning("Gemini grounded valuation raw response: %r", text)
+            if not text:
+                return
+            data = self._extract_json(text)
+            if not isinstance(data, dict):
+                return
+
+            label = str(data.get("vehicle_label", "") or "")
+            try:
+                value = int(data.get("estimated_vehicle_value_usd", 0) or 0)
+            except (TypeError, ValueError):
+                value = 0
+            total_loss = bool(data.get("total_loss", False))
+
+            for region in regions:
+                if label:
+                    region.vehicle_label = label
+                if value > 0:
+                    region.vehicle_value_usd = value
+                # Grounded total-loss can only add confidence to a positive verdict.
+                region.vehicle_total_loss = region.vehicle_total_loss or total_loss
+        except Exception as exc:
+            logger.warning("Gemini grounded valuation unavailable, keeping estimates: %s", exc)
 
     def _parse_detections(
         self, text: str, dimensions: list[tuple[int, int]]
