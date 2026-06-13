@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from PIL import Image
 
 from app.core.config import GEMINI_API_KEY, GEMINI_MODEL
 from app.models.schemas import BoundingBox, DamageRegion
+
+logger = logging.getLogger("claimsight.gemini")
 
 
 class GeminiClaimNarrator:
@@ -125,14 +128,24 @@ class GeminiClaimNarrator:
                 ],
             )
             text = getattr(response, "text", None)
+            logger.info("Gemini detection raw response (model=%s): %r", GEMINI_MODEL, text)
             if not text:
+                logger.warning("Gemini detection returned empty text; falling back.")
                 return None
 
             with Image.open(image_path) as image:
                 width, height = image.size
 
-            return self._parse_detections(text, width, height)
-        except Exception:
+            regions = self._parse_detections(text, width, height)
+            logger.info(
+                "Gemini detection parsed %d region(s) from image %dx%d.",
+                len(regions) if regions else 0,
+                width,
+                height,
+            )
+            return regions
+        except Exception as exc:
+            logger.exception("Gemini detection failed: %s", exc)
             return None
 
     def _parse_detections(self, text: str, width: int, height: int) -> list[DamageRegion] | None:
@@ -143,23 +156,29 @@ class GeminiClaimNarrator:
         start = cleaned.find("[")
         end = cleaned.rfind("]")
         if start == -1 or end == -1 or end < start:
+            logger.warning("Gemini detection: no JSON array found in response.")
             return None
 
         try:
             items = json.loads(cleaned[start : end + 1])
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            logger.warning("Gemini detection: JSON parse failed: %s", exc)
             return None
 
         regions: list[DamageRegion] = []
         for item in items:
-            box = item.get("box_2d")
-            if not box or len(box) != 4:
+            if not isinstance(item, dict):
                 continue
-            ymin, xmin, ymax, xmax = box
-            left = int(min(xmin, xmax) / 1000 * width)
-            top = int(min(ymin, ymax) / 1000 * height)
-            right = int(max(xmin, xmax) / 1000 * width)
-            bottom = int(max(ymin, ymax) / 1000 * height)
+            box = (
+                item.get("box_2d")
+                or item.get("box")
+                or item.get("bbox")
+                or item.get("bounding_box")
+            )
+            if not isinstance(box, (list, tuple)) or len(box) != 4:
+                logger.warning("Gemini detection: skipping item with no usable box: %r", item)
+                continue
+            left, top, right, bottom = self._normalize_box(box, width, height)
             box_width = max(1, right - left)
             box_height = max(1, bottom - top)
 
@@ -181,6 +200,37 @@ class GeminiClaimNarrator:
             )
 
         return regions
+
+    def _normalize_box(
+        self, box: list, width: int, height: int
+    ) -> tuple[int, int, int, int]:
+        """Convert a 4-number box into pixel (left, top, right, bottom).
+
+        Assumes Gemini's documented [ymin, xmin, ymax, xmax] order (what the prompt
+        requests) and auto-detects the coordinate scale: normalized 0-1, normalized
+        0-1000, or raw pixels.
+        """
+        a, b, c, d = (float(v) for v in box)
+
+        max_val = max(abs(a), abs(b), abs(c), abs(d))
+        if max_val <= 1.0:
+            # 0-1 normalized
+            ymin, xmin, ymax, xmax = a * height, b * width, c * height, d * width
+        elif max_val <= 1000.0:
+            ymin, xmin, ymax, xmax = (
+                a / 1000 * height,
+                b / 1000 * width,
+                c / 1000 * height,
+                d / 1000 * width,
+            )
+        else:
+            ymin, xmin, ymax, xmax = a, b, c, d
+
+        left = int(max(0, min(xmin, xmax)))
+        right = int(min(width, max(xmin, xmax)))
+        top = int(max(0, min(ymin, ymax)))
+        bottom = int(min(height, max(ymin, ymax)))
+        return left, top, right, bottom
 
     def _guess_mime_type(self, image_path: Path) -> str:
         suffix = image_path.suffix.lower()
