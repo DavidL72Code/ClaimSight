@@ -31,6 +31,7 @@ class DamageRegion(BaseModel):
     total_loss_reason: str = ""
     vehicle_sources: list[Source] = []
     vehicle_search_queries: list[str] = []
+    grounding_status: str = ""
 
 
 class AssessmentMeta(BaseModel):
@@ -38,6 +39,7 @@ class AssessmentMeta(BaseModel):
     report_provider: str
     fallback_used: bool
     image_count: int = 1
+    grounding_status: str = ""
 
 
 class AssessmentResponse(BaseModel):
