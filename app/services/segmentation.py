@@ -310,9 +310,34 @@ class Sam2SegmentationService(SegmentationService):
         )
 
 
+class GeminiSegmentationService(SegmentationService):
+    """Uses Gemini's multimodal grounding to detect real damage regions.
+
+    Falls back to the classical detector if Gemini is unavailable or returns nothing usable.
+    """
+
+    def __init__(self) -> None:
+        from app.services.gemini_client import GeminiClaimNarrator
+
+        self._narrator = GeminiClaimNarrator()
+        self._fallback = ClassicalSegmentationService()
+
+    @property
+    def provider_name(self) -> str:
+        return "gemini" if self._narrator.enabled else self._fallback.provider_name
+
+    def analyze(self, image_path: Path, original_filename: str) -> list[DamageRegion]:
+        regions = self._narrator.detect_regions(image_path, original_filename)
+        if regions:
+            return regions
+        return self._fallback.analyze(image_path, original_filename)
+
+
 def get_segmentation_service() -> SegmentationService:
     if SEGMENTATION_PROVIDER == "mock":
         return MockSegmentationService()
     if SEGMENTATION_PROVIDER == "classical":
         return ClassicalSegmentationService()
+    if SEGMENTATION_PROVIDER == "gemini":
+        return GeminiSegmentationService()
     return Sam2SegmentationService()
