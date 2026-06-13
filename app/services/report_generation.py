@@ -22,14 +22,18 @@ class ClaimReportService:
         vehicle_label = next(
             (region.vehicle_label for region in regions if region.vehicle_label), ""
         )
+        # The detector's holistic total-loss verdict (catches structural/unrepairable
+        # cases the cost-vs-value ratio alone would miss).
+        ai_total_loss = any(region.vehicle_total_loss for region in regions)
 
-        # Total-loss rule: repairs above ~75% of the vehicle's actual cash value (ACV).
-        # When the value is unknown (e.g. classical fallback), fall back to a flat threshold.
+        # Total-loss when EITHER the model flags it OR repairs exceed ~75% of ACV.
+        # When value is unknown (classical fallback), fall back to a flat threshold.
         total_loss_ratio = 0.75
         if vehicle_value > 0:
-            is_total_loss = total_cost >= total_loss_ratio * vehicle_value
+            ratio_total_loss = total_cost >= total_loss_ratio * vehicle_value
         else:
-            is_total_loss = total_cost >= 5000
+            ratio_total_loss = total_cost >= 5000
+        is_total_loss = ai_total_loss or ratio_total_loss
         repairability = "review for total loss" if is_total_loss else "repair"
 
         recommended_action = (
@@ -49,6 +53,7 @@ class ClaimReportService:
             filenames=filenames,
             vehicle_type=vehicle_label or "passenger vehicle",
             estimated_vehicle_value_usd=vehicle_value,
+            total_loss=is_total_loss,
             overall_severity=overall_severity,
             repairability=repairability,
             estimated_total_cost_usd=total_cost,
