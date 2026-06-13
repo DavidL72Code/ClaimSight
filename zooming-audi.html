@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audi RS e-tron GT</title>
+<style>
+  :root{
+    --bg:#0a0c0a;
+    --ink:#e8efe6;
+    --muted:#9aa896;
+    --accent:#a7e34a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    line-height:1.6;overflow-x:hidden;
+  }
+  img{display:block;max-width:100%;}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;height:100vh;overflow:hidden;}
+  .hero-img{
+    position:absolute;inset:0;
+    background:url("audi.png") center/cover no-repeat;
+    transform:scale(1.15);
+    will-change:transform;
+  }
+  .hero::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(to bottom,rgba(10,12,10,.25) 0%,transparent 35%,rgba(10,12,10,.9) 100%);
+  }
+  .hero-copy{
+    position:absolute;left:0;right:0;bottom:12vh;z-index:2;
+    text-align:center;padding:0 24px;
+  }
+  .hero-copy .kicker{
+    color:var(--accent);font-size:13px;font-weight:600;
+    letter-spacing:.35em;text-transform:uppercase;
+    opacity:0;animation:riseIn 1s ease .2s forwards;
+  }
+  .hero-copy h1{
+    font-size:clamp(2.4rem,7vw,5.5rem);font-weight:700;letter-spacing:-.02em;
+    margin-top:10px;
+    opacity:0;animation:riseIn 1s ease .45s forwards;
+  }
+  .hero-copy p{
+    color:var(--muted);max-width:520px;margin:14px auto 0;
+    opacity:0;animation:riseIn 1s ease .7s forwards;
+  }
+  .scroll-cue{
+    position:absolute;left:50%;bottom:28px;transform:translateX(-50%);z-index:2;
+    width:24px;height:38px;border:2px solid rgba(255,255,255,.4);border-radius:14px;
+    opacity:0;animation:riseIn 1s ease 1.1s forwards;
+  }
+  .scroll-cue::before{
+    content:"";position:absolute;left:50%;top:7px;width:4px;height:8px;
+    margin-left:-2px;border-radius:2px;background:var(--accent);
+    animation:cueDrop 1.8s ease-in-out infinite;
+  }
+  @keyframes riseIn{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes cueDrop{0%{transform:translateY(0);opacity:1}70%{transform:translateY(12px);opacity:0}100%{opacity:0}}
+
+  /* ---------- generic scroll reveals ---------- */
+  .reveal{opacity:0;transform:translateY(46px);transition:opacity .9s ease,transform .9s cubic-bezier(.22,.8,.3,1);}
+  .reveal.in{opacity:1;transform:none;}
+  .reveal.from-left{transform:translateX(-60px);}
+  .reveal.from-right{transform:translateX(60px);}
+  .reveal.from-left.in,.reveal.from-right.in{transform:none;}
+  .reveal.d1{transition-delay:.1s}
+  .reveal.d2{transition-delay:.25s}
+  .reveal.d3{transition-delay:.4s}
+
+  section{padding:18vh 24px;max-width:1100px;margin:0 auto;}
+  .kicker{color:var(--accent);font-size:12px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;}
+  h2{font-size:clamp(1.8rem,4vw,3rem);font-weight:700;letter-spacing:-.02em;margin:12px 0 18px;}
+  .lead{color:var(--muted);max-width:560px;font-size:1.05rem;}
+
+  /* ---------- sticky zoom panel ---------- */
+  .zoom-wrap{height:220vh;position:relative;max-width:none;padding:0;}
+  .zoom-sticky{
+    position:sticky;top:0;height:100vh;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .zoom-img{
+    width:min(92vw,1100px);aspect-ratio:1408/768;
+    background:url("audi.png") center/cover no-repeat;
+    border-radius:18px;box-shadow:0 40px 100px rgba(0,0,0,.55);
+    will-change:transform,border-radius;
+  }
+  .zoom-caption{
+    position:absolute;bottom:8vh;left:0;right:0;text-align:center;
+    color:var(--ink);font-size:1.1rem;opacity:0;transition:opacity .6s ease;
+    text-shadow:0 2px 18px rgba(0,0,0,.8);
+  }
+  .zoom-caption.in{opacity:1;}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:48px;}
+  .stat{
+    border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px 24px;
+    background:rgba(255,255,255,.03);
+  }
+  .stat .num{font-size:2.4rem;font-weight:700;color:var(--accent);letter-spacing:-.02em;}
+  .stat .label{color:var(--muted);font-size:.9rem;margin-top:4px;}
+
+  /* ---------- parallax band ---------- */
+  .band{
+    position:relative;height:70vh;overflow:hidden;max-width:none;padding:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .band-img{
+    position:absolute;inset:-20% 0;
+    background:url("audi.png") center/cover no-repeat;
+    will-change:transform;
+  }
+  .band::after{content:"";position:absolute;inset:0;background:rgba(10,12,10,.55);}
+  .band h2{position:relative;z-index:2;text-align:center;padding:0 24px;}
+
+  footer{padding:10vh 24px;text-align:center;color:var(--muted);font-size:.85rem;}
+
+  @media (prefers-reduced-motion: reduce){
+    .reveal{opacity:1;transform:none;transition:none;}
+    .hero-copy .kicker,.hero-copy h1,.hero-copy p,.scroll-cue{animation:none;opacity:1;}
+  }
+</style>
+</head>
+<body>
+
+  <!-- hero: still image, gentle scroll parallax -->
+  <header class="hero">
+    <div class="hero-img" id="heroImg"></div>
+    <div class="hero-copy">
+      <div class="kicker">Fully Electric</div>
+      <h1>RS e-tron GT</h1>
+      <p>Tactical green. Forest roads. Zero emissions. A grand tourer built for the quiet thrill.</p>
+    </div>
+    <div class="scroll-cue" aria-hidden="true"></div>
+  </header>
+
+  <!-- intro copy -->
+  <section>
+    <div class="kicker reveal">Design</div>
+    <h2 class="reveal d1">Stillness, engineered<br>to move you.</h2>
+    <p class="lead reveal d2">
+      Every line of the e-tron GT is drawn by airflow. A low silhouette, a wide stance,
+      and a body that holds the road even when it's standing perfectly still.
+    </p>
+  </section>
+
+  <!-- sticky zoom: image scales subtly as you scroll through -->
+  <div class="zoom-wrap" id="zoomWrap">
+    <div class="zoom-sticky">
+      <div class="zoom-img" id="zoomImg"></div>
+      <div class="zoom-caption" id="zoomCaption">Closer. Without a single sound.</div>
+    </div>
+  </div>
+
+  <!-- stats -->
+  <section>
+    <div class="kicker reveal">Performance</div>
+    <h2 class="reveal d1">Numbers worth slowing down for.</h2>
+    <div class="stats">
+      <div class="stat reveal d1"><div class="num">912</div><div class="label">Horsepower</div></div>
+      <div class="stat reveal d2"><div class="num">2.5s</div><div class="label">0–60 mph</div></div>
+      <div class="stat reveal d3"><div class="num">155</div><div class="label">Top speed (mph)</div></div>
+    </div>
+  </section>
+
+  <!-- parallax band -->
+  <div class="band">
+    <div class="band-img" id="bandImg"></div>
+    <h2 class="reveal">The forest doesn't hear you coming.</h2>
+  </div>
+
+  <!-- closing -->
+  <section>
+    <div class="kicker reveal from-left">Experience</div>
+    <h2 class="reveal from-left d1">Take the long way home.</h2>
+    <p class="lead reveal from-left d2">
+      Some roads aren't about getting there. They're about the light through the trees,
+      the gravel underneath, and a car that disappears into the drive.
+    </p>
+  </section>
+
+  <footer>Audi RS e-tron GT — concept page</footer>
+
+<script>
+// ---- reveal-on-scroll ----
+const observer = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (e.isIntersecting) {
+      e.target.classList.add('in');
+      observer.unobserve(e.target);     // animate once, stay visible
+    }
+  }
+}, { threshold: 0.18 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ---- scroll-linked transforms (parallax + sticky zoom), all on a still image ----
+const heroImg = document.getElementById('heroImg');
+const zoomWrap = document.getElementById('zoomWrap');
+const zoomImg = document.getElementById('zoomImg');
+const zoomCaption = document.getElementById('zoomCaption');
+const bandImg = document.getElementById('bandImg');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function onScroll() {
+  if (reduceMotion) return;
+  const y = window.scrollY;
+  const vh = window.innerHeight;
+
+  // hero: slow parallax drift + settle from the initial 1.15 scale
+  if (y < vh) {
+    const p = y / vh;                                   // 0..1 across hero
+    heroImg.style.transform =
+      `translateY(${p * vh * 0.25}px) scale(${1.15 - p * 0.1})`;
+  }
+
+  // sticky zoom: progress 0..1 while the wrapper scrolls past
+  const zr = zoomWrap.getBoundingClientRect();
+  const zp = Math.min(Math.max(-zr.top / (zr.height - vh), 0), 1);
+  const scale = 1 + zp * 0.18;
+  const radius = 18 * (1 - zp);
+  zoomImg.style.transform = `scale(${scale})`;
+  zoomImg.style.borderRadius = `${radius}px`;
+  zoomCaption.classList.toggle('in', zp > 0.55);
+
+  // band: classic background parallax
+  const br = bandImg.parentElement.getBoundingClientRect();
+  if (br.bottom > 0 && br.top < vh) {
+    const bp = (vh - br.top) / (vh + br.height);        // 0..1 through viewport
+    bandImg.style.transform = `translateY(${(bp - 0.5) * 18}%)`;
+  }
+}
+addEventListener('scroll', () => requestAnimationFrame(onScroll), { passive: true });
+onScroll();
+</script>
+</body>
+</html>

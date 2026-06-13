@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Insurance Damage Assessment Tool</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Insurance AI MVP</p>
+        <h1>Damage assessment for faster claim triage</h1>
+        <p class="lede">
+          Upload a vehicle image to simulate a segmentation-first workflow that identifies damaged
+          regions and produces a structured claim summary.
+        </p>
+      </section>
+
+      <section class="card">
+        <form id="upload-form">
+          <label for="claim-image" class="label">Claim image</label>
+          <input id="claim-image" name="file" type="file" accept="image/*" required />
+          <button type="submit">Assess damage</button>
+        </form>
+        <p id="status" class="status"></p>
+      </section>
+
+      <section id="results" class="results hidden">
+        <div class="card summary-card">
+          <h2>Assessment summary</h2>
+          <dl class="summary-grid">
+            <div>
+              <dt>File</dt>
+              <dd id="filename">-</dd>
+            </div>
+            <div>
+              <dt>Overall severity</dt>
+              <dd id="overall-severity">-</dd>
+            </div>
+            <div>
+              <dt>Repairability</dt>
+              <dd id="repairability">-</dd>
+            </div>
+            <div>
+              <dt>Estimated cost</dt>
+              <dd id="estimated-cost">-</dd>
+            </div>
+            <div>
+              <dt>Recommended action</dt>
+              <dd id="recommended-action">-</dd>
+            </div>
+            <div>
+              <dt>Segmentation provider</dt>
+              <dd id="segmentation-provider">-</dd>
+            </div>
+            <div>
+              <dt>Report provider</dt>
+              <dd id="report-provider">-</dd>
+            </div>
+          </dl>
+          <p id="fallback-note" class="fallback-note"></p>
+          <p id="summary-text" class="summary-text"></p>
+        </div>
+
+        <div class="card">
+          <h2>Detected damage regions</h2>
+          <div id="regions" class="regions"></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("upload-form");
+      const status = document.getElementById("status");
+      const results = document.getElementById("results");
+      const regions = document.getElementById("regions");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const fileInput = document.getElementById("claim-image");
+
+        if (!fileInput.files.length) {
+          status.textContent = "Choose an image before submitting.";
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        status.textContent = "Running assessment...";
+        results.classList.add("hidden");
+        regions.innerHTML = "";
+
+        try {
+          const response = await fetch("/api/assess", {
+            method: "POST",
+            body: formData,
+          });
+
+          const payload = await response.json();
+
+          if (!response.ok) {
+            throw new Error(payload.detail || "Assessment failed.");
+          }
+
+          document.getElementById("filename").textContent = payload.filename;
+          document.getElementById("overall-severity").textContent = payload.overall_severity;
+          document.getElementById("repairability").textContent = payload.repairability;
+          document.getElementById("estimated-cost").textContent =
+            `$${payload.estimated_total_cost_usd}`;
+          document.getElementById("recommended-action").textContent = payload.recommended_action;
+          document.getElementById("segmentation-provider").textContent =
+            payload.meta.segmentation_provider;
+          document.getElementById("report-provider").textContent = payload.meta.report_provider;
+          document.getElementById("fallback-note").textContent = payload.meta.fallback_used
+            ? "Used the built-in rules summary because Gemini was unavailable or returned no text."
+            : "Used Gemini to generate the adjuster-facing narrative summary.";
+          document.getElementById("summary-text").textContent = payload.summary;
+
+          const addRegionLine = (article, label, value) => {
+            const line = document.createElement("p");
+            line.textContent = `${label}: ${value}`;
+            article.appendChild(line);
+          };
+
+          payload.regions.forEach((region) => {
+            const article = document.createElement("article");
+            article.className = "region";
+            const title = document.createElement("h3");
+            title.textContent = region.panel;
+            article.appendChild(title);
+            addRegionLine(article, "Damage", `${region.damage_type} · ${region.severity}`);
+            addRegionLine(article, "Confidence", `${(region.confidence * 100).toFixed(0)}%`);
+            addRegionLine(article, "Provider", region.source);
+            addRegionLine(article, "Estimated repair", `$${region.estimated_repair_cost_usd}`);
+            addRegionLine(
+              article,
+              "Box",
+              `x ${region.bounding_box.x}, y ${region.bounding_box.y}, w ${region.bounding_box.width}, h ${region.bounding_box.height}`,
+            );
+            regions.appendChild(article);
+          });
+
+          results.classList.remove("hidden");
+          status.textContent = "Assessment complete.";
+        } catch (error) {
+          status.textContent = error.message;
+        }
+      });
+    </script>
+  </body>
+</html>
