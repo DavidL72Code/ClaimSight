@@ -1,4 +1,6 @@
 {
+  "buildCommand": "node scripts/build.mjs",
+  "outputDirectory": "dist",
   "cleanUrls": true,
   "headers": [
     {
