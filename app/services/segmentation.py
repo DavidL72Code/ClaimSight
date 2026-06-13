@@ -328,7 +328,11 @@ class GeminiSegmentationService(SegmentationService):
 
     def analyze(self, image_path: Path, original_filename: str) -> list[DamageRegion]:
         regions = self._narrator.detect_regions(image_path, original_filename)
-        if regions:
+        # detect_regions returns:
+        #   None  -> Gemini errored/unavailable -> fall back to the classical detector
+        #   []    -> Gemini ran and found no damage -> return no regions (do NOT hallucinate)
+        #   [...] -> real detections
+        if regions is not None:
             return regions
         return self._fallback.analyze(image_path, original_filename)
 
