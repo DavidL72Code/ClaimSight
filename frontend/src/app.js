@@ -16,6 +16,8 @@ const elements = {
   queueList: document.getElementById("queue-list"),
   queueCount: document.getElementById("queue-count"),
   clearQueue: document.getElementById("clear-queue"),
+  queuePrev: document.getElementById("queue-prev"),
+  queueNext: document.getElementById("queue-next"),
   imageState: document.getElementById("image-state"),
   status: document.getElementById("status"),
   filename: document.getElementById("filename"),
@@ -455,6 +457,18 @@ elements.dropzone.addEventListener("drop", (event) => {
 });
 
 elements.clearQueue.addEventListener("click", clearQueue);
+
+// Carousel arrows step to the previous/next image (with wrap-around).
+elements.queuePrev.addEventListener("click", () => {
+  if (selectedImages.length) {
+    setActiveImage((activeImageIndex - 1 + selectedImages.length) % selectedImages.length);
+  }
+});
+elements.queueNext.addEventListener("click", () => {
+  if (selectedImages.length) {
+    setActiveImage((activeImageIndex + 1) % selectedImages.length);
+  }
+});
 
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
