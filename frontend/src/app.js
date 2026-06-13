@@ -12,6 +12,10 @@ const elements = {
   previewImage: document.getElementById("preview-image"),
   damageOverlay: document.getElementById("damage-overlay"),
   thumbStrip: document.getElementById("thumb-strip"),
+  uploadQueue: document.getElementById("upload-queue"),
+  queueList: document.getElementById("queue-list"),
+  queueCount: document.getElementById("queue-count"),
+  clearQueue: document.getElementById("clear-queue"),
   imageState: document.getElementById("image-state"),
   status: document.getElementById("status"),
   filename: document.getElementById("filename"),
@@ -71,7 +75,59 @@ const updateDropLabel = () => {
     return;
   }
   title.textContent = `${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} selected`;
-  subtitle.textContent = "Click to add more · ready to assess";
+  subtitle.textContent =
+    selectedImages.length < maxImages ? "Click to add more · ready to assess" : "Max images reached";
+};
+
+const formatBytes = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+// The upload queue is the primary "what have I added" view, shown under the dropzone.
+const renderQueue = () => {
+  elements.queueList.innerHTML = "";
+  if (selectedImages.length === 0) {
+    elements.uploadQueue.classList.add("hidden");
+    return;
+  }
+  elements.uploadQueue.classList.remove("hidden");
+  elements.queueCount.textContent = `${selectedImages.length} of ${maxImages} image${
+    selectedImages.length === 1 ? "" : "s"
+  }`;
+
+  selectedImages.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.className = `queue-item${index === activeImageIndex ? " active" : ""}`;
+
+    const thumb = document.createElement("span");
+    thumb.className = "queue-thumb";
+    thumb.style.backgroundImage = `url(${item.dataUrl})`;
+
+    const meta = document.createElement("span");
+    meta.className = "queue-meta";
+    const name = document.createElement("strong");
+    name.textContent = `${index + 1}. ${item.file.name}`;
+    const size = document.createElement("small");
+    size.textContent = formatBytes(item.file.size);
+    meta.append(name, size);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "queue-remove";
+    remove.setAttribute("aria-label", `Remove ${item.file.name}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeImage(index);
+    });
+
+    // Clicking the item previews that image.
+    li.addEventListener("click", () => setActiveImage(index));
+    li.append(thumb, meta, remove);
+    elements.queueList.appendChild(li);
+  });
 };
 
 const addFiles = async (fileList) => {
@@ -108,6 +164,7 @@ const addFiles = async (fileList) => {
     activeImageIndex = Math.max(0, selectedImages.length - 1);
   }
   renderThumbs();
+  renderQueue();
   showActiveImage();
   updateDropLabel();
   setStatus(`${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} ready.`);
@@ -121,8 +178,26 @@ const removeImage = (index) => {
     activeImageIndex = Math.max(0, selectedImages.length - 1);
   }
   renderThumbs();
+  renderQueue();
   showActiveImage();
   updateDropLabel();
+  setStatus(
+    selectedImages.length
+      ? `${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} ready.`
+      : "No claim photos selected."
+  );
+};
+
+const clearQueue = () => {
+  selectedImages = [];
+  activeImageIndex = 0;
+  latestAssessment = null;
+  elements.downloadReport.classList.add("hidden");
+  renderThumbs();
+  renderQueue();
+  showActiveImage();
+  updateDropLabel();
+  setStatus("No claim photos selected.");
 };
 
 const setActiveImage = (index) => {
@@ -131,6 +206,7 @@ const setActiveImage = (index) => {
   }
   activeImageIndex = index;
   renderThumbs();
+  renderQueue();
   showActiveImage();
 };
 
@@ -372,6 +448,8 @@ elements.dropzone.addEventListener("drop", (event) => {
   }
 });
 
+elements.clearQueue.addEventListener("click", clearQueue);
+
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -409,6 +487,7 @@ elements.form.addEventListener("submit", async (event) => {
     updateSummary(payload);
     renderRegions(payload.regions);
     renderThumbs();
+    renderQueue();
     elements.downloadReport.classList.remove("hidden");
     renderActiveOverlay();
     setStatus("Assessment complete.");
