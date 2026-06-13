@@ -37,6 +37,7 @@ const elements = {
   sourcesBlock: document.getElementById("sources-block"),
   sourcesList: document.getElementById("sources-list"),
   searchQueries: document.getElementById("search-queries"),
+  groundingStatus: document.getElementById("grounding-status"),
   regions: document.getElementById("regions-list"),
   regionCount: document.getElementById("region-count"),
   downloadReport: document.getElementById("download-report"),
@@ -307,6 +308,7 @@ const renderEvidence = (payload) => {
   const reason = payload.total_loss_reason || "";
   const sources = payload.sources || [];
   const queries = payload.search_queries || [];
+  const groundingStatus = payload.meta?.grounding_status || "";
 
   if (reason) {
     elements.totalLossReason.textContent = reason;
@@ -335,7 +337,19 @@ const renderEvidence = (payload) => {
     elements.sourcesBlock.classList.add("hidden");
   }
 
-  elements.evidence.classList.toggle("hidden", !reason && !sources.length);
+  // Always show the grounding status when there are no sources, so it's clear
+  // whether web grounding ran (and why not, if it didn't).
+  if (groundingStatus && !sources.length) {
+    elements.groundingStatus.textContent = `Web grounding: ${groundingStatus}`;
+    elements.groundingStatus.classList.remove("hidden");
+  } else {
+    elements.groundingStatus.classList.add("hidden");
+  }
+
+  elements.evidence.classList.toggle(
+    "hidden",
+    !reason && !sources.length && !groundingStatus
+  );
 };
 
 const renderRegions = (regions) => {

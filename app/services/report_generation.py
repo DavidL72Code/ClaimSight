@@ -33,6 +33,9 @@ class ClaimReportService:
             (region.vehicle_search_queries for region in regions if region.vehicle_search_queries),
             [],
         )
+        grounding_status = next(
+            (region.grounding_status for region in regions if region.grounding_status), ""
+        )
 
         # Total-loss when EITHER the model flags it OR repairs exceed ~75% of ACV.
         # When value is unknown (classical fallback), fall back to a flat threshold.
@@ -76,6 +79,7 @@ class ClaimReportService:
                 report_provider=self._narrator.provider_name,
                 fallback_used=fallback_used,
                 image_count=len(image_paths),
+                grounding_status=grounding_status,
             ),
         )
 

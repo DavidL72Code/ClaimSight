@@ -665,6 +665,15 @@ dd {
   color: var(--muted);
   font-size: .76rem;
 }
+.grounding-status {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: .8rem;
+}
+.grounding-status.hidden { display: none; }
 
 /* ── upload queue ────────────────────────────────────────────── */
 .upload-queue {

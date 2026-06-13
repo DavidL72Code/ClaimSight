@@ -258,6 +258,11 @@ class GeminiClaimNarrator:
         The search tool cannot be combined with forced-JSON schema, so this is a
         separate grounded call whose JSON is parsed leniently. No-ops on any failure.
         """
+        def set_status(status: str) -> None:
+            for region in regions:
+                region.grounding_status = status
+
+        set_status("not attempted")
         damaged = ", ".join(sorted({r.panel for r in regions})) or "visible body damage"
         prompt = (
             "Identify the exact make, model, and approximate year of the vehicle in these images. "
@@ -312,6 +317,7 @@ class GeminiClaimNarrator:
                     response = None
 
             if response is None:
+                set_status(f"search tool not accepted: {str(last_error)[:160]}")
                 logger.warning(
                     "Gemini grounded valuation unavailable (no search tool accepted): %s",
                     last_error,
@@ -321,9 +327,11 @@ class GeminiClaimNarrator:
             text = getattr(response, "text", None)
             logger.warning("Gemini grounded valuation raw response: %r", text)
             if not text:
+                set_status("empty grounded response")
                 return
             data = self._extract_json(text)
             if not isinstance(data, dict):
+                set_status("grounded response not JSON")
                 return
 
             label = str(data.get("vehicle_label", "") or "")
@@ -350,7 +358,13 @@ class GeminiClaimNarrator:
                     region.vehicle_sources = sources
                 if queries:
                     region.vehicle_search_queries = queries
+            set_status(
+                f"grounded ok: {len(sources)} source(s)"
+                if sources
+                else "grounded ran but returned no sources"
+            )
         except Exception as exc:
+            set_status(f"error: {str(exc)[:160]}")
             logger.warning("Gemini grounded valuation unavailable, keeping estimates: %s", exc)
 
     def _extract_grounding(self, response) -> tuple[list[Source], list[str]]:
