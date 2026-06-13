@@ -614,6 +614,58 @@ dd {
   grid-template-columns: 1fr 1fr;
 }
 
+/* ── evidence: reasoning + web sources ───────────────────────── */
+.evidence {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+.evidence.hidden { display: none; }
+.reason-block.hidden, .sources-block.hidden { display: none; }
+
+.evidence-label {
+  display: block;
+  color: var(--muted);
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+.reason-block {
+  padding: 14px 16px;
+  border-left: 3px solid var(--warning);
+  background: rgba(240,180,41,.06);
+  border-radius: 8px;
+}
+.reason-block p { margin: 0; color: var(--ink-soft); }
+
+.sources-block {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.sources-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.sources-list li { display: flex; }
+.sources-list a {
+  color: var(--accent);
+  font-size: .88rem;
+  text-decoration: none;
+  word-break: break-word;
+}
+.sources-list a:hover { text-decoration: underline; }
+.search-queries {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
 /* ── upload queue ────────────────────────────────────────────── */
 .upload-queue {
   margin: 0 20px 20px;

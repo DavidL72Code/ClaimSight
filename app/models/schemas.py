@@ -8,6 +8,11 @@ class BoundingBox(BaseModel):
     height: int
 
 
+class Source(BaseModel):
+    title: str = ""
+    url: str = ""
+
+
 class DamageRegion(BaseModel):
     part_id: str = ""
     panel: str
@@ -23,6 +28,9 @@ class DamageRegion(BaseModel):
     vehicle_value_usd: int = 0
     vehicle_label: str = ""
     vehicle_total_loss: bool = False
+    total_loss_reason: str = ""
+    vehicle_sources: list[Source] = []
+    vehicle_search_queries: list[str] = []
 
 
 class AssessmentMeta(BaseModel):
@@ -38,10 +46,13 @@ class AssessmentResponse(BaseModel):
     vehicle_type: str
     estimated_vehicle_value_usd: int = 0
     total_loss: bool = False
+    total_loss_reason: str = ""
     overall_severity: str
     repairability: str
     estimated_total_cost_usd: int
     recommended_action: str
     summary: str
     regions: list[DamageRegion]
+    sources: list[Source] = []
+    search_queries: list[str] = []
     meta: AssessmentMeta

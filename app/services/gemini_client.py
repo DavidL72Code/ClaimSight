@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.core.config import GEMINI_API_KEY, GEMINI_MODEL
-from app.models.schemas import BoundingBox, DamageRegion
+from app.models.schemas import BoundingBox, DamageRegion, Source
 
 logger = logging.getLogger("claimsight.gemini")
 
@@ -301,6 +301,10 @@ class GeminiClaimNarrator:
             except (TypeError, ValueError):
                 value = 0
             total_loss = bool(data.get("total_loss", False))
+            reason = str(data.get("total_loss_reason", "") or "")
+
+            sources, queries = self._extract_grounding(response)
+            logger.warning("Gemini grounded valuation used %d source(s).", len(sources))
 
             for region in regions:
                 if label:
@@ -309,8 +313,40 @@ class GeminiClaimNarrator:
                     region.vehicle_value_usd = value
                 # Grounded total-loss can only add confidence to a positive verdict.
                 region.vehicle_total_loss = region.vehicle_total_loss or total_loss
+                if reason:
+                    region.total_loss_reason = reason
+                if sources:
+                    region.vehicle_sources = sources
+                if queries:
+                    region.vehicle_search_queries = queries
         except Exception as exc:
             logger.warning("Gemini grounded valuation unavailable, keeping estimates: %s", exc)
+
+    def _extract_grounding(self, response) -> tuple[list[Source], list[str]]:
+        """Pull the web sources and search queries the grounded call relied on."""
+        sources: list[Source] = []
+        queries: list[str] = []
+        try:
+            candidate = (getattr(response, "candidates", None) or [None])[0]
+            meta = getattr(candidate, "grounding_metadata", None)
+            if meta is None:
+                return sources, queries
+
+            queries = list(getattr(meta, "web_search_queries", None) or [])
+
+            seen: set[str] = set()
+            for chunk in getattr(meta, "grounding_chunks", None) or []:
+                web = getattr(chunk, "web", None)
+                if web is None:
+                    continue
+                uri = getattr(web, "uri", "") or ""
+                title = getattr(web, "title", "") or ""
+                if uri and uri not in seen:
+                    seen.add(uri)
+                    sources.append(Source(title=title or uri, url=uri))
+        except Exception as exc:
+            logger.warning("Could not extract grounding metadata: %s", exc)
+        return sources, queries
 
     def _parse_detections(
         self, text: str, dimensions: list[tuple[int, int]]
