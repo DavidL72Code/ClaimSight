@@ -15,6 +15,16 @@ class SegmentationService(ABC):
     def analyze(self, image_path: Path, original_filename: str) -> list[DamageRegion]:
         raise NotImplementedError
 
+    def analyze_images(
+        self, image_paths: list[Path], original_filenames: list[str]
+    ) -> list[DamageRegion]:
+        """Multi-image entry point.
+
+        Default implementation only inspects the first image (providers that can't
+        reason across angles). Gemini overrides this to analyze all images at once.
+        """
+        return self.analyze(image_paths[0], original_filenames[0])
+
     @property
     @abstractmethod
     def provider_name(self) -> str:
@@ -327,14 +337,20 @@ class GeminiSegmentationService(SegmentationService):
         return "gemini" if self._narrator.enabled else self._fallback.provider_name
 
     def analyze(self, image_path: Path, original_filename: str) -> list[DamageRegion]:
-        regions = self._narrator.detect_regions(image_path, original_filename)
+        return self.analyze_images([image_path], [original_filename])
+
+    def analyze_images(
+        self, image_paths: list[Path], original_filenames: list[str]
+    ) -> list[DamageRegion]:
+        regions = self._narrator.detect_regions(image_paths, original_filenames)
         # detect_regions returns:
         #   None  -> Gemini errored/unavailable -> fall back to the classical detector
         #   []    -> Gemini ran and found no damage -> return no regions (do NOT hallucinate)
         #   [...] -> real detections
         if regions is not None:
             return regions
-        return self._fallback.analyze(image_path, original_filename)
+        # Fallback can only inspect a single image; use the first.
+        return self._fallback.analyze(image_paths[0], original_filenames[0])
 
 
 def get_segmentation_service() -> SegmentationService:

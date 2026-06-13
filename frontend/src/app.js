@@ -1,5 +1,6 @@
 const apiBaseUrl = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
 const maxClientUploadBytes = 8 * 1024 * 1024;
+const maxImages = 8;
 const allowedClientMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const elements = {
@@ -10,6 +11,7 @@ const elements = {
   emptyPreview: document.getElementById("empty-preview"),
   previewImage: document.getElementById("preview-image"),
   damageOverlay: document.getElementById("damage-overlay"),
+  thumbStrip: document.getElementById("thumb-strip"),
   imageState: document.getElementById("image-state"),
   status: document.getElementById("status"),
   filename: document.getElementById("filename"),
@@ -29,51 +31,170 @@ const elements = {
 elements.backendUrlLabel.textContent = apiBaseUrl ? "Backend connected" : "Backend URL missing";
 
 let latestAssessment = null;
-
-const isValidClientImage = (file) => {
-  if (!allowedClientMimeTypes.has(file.type)) {
-    setStatus("Use a JPG, PNG, or WebP image.");
-    return false;
-  }
-
-  if (file.size > maxClientUploadBytes) {
-    setStatus("Image must be smaller than 8 MB.");
-    return false;
-  }
-
-  return true;
-};
-
-const renderPreview = (file) => {
-  if (!isValidClientImage(file)) {
-    elements.fileInput.value = "";
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = () => {
-    elements.previewImage.src = reader.result;
-    elements.previewImage.classList.remove("hidden");
-    elements.emptyPreview.classList.add("hidden");
-    elements.imageState.textContent = "Photo loaded";
-    elements.damageOverlay.innerHTML = "";
-    latestAssessment = null;
-    elements.downloadReport.classList.add("hidden");
-    elements.dropzone.querySelector(".drop-title").textContent = file.name;
-    elements.dropzone.querySelector(".drop-subtitle").textContent = "Ready to assess";
-  };
-  reader.readAsDataURL(file);
-};
+// Ordered list of { file, dataUrl }. The array index is the image_index the
+// backend uses for each detected region.
+let selectedImages = [];
+let activeImageIndex = 0;
 
 const setStatus = (message) => {
   elements.status.textContent = message;
 };
 
+const isValidClientImage = (file) => {
+  if (!allowedClientMimeTypes.has(file.type)) {
+    setStatus("Use JPG, PNG, or WebP images.");
+    return false;
+  }
+  if (file.size > maxClientUploadBytes) {
+    setStatus("Each image must be smaller than 8 MB.");
+    return false;
+  }
+  return true;
+};
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+const updateDropLabel = () => {
+  const title = elements.dropzone.querySelector(".drop-title");
+  const subtitle = elements.dropzone.querySelector(".drop-subtitle");
+  if (selectedImages.length === 0) {
+    title.textContent = "Drop claim photos here";
+    subtitle.textContent = `JPG, PNG, or WebP · up to ${maxImages} images`;
+    return;
+  }
+  title.textContent = `${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} selected`;
+  subtitle.textContent = "Click to add more · ready to assess";
+};
+
+const addFiles = async (fileList) => {
+  const incoming = Array.from(fileList);
+  let added = 0;
+  for (const file of incoming) {
+    if (selectedImages.length >= maxImages) {
+      setStatus(`You can upload up to ${maxImages} images per assessment.`);
+      break;
+    }
+    if (!isValidClientImage(file)) {
+      continue;
+    }
+    const duplicate = selectedImages.some(
+      (item) => item.file.name === file.name && item.file.size === file.size
+    );
+    if (duplicate) {
+      continue;
+    }
+    const dataUrl = await readFileAsDataUrl(file);
+    selectedImages.push({ file, dataUrl });
+    added += 1;
+  }
+
+  if (added === 0 && selectedImages.length === 0) {
+    return;
+  }
+
+  // New images invalidate any prior assessment.
+  latestAssessment = null;
+  elements.damageOverlay.innerHTML = "";
+  elements.downloadReport.classList.add("hidden");
+  if (activeImageIndex >= selectedImages.length) {
+    activeImageIndex = Math.max(0, selectedImages.length - 1);
+  }
+  renderThumbs();
+  showActiveImage();
+  updateDropLabel();
+  setStatus(`${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} ready.`);
+};
+
+const removeImage = (index) => {
+  selectedImages.splice(index, 1);
+  latestAssessment = null;
+  elements.downloadReport.classList.add("hidden");
+  if (activeImageIndex >= selectedImages.length) {
+    activeImageIndex = Math.max(0, selectedImages.length - 1);
+  }
+  renderThumbs();
+  showActiveImage();
+  updateDropLabel();
+};
+
+const setActiveImage = (index) => {
+  if (index < 0 || index >= selectedImages.length) {
+    return;
+  }
+  activeImageIndex = index;
+  renderThumbs();
+  showActiveImage();
+};
+
+const showActiveImage = () => {
+  if (selectedImages.length === 0) {
+    elements.previewImage.classList.add("hidden");
+    elements.emptyPreview.classList.remove("hidden");
+    elements.imageState.textContent = "Awaiting upload";
+    elements.damageOverlay.innerHTML = "";
+    return;
+  }
+  const current = selectedImages[activeImageIndex];
+  elements.previewImage.src = current.dataUrl;
+  elements.previewImage.classList.remove("hidden");
+  elements.emptyPreview.classList.add("hidden");
+  elements.imageState.textContent =
+    selectedImages.length > 1
+      ? `Image ${activeImageIndex + 1} of ${selectedImages.length}`
+      : "Photo loaded";
+  // Overlay is redrawn on the image's load event (renderActiveOverlay).
+};
+
+const renderThumbs = () => {
+  elements.thumbStrip.innerHTML = "";
+  if (selectedImages.length <= 1) {
+    elements.thumbStrip.classList.add("hidden");
+    return;
+  }
+  elements.thumbStrip.classList.remove("hidden");
+  selectedImages.forEach((item, index) => {
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = `thumb${index === activeImageIndex ? " active" : ""}`;
+    thumb.style.backgroundImage = `url(${item.dataUrl})`;
+    thumb.title = item.file.name;
+    thumb.setAttribute("aria-label", `View image ${index + 1}`);
+
+    const badge = document.createElement("span");
+    badge.className = "thumb-index";
+    badge.textContent = String(index + 1);
+    thumb.appendChild(badge);
+
+    if (!latestAssessment) {
+      const remove = document.createElement("span");
+      remove.className = "thumb-remove";
+      remove.textContent = "×";
+      remove.title = "Remove image";
+      remove.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removeImage(index);
+      });
+      thumb.appendChild(remove);
+    }
+
+    thumb.addEventListener("click", () => setActiveImage(index));
+    elements.thumbStrip.appendChild(thumb);
+  });
+};
+
 const updateSummary = (payload) => {
-  elements.filename.textContent = payload.filename;
+  const imageCount = payload.meta?.image_count || 1;
+  elements.filename.textContent =
+    imageCount > 1 ? `${imageCount} images` : payload.filename;
   elements.severity.textContent = payload.overall_severity;
   elements.repairability.textContent = payload.repairability;
-  elements.estimatedCost.textContent = `$${payload.estimated_total_cost_usd}`;
+  elements.estimatedCost.textContent = `$${payload.estimated_total_cost_usd.toLocaleString()}`;
   elements.recommendedAction.textContent = payload.recommended_action;
   elements.segmentationProvider.textContent = payload.meta.segmentation_provider;
   elements.reportProvider.textContent = payload.meta.report_provider;
@@ -85,28 +206,64 @@ const updateSummary = (payload) => {
 
 const renderRegions = (regions) => {
   elements.regions.innerHTML = "";
-  elements.regionCount.textContent = `${regions.length} ${regions.length === 1 ? "region" : "regions"}`;
+  elements.regionCount.textContent = `${regions.length} ${regions.length === 1 ? "part" : "parts"}`;
+
+  if (regions.length === 0) {
+    const empty = document.createElement("article");
+    empty.className = "region-row placeholder";
+    empty.innerHTML = "<span>No damage detected</span><strong>The vehicle appears undamaged in the submitted images.</strong>";
+    elements.regions.appendChild(empty);
+    return;
+  }
+
+  const multi = selectedImages.length > 1;
+  const table = document.createElement("table");
+  table.className = "regions-table";
+
+  const head = document.createElement("thead");
+  const headers = ["Part ID", "Part Name", "Assessment", "Confidence", "AI Model", "Est. Cost"];
+  if (multi) {
+    headers.push("Image");
+  }
+  head.innerHTML = `<tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+  table.appendChild(head);
+
+  const body = document.createElement("tbody");
   regions.forEach((region, index) => {
-    const card = document.createElement("article");
-    card.className = "region-row";
-    const indexNode = document.createElement("span");
-    const panel = document.createElement("strong");
-    const damage = document.createElement("span");
-    const confidence = document.createElement("span");
-    const cost = document.createElement("span");
-    const source = document.createElement("span");
+    const row = document.createElement("tr");
+    row.className = "region-row-tr";
 
-    indexNode.className = "region-index";
-    indexNode.textContent = String(index + 1);
-    panel.textContent = region.panel;
-    damage.textContent = `${region.damage_type} / ${region.severity}`;
-    confidence.textContent = `${(region.confidence * 100).toFixed(0)}%`;
-    cost.textContent = `$${region.estimated_repair_cost_usd}`;
-    source.textContent = region.source;
+    const cells = [
+      region.part_id || `P${index + 1}`,
+      region.panel,
+      `${region.damage_type} · ${region.severity}`,
+      `${(region.confidence * 100).toFixed(0)}%`,
+      region.ai_assessor_model || region.source,
+      `$${region.estimated_repair_cost_usd.toLocaleString()}`,
+    ];
+    if (multi) {
+      cells.push(`#${(region.image_index ?? 0) + 1}`);
+    }
 
-    card.append(indexNode, panel, damage, confidence, cost, source);
-    elements.regions.appendChild(card);
+    cells.forEach((value, cellIndex) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      if (cellIndex === 2) {
+        cell.className = `sev-${region.severity}`;
+      }
+      row.appendChild(cell);
+    });
+
+    // Clicking a row jumps the preview to the image that part is on.
+    row.addEventListener("click", () => {
+      setActiveImage(region.image_index ?? 0);
+      elements.previewImage.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    body.appendChild(row);
   });
+  table.appendChild(body);
+  elements.regions.appendChild(table);
 };
 
 const boxToDisplayRect = (box) => {
@@ -131,14 +288,19 @@ const boxToDisplayRect = (box) => {
   };
 };
 
-const renderDamageOverlay = (regions) => {
+const renderActiveOverlay = () => {
   elements.damageOverlay.innerHTML = "";
 
-  if (!regions?.length || elements.previewImage.classList.contains("hidden")) {
+  if (!latestAssessment || elements.previewImage.classList.contains("hidden")) {
     return;
   }
 
-  regions.forEach((region, index) => {
+  // Only draw boxes that belong to the image currently in the preview.
+  const regions = latestAssessment.regions.filter(
+    (region) => (region.image_index ?? 0) === activeImageIndex
+  );
+
+  regions.forEach((region) => {
     const displayRect = boxToDisplayRect(region.bounding_box);
     if (!displayRect) {
       return;
@@ -153,8 +315,7 @@ const renderDamageOverlay = (regions) => {
 
     const tag = document.createElement("span");
     tag.className = "damage-tag";
-    tag.dataset.index = String(index + 1);
-    tag.textContent = `${region.panel}`;
+    tag.textContent = `${region.part_id || ""} ${region.panel}`.trim();
 
     box.appendChild(tag);
     elements.damageOverlay.appendChild(box);
@@ -178,9 +339,9 @@ const downloadAssessmentReport = () => {
 };
 
 elements.fileInput.addEventListener("change", () => {
-  const [file] = elements.fileInput.files;
-  if (file) {
-    renderPreview(file);
+  if (elements.fileInput.files?.length) {
+    addFiles(elements.fileInput.files);
+    elements.fileInput.value = "";
   }
 });
 
@@ -199,43 +360,33 @@ elements.fileInput.addEventListener("change", () => {
 });
 
 elements.dropzone.addEventListener("drop", (event) => {
-  const file = event.dataTransfer?.files?.[0];
-  if (!file) {
-    return;
+  const files = event.dataTransfer?.files;
+  if (files?.length) {
+    addFiles(files);
   }
-
-  if (!isValidClientImage(file)) {
-    return;
-  }
-
-  const dataTransfer = new DataTransfer();
-  dataTransfer.items.add(file);
-  elements.fileInput.files = dataTransfer.files;
-  renderPreview(file);
 });
 
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const [file] = elements.fileInput.files;
 
   if (!apiBaseUrl) {
     setStatus("Set VITE_API_BASE_URL before running the frontend.");
     return;
   }
 
-  if (!file) {
-    setStatus("Choose an image before submitting.");
-    return;
-  }
-
-  if (!isValidClientImage(file)) {
+  if (selectedImages.length === 0) {
+    setStatus("Add at least one image before submitting.");
     return;
   }
 
   const formData = new FormData();
-  formData.append("file", file);
+  selectedImages.forEach((item) => formData.append("files", item.file));
 
-  setStatus("Assessing claim...");
+  setStatus(
+    selectedImages.length > 1
+      ? `Assessing ${selectedImages.length} images...`
+      : "Assessing claim..."
+  );
 
   try {
     const response = await fetch(`${apiBaseUrl}/api/assess`, {
@@ -248,28 +399,25 @@ elements.form.addEventListener("submit", async (event) => {
       throw new Error(payload.detail || "Assessment failed.");
     }
 
+    latestAssessment = payload;
     updateSummary(payload);
     renderRegions(payload.regions);
-    latestAssessment = payload;
+    renderThumbs();
     elements.downloadReport.classList.remove("hidden");
-    renderDamageOverlay(payload.regions);
+    renderActiveOverlay();
     setStatus("Assessment complete.");
   } catch (error) {
     setStatus(error.message || "Something went wrong.");
   }
 });
 
-elements.previewImage.addEventListener("load", () => {
-  if (latestAssessment) {
-    renderDamageOverlay(latestAssessment.regions);
-  }
-});
+elements.previewImage.addEventListener("load", renderActiveOverlay);
 
 elements.downloadReport.addEventListener("click", downloadAssessmentReport);
 
 window.addEventListener("resize", () => {
   if (latestAssessment) {
-    renderDamageOverlay(latestAssessment.regions);
+    renderActiveOverlay();
   }
 });
 

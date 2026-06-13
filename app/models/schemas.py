@@ -9,6 +9,7 @@ class BoundingBox(BaseModel):
 
 
 class DamageRegion(BaseModel):
+    part_id: str = ""
     panel: str
     damage_type: str
     severity: str
@@ -16,16 +17,20 @@ class DamageRegion(BaseModel):
     bounding_box: BoundingBox
     estimated_repair_cost_usd: int
     source: str
+    image_index: int = 0
+    ai_assessor_model: str = ""
 
 
 class AssessmentMeta(BaseModel):
     segmentation_provider: str
     report_provider: str
     fallback_used: bool
+    image_count: int = 1
 
 
 class AssessmentResponse(BaseModel):
     filename: str
+    filenames: list[str] = []
     vehicle_type: str
     overall_severity: str
     repairability: str

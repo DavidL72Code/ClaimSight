@@ -8,8 +8,8 @@ class ClaimReportService:
 
     def build_assessment(
         self,
-        filename: str,
-        image_path,
+        filenames: list[str],
+        image_paths: list,
         regions: list[DamageRegion],
         segmentation_provider: str,
     ) -> AssessmentResponse:
@@ -24,11 +24,14 @@ class ClaimReportService:
         )
 
         fallback_summary = self._build_summary(regions, total_cost, overall_severity)
-        summary = self._narrator.build_summary(image_path, filename, regions) or fallback_summary
+        summary = (
+            self._narrator.build_summary(image_paths, filenames, regions) or fallback_summary
+        )
         fallback_used = summary == fallback_summary
 
         return AssessmentResponse(
-            filename=filename,
+            filename=filenames[0] if filenames else "",
+            filenames=filenames,
             vehicle_type="passenger vehicle",
             overall_severity=overall_severity,
             repairability=repairability,
@@ -40,6 +43,7 @@ class ClaimReportService:
                 segmentation_provider=segmentation_provider,
                 report_provider=self._narrator.provider_name,
                 fallback_used=fallback_used,
+                image_count=len(image_paths),
             ),
         )
 
@@ -49,10 +53,15 @@ class ClaimReportService:
         total_cost: int,
         overall_severity: str,
     ) -> str:
+        if not regions:
+            return (
+                "No vehicle damage was detected in the submitted image(s). "
+                "If damage is expected, capture clearer or additional angles."
+            )
         region_descriptions = ", ".join(
             f"{region.severity} {region.damage_type} on the {region.panel}" for region in regions
         )
         return (
-            f"The claim image suggests {region_descriptions}. "
+            f"The submitted image(s) suggest {region_descriptions}. "
             f"Estimated repair exposure is about ${total_cost}, with an overall severity of {overall_severity}."
         )

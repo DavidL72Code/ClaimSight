@@ -39,13 +39,13 @@
         </div>
         <form id="upload-form" class="upload-form">
           <label class="dropzone" for="claim-image" id="dropzone">
-            <input id="claim-image" name="file" type="file" accept="image/*" hidden required />
-            <span class="drop-title">Drop claim photo here</span>
-            <span class="drop-subtitle">JPG, PNG, or WebP · click to browse</span>
+            <input id="claim-image" name="files" type="file" accept="image/*" multiple hidden />
+            <span class="drop-title">Drop claim photos here</span>
+            <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
           </label>
           <div class="intake-actions">
             <button type="submit" class="cta">Assess claim</button>
-            <p id="status" class="status">No claim photo selected.</p>
+            <p id="status" class="status">No claim photos selected.</p>
           </div>
         </form>
       </section>
@@ -65,6 +65,7 @@
               <img id="preview-image" class="preview-image hidden" alt="Claim preview" />
               <div id="damage-overlay" class="damage-overlay" aria-hidden="true"></div>
             </div>
+            <div id="thumb-strip" class="thumb-strip hidden" aria-label="Uploaded images"></div>
           </section>
           <div class="zoom-caption" id="zoom-caption">Scroll to explore the assessment</div>
         </div>
@@ -100,13 +101,13 @@
       <!-- ── regions ────────────────────────────────────────────── -->
       <section class="regions-panel reveal" id="regions">
         <div class="panel-heading">
-          <span>Detected regions</span>
-          <strong id="region-count">0 regions</strong>
+          <span>Detected parts</span>
+          <strong id="region-count">0 parts</strong>
         </div>
         <div id="regions-list" class="regions-list">
           <article class="region-row placeholder">
-            <span>No region data yet</span>
-            <strong>Upload a claim photo to begin.</strong>
+            <span>No part data yet</span>
+            <strong>Upload claim photos to begin.</strong>
           </article>
         </div>
       </section>
