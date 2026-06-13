@@ -280,13 +280,44 @@ class GeminiClaimNarrator:
             ]
             contents.append(prompt)
 
-            response = self._client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())]
-                ),
-            )
+            # The search-grounding tool differs by model generation:
+            #   google_search           -> Gemini 2.x / 3.x
+            #   google_search_retrieval -> Gemini 1.5
+            # Try each in turn so grounding works regardless of GEMINI_MODEL.
+            response = None
+            tool_variants = []
+            try:
+                tool_variants.append(types.Tool(google_search=types.GoogleSearch()))
+            except Exception:
+                pass
+            try:
+                tool_variants.append(
+                    types.Tool(google_search_retrieval=types.GoogleSearchRetrieval())
+                )
+            except Exception:
+                pass
+
+            last_error = None
+            for tool in tool_variants:
+                try:
+                    response = self._client.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=contents,
+                        config=types.GenerateContentConfig(tools=[tool]),
+                    )
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning("Grounding tool %r rejected: %s", type(tool), exc)
+                    response = None
+
+            if response is None:
+                logger.warning(
+                    "Gemini grounded valuation unavailable (no search tool accepted): %s",
+                    last_error,
+                )
+                return
+
             text = getattr(response, "text", None)
             logger.warning("Gemini grounded valuation raw response: %r", text)
             if not text:
