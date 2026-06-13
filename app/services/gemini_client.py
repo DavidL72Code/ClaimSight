@@ -149,7 +149,7 @@ class GeminiClaimNarrator:
                 ),
             )
             text = getattr(response, "text", None)
-            logger.info("Gemini detection raw response (model=%s): %r", GEMINI_MODEL, text)
+            logger.warning("Gemini detection raw response (model=%s): %r", GEMINI_MODEL, text)
             if not text:
                 logger.warning("Gemini detection returned empty text; falling back.")
                 return None
@@ -158,7 +158,7 @@ class GeminiClaimNarrator:
                 width, height = image.size
 
             regions = self._parse_detections(text, width, height)
-            logger.info(
+            logger.warning(
                 "Gemini detection parsed %d region(s) from image %dx%d.",
                 len(regions) if regions else 0,
                 width,
