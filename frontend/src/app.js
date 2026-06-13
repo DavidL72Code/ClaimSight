@@ -128,6 +128,12 @@ const renderQueue = () => {
     li.append(thumb, meta, remove);
     elements.queueList.appendChild(li);
   });
+
+  // Smoothly bring the active card into view within the horizontal carousel.
+  const activeCard = elements.queueList.children[activeImageIndex];
+  if (activeCard) {
+    activeCard.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
 };
 
 const addFiles = async (fileList) => {

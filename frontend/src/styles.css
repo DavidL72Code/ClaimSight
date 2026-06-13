@@ -616,7 +616,8 @@ dd {
 
 /* ── upload queue ────────────────────────────────────────────── */
 .upload-queue {
-  margin-top: 16px;
+  grid-column: 1 / -1;   /* span full width — not the narrow form column */
+  margin-top: 4px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface-2);
@@ -650,27 +651,39 @@ dd {
 .queue-list {
   list-style: none;
   margin: 0;
-  padding: 6px;
-  display: grid;
-  gap: 4px;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+.queue-list::-webkit-scrollbar { height: 8px; }
+.queue-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
 }
 .queue-item {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
   border-radius: 9px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.02);
   transition: background .15s, border-color .15s;
 }
-.queue-item:hover { background: rgba(255,255,255,.03); }
+.queue-item:hover { background: rgba(255,255,255,.05); }
 .queue-item.active { border-color: var(--accent); background: var(--accent-dim); }
 
 .queue-thumb {
   flex: 0 0 auto;
-  width: 48px;
-  height: 36px;
+  width: 56px;
+  height: 42px;
   border-radius: 6px;
   background-size: cover;
   background-position: center;
