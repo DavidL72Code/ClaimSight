@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+
+    <!-- ── topbar ─────────────────────────────────────────────── -->
+    <header class="topbar">
+      <a class="brand" href="/">ClaimSight</a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a class="nav-button" href="#intake">Intake</a>
+        <a class="nav-button" href="#assessment">Assessment</a>
+        <a class="nav-button" href="#regions">Regions</a>
+      </nav>
+      <span id="backend-url-label" class="api-chip">Connecting</span>
+    </header>
+
+    <main class="page">
+
+      <!-- ── hero ───────────────────────────────────────────────── -->
+      <section class="hero" id="intake">
+        <div class="hero-img"></div>
+        <div class="hero-copy">
+          <p class="kicker">AI-Powered Claims Review</p>
+          <h1>ClaimSight</h1>
+          <p class="hero-sub">Photo intake, damage triage, and adjuster notes — in one review screen.</p>
+        </div>
+        <div class="scroll-cue" aria-hidden="true"></div>
+      </section>
+
+      <!-- ── intake ─────────────────────────────────────────────── -->
+      <section class="intake-panel reveal" aria-label="Claim photo intake">
+        <div class="panel-heading">
+          <span>Upload claim photo</span>
+        </div>
+        <form id="upload-form" class="upload-form">
+          <label class="dropzone" for="claim-image" id="dropzone">
+            <input id="claim-image" name="file" type="file" accept="image/*" hidden required />
+            <span class="drop-title">Drop claim photo here</span>
+            <span class="drop-subtitle">JPG, PNG, or WebP · click to browse</span>
+          </label>
+          <div class="intake-actions">
+            <button type="submit" class="cta">Assess claim</button>
+            <p id="status" class="status">No claim photo selected.</p>
+          </div>
+        </form>
+      </section>
+
+      <!-- ── sticky zoom + image preview ───────────────────────── -->
+      <div class="zoom-wrap" id="zoom-wrap">
+        <div class="zoom-sticky">
+          <section class="image-panel" aria-label="Claim image preview">
+            <div class="panel-heading">
+              <span>Claim image</span>
+              <strong id="image-state">Awaiting upload</strong>
+            </div>
+            <div class="preview-stage">
+              <div class="empty-preview" id="empty-preview">
+                <span>Image preview</span>
+              </div>
+              <img id="preview-image" class="preview-image hidden" alt="Claim preview" />
+              <div id="damage-overlay" class="damage-overlay" aria-hidden="true"></div>
+            </div>
+          </section>
+          <div class="zoom-caption" id="zoom-caption">Scroll to explore the assessment</div>
+        </div>
+      </div>
+
+      <!-- ── assessment ─────────────────────────────────────────── -->
+      <section class="assessment-panel reveal" id="assessment">
+        <div class="panel-heading">
+          <span>Assessment</span>
+          <strong id="overall-severity">Pending</strong>
+        </div>
+
+        <dl class="summary-grid stagger">
+          <div><dt>File</dt><dd id="filename">—</dd></div>
+          <div><dt>Repairability</dt><dd id="repairability">—</dd></div>
+          <div><dt>Estimated cost</dt><dd id="estimated-cost">—</dd></div>
+          <div><dt>Recommended action</dt><dd id="recommended-action">—</dd></div>
+          <div><dt>Segmentation</dt><dd id="segmentation-provider">—</dd></div>
+          <div><dt>Summary engine</dt><dd id="report-provider">—</dd></div>
+        </dl>
+
+        <p id="fallback-note" class="fallback-note">Waiting for assessment output.</p>
+        <p id="summary-text" class="summary-text">
+          The assessment narrative will appear here after the backend reviews the claim image.
+        </p>
+        <div class="report-actions">
+          <button id="download-report" class="secondary-action hidden" type="button">
+            Download report JSON
+          </button>
+        </div>
+      </section>
+
+      <!-- ── regions ────────────────────────────────────────────── -->
+      <section class="regions-panel reveal" id="regions">
+        <div class="panel-heading">
+          <span>Detected regions</span>
+          <strong id="region-count">0 regions</strong>
+        </div>
+        <div id="regions-list" class="regions-list">
+          <article class="region-row placeholder">
+            <span>No region data yet</span>
+            <strong>Upload a claim photo to begin.</strong>
+          </article>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">ClaimSight — AI damage assessment</footer>
+
+    <script src="/config.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

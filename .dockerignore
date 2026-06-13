@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+.git/
+.github/
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+*.log
+*.map
+data/
+frontend/
+tests/
+*.png
+zooming-audi.html
