@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.core.config import GEMINI_API_KEY, GEMINI_MODEL
+from app.core.config import GEMINI_API_KEY, GEMINI_MODEL, TAVILY_API_KEY
 from app.models.schemas import BoundingBox, DamageRegion, Source
 
 logger = logging.getLogger("claimsight.gemini")
@@ -249,14 +249,117 @@ class GeminiClaimNarrator:
             logger.exception("Gemini detection failed: %s", exc)
             return None
 
+    def _ground_via_tavily(
+        self, damaged: str, regions: list[DamageRegion], set_status
+    ) -> bool:
+        """Free web-search grounding via Tavily (1000 searches/month free).
+
+        Searches the web for the vehicle's market value, then uses a normal Gemini
+        call (regular quota) to extract value + total-loss from the results, citing
+        the real source URLs. Returns True on success.
+        """
+        import requests
+
+        label = next((r.vehicle_label for r in regions if r.vehicle_label), "") or "vehicle"
+        query = f"{label} used resale market value USD price"
+        try:
+            resp = requests.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": TAVILY_API_KEY,
+                    "query": query,
+                    "max_results": 5,
+                    "search_depth": "basic",
+                    "include_answer": True,
+                },
+                timeout=20,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            set_status(f"tavily search failed: {str(exc)[:140]}")
+            logger.warning("Tavily search failed: %s", exc)
+            return False
+
+        results = data.get("results") or []
+        answer = str(data.get("answer") or "")
+        if not results and not answer:
+            set_status("tavily returned no results")
+            return False
+
+        sources = [
+            Source(title=(r.get("title") or r.get("url") or ""), url=r.get("url") or "")
+            for r in results
+            if r.get("url")
+        ]
+        context = answer + "\n" + "\n".join(
+            f"- {r.get('title','')}: {str(r.get('content',''))[:300]} ({r.get('url','')})"
+            for r in results
+        )
+
+        extract_prompt = (
+            "Using ONLY these web search results about a vehicle's market value:\n"
+            f"{context}\n\n"
+            f"The vehicle is '{label}' with this visible damage: {damaged}. "
+            "Estimate its actual cash value (ACV) in US dollars from the results, and decide "
+            "whether it is an economic or structural total loss (repairs approach/exceed value, "
+            "or structural/fire damage makes it unrepairable). "
+            'Respond ONLY with JSON: {"vehicle_label": str, "estimated_vehicle_value_usd": int, '
+            '"total_loss": bool, "total_loss_reason": str}.'
+        )
+        try:
+            from google.genai import types
+
+            response = self._client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[extract_prompt],
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            payload = self._extract_json(getattr(response, "text", "") or "")
+        except Exception as exc:
+            set_status(f"tavily extraction failed: {str(exc)[:140]}")
+            logger.warning("Tavily extraction call failed: %s", exc)
+            return False
+
+        if not isinstance(payload, dict):
+            set_status("tavily extraction not JSON")
+            return False
+
+        new_label = str(payload.get("vehicle_label", "") or "")
+        try:
+            value = int(payload.get("estimated_vehicle_value_usd", 0) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        total_loss = bool(payload.get("total_loss", False))
+        reason = str(payload.get("total_loss_reason", "") or "")
+
+        for region in regions:
+            if new_label:
+                region.vehicle_label = new_label
+            if value > 0:
+                region.vehicle_value_usd = value
+            region.vehicle_total_loss = region.vehicle_total_loss or total_loss
+            if reason:
+                region.total_loss_reason = reason
+            if sources:
+                region.vehicle_sources = sources
+            region.vehicle_search_queries = [query]
+        set_status(
+            f"grounded via Tavily: {len(sources)} source(s)"
+            if sources
+            else "Tavily ran but returned no source URLs"
+        )
+        logger.warning("Tavily grounding used %d source(s).", len(sources))
+        return True
+
     def _ground_vehicle_value(
         self, image_paths: list[Path], regions: list[DamageRegion]
     ) -> None:
-        """Look up the vehicle's real market value via Google Search grounding and
-        overwrite the from-pixels vehicle value / total-loss verdict on each region.
+        """Look up the vehicle's real market value via web grounding and overwrite the
+        from-pixels vehicle value / total-loss verdict on each region.
 
-        The search tool cannot be combined with forced-JSON schema, so this is a
-        separate grounded call whose JSON is parsed leniently. No-ops on any failure.
+        Tries free Tavily search first (if TAVILY_API_KEY is set), else Google's paid
+        Search-grounding tool. No-ops on any failure.
         """
         def set_status(status: str) -> None:
             for region in regions:
@@ -264,6 +367,12 @@ class GeminiClaimNarrator:
 
         set_status("not attempted")
         damaged = ", ".join(sorted({r.panel for r in regions})) or "visible body damage"
+
+        # Prefer free web-search grounding (Tavily) — uses normal Gemini quota for
+        # extraction, not the exhausted paid Google-Search-grounding quota.
+        if TAVILY_API_KEY and self._ground_via_tavily(damaged, regions, set_status):
+            return
+
         prompt = (
             "Identify the exact make, model, and approximate year of the vehicle in these images. "
             "Use Google Search to estimate its current actual cash value (ACV) in US dollars — the "
