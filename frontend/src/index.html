@@ -43,6 +43,13 @@
             <span class="drop-title">Drop claim photos here</span>
             <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
           </label>
+          <div id="upload-queue" class="upload-queue hidden" aria-label="Uploaded images">
+            <div class="queue-heading">
+              <span id="queue-count">0 images</span>
+              <button type="button" id="clear-queue" class="queue-clear">Clear all</button>
+            </div>
+            <ul id="queue-list" class="queue-list"></ul>
+          </div>
           <div class="intake-actions">
             <button type="submit" class="cta">Assess claim</button>
             <p id="status" class="status">No claim photos selected.</p>

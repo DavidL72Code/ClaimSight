@@ -614,6 +614,106 @@ dd {
   grid-template-columns: 1fr 1fr;
 }
 
+/* ── upload queue ────────────────────────────────────────────── */
+.upload-queue {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.upload-queue.hidden { display: none; }
+
+.queue-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.queue-heading span {
+  color: var(--muted);
+  font-size: .76rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.queue-clear {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font-size: .8rem;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.queue-clear:hover { text-decoration: underline; }
+
+.queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .15s, border-color .15s;
+}
+.queue-item:hover { background: rgba(255,255,255,.03); }
+.queue-item.active { border-color: var(--accent); background: var(--accent-dim); }
+
+.queue-thumb {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 36px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--line);
+}
+.queue-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.queue-meta strong {
+  color: var(--ink);
+  font-size: .85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-meta small { color: var(--muted); font-size: .72rem; }
+
+.queue-remove {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.queue-remove:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
 /* ── thumbnail strip (multi-image) ───────────────────────────── */
 .thumb-strip {
   display: flex;
