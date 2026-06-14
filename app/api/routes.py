@@ -113,8 +113,10 @@ async def assess_damage(
         destinations.append(destination)
         digests.append(sha256(content).hexdigest())
 
-    # Reproducibility: identical image set -> identical assessment, returned verbatim.
-    cache_key = "|".join(sorted(digests))
+    # Reproducibility: identical images IN THE SAME ORDER -> identical assessment.
+    # Order matters because each box's image_index refers to upload position, so the
+    # key must NOT be sorted (re-ordering legitimately changes box-to-image mapping).
+    cache_key = "|".join(digests)
     cached = _assessment_cache.get(cache_key)
     if cached is not None:
         return cached
