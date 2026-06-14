@@ -461,6 +461,14 @@ const renderActiveOverlay = () => {
     box.style.width = `${displayRect.width}px`;
     box.style.height = `${displayRect.height}px`;
 
+    // If MobileSAM produced a mask, overlay its shape filling the box rect.
+    if (region.mask_png) {
+      const mask = document.createElement("img");
+      mask.className = "damage-mask";
+      mask.src = region.mask_png;
+      box.appendChild(mask);
+    }
+
     const tag = document.createElement("span");
     tag.className = "damage-tag";
     tag.textContent = `${region.part_id || ""} ${region.panel}`.trim();

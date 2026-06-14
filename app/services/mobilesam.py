@@ -14,6 +14,8 @@ Targets the standard segment-anything ONNX decoder I/O convention.
 """
 from __future__ import annotations
 
+import base64
+import io
 import logging
 from pathlib import Path
 
@@ -32,6 +34,12 @@ logger = logging.getLogger("claimsight.mobilesam")
 _TARGET = 1024
 _PIXEL_MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
 _PIXEL_STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
+# Mask fill color by severity (matches the UI palette).
+_SEVERITY_RGB = {
+    "high": (224, 92, 74),
+    "moderate": (240, 180, 41),
+    "low": (167, 227, 74),
+}
 
 
 class MobileSamRefiner:
@@ -85,11 +93,16 @@ class MobileSamRefiner:
             if embedding is None:
                 return
             for region in regions:
-                box = region.bounding_box
-                refined = self._box_from_mask(embedding, scale, orig_hw, box)
-                if refined is not None:
-                    region.bounding_box = refined
-                    region.source = "gemini+sam2"
+                mask = self._mask_for_box(embedding, scale, orig_hw, region.bounding_box)
+                if mask is None:
+                    continue
+                refined = self._bbox_from_mask(mask)
+                if refined is None:
+                    continue
+                region.bounding_box = refined
+                region.source = "gemini+sam2"
+                # Cropped, colored mask PNG positioned later at the (refined) box.
+                region.mask_png = self._mask_png(mask, refined, region.severity)
         except Exception as exc:
             logger.warning("MobileSAM refine failed, keeping Gemini boxes: %s", exc)
 
@@ -109,7 +122,8 @@ class MobileSamRefiner:
         out = self._encoder.run(None, {enc_in: tensor})
         return out[0], scale, (h, w)
 
-    def _box_from_mask(self, embedding, scale, orig_hw, box: BoundingBox):
+    def _mask_for_box(self, embedding, scale, orig_hw, box: BoundingBox):
+        """Run the decoder with a box prompt; return a full-size boolean mask or None."""
         h, w = orig_hw
         # Box corners in the resized (1024) coordinate frame, SAM box-prompt labels 2/3.
         coords = np.array(
@@ -132,12 +146,13 @@ class MobileSamRefiner:
             return None
 
         outputs = self._decoder.run(None, feeds)
-        masks = outputs[0]
-        mask = np.asarray(masks)
+        mask = np.asarray(outputs[0])
         while mask.ndim > 2:
             mask = mask[0]
-        binary = mask > 0.0
-        ys, xs = np.where(binary)
+        return mask > 0.0
+
+    def _bbox_from_mask(self, mask: np.ndarray):
+        ys, xs = np.where(mask)
         if ys.size == 0:
             return None
         left, right = int(xs.min()), int(xs.max())
@@ -148,3 +163,32 @@ class MobileSamRefiner:
             width=max(1, right - left),
             height=max(1, bottom - top),
         )
+
+    def _mask_png(self, mask: np.ndarray, box: BoundingBox, severity: str) -> str:
+        """Crop the mask to its box and return a translucent colored PNG data URL.
+
+        The crop aligns exactly with the (refined) bounding box, so the frontend can
+        draw it at the same screen rect it uses for the box.
+        """
+        try:
+            crop = mask[box.y : box.y + box.height, box.x : box.x + box.width]
+            if crop.size == 0:
+                return ""
+            r, g, b = _SEVERITY_RGB.get(severity, _SEVERITY_RGB["moderate"])
+            h, w = crop.shape
+            rgba = np.zeros((h, w, 4), dtype=np.uint8)
+            rgba[crop, 0] = r
+            rgba[crop, 1] = g
+            rgba[crop, 2] = b
+            rgba[crop, 3] = 110  # translucent fill
+            img = Image.fromarray(rgba, mode="RGBA")
+            # Keep payload small.
+            if max(h, w) > 256:
+                ratio = 256 / max(h, w)
+                img = img.resize((max(1, int(w * ratio)), max(1, int(h * ratio))), Image.NEAREST)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception as exc:
+            logger.warning("mask PNG build failed: %s", exc)
+            return ""

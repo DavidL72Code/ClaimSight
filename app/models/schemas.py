@@ -24,6 +24,7 @@ class DamageRegion(BaseModel):
     source: str
     image_index: int = 0
     ai_assessor_model: str = ""
+    mask_png: str = ""  # base64 PNG of the segmentation mask, cropped to the box
     # Vehicle-level context (same across a vehicle's regions; 0/""/False when unknown).
     vehicle_value_usd: int = 0
     vehicle_label: str = ""
