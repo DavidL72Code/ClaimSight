@@ -11,6 +11,22 @@ from app.models.schemas import BoundingBox, DamageRegion, Source
 
 logger = logging.getLogger("claimsight.gemini")
 
+# Deterministic decoding so the same images yield the same assessment every run.
+_FIXED_SEED = 7
+
+
+def _det_config(types, **kwargs):
+    """Build a GenerateContentConfig with deterministic settings (temp 0 + fixed seed).
+
+    seed isn't supported on every SDK/model build, so fall back gracefully.
+    """
+    base = {"temperature": 0.0, "seed": _FIXED_SEED, **kwargs}
+    try:
+        return types.GenerateContentConfig(**base)
+    except TypeError:
+        base.pop("seed", None)
+        return types.GenerateContentConfig(**base)
+
 
 class GeminiClaimNarrator:
     def __init__(self) -> None:
@@ -85,6 +101,7 @@ class GeminiClaimNarrator:
             response = self._client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=contents,
+                config=_det_config(types),
             )
             text = getattr(response, "text", None)
             return text.strip() if text else None
@@ -129,6 +146,13 @@ class GeminiClaimNarrator:
                 if multi
                 else ""
             )
+            + "Apply this FIXED severity rubric consistently every time: "
+            "low = cosmetic only (minor scratch/scuff/chip, no part replacement, paint touch-up); "
+            "moderate = a dent, crack, or damaged component needing repair/repaint or one bolt-on "
+            "part replacement; "
+            "high = structural deformation, a missing/destroyed/non-functional part, broken glass, "
+            "suspension/frame/airbag/safety involvement. "
+            "The same visible damage on the same vehicle must always get the same severity and cost. "
             + "For each unique damaged part output an object with: "
             'part_id (a short stable id like "P1", "P2", ... unique per part); '
             "panel (the part name, e.g. \"front bumper\", \"driver door\", \"windshield\"); "
@@ -215,7 +239,8 @@ class GeminiClaimNarrator:
             response = self._client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=contents,
-                config=types.GenerateContentConfig(
+                config=_det_config(
+                    types,
                     response_mime_type="application/json",
                     response_schema=response_schema,
                 ),
@@ -313,7 +338,7 @@ class GeminiClaimNarrator:
             response = self._client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=[extract_prompt],
-                config=types.GenerateContentConfig(response_mime_type="application/json"),
+                config=_det_config(types, response_mime_type="application/json"),
             )
             payload = self._extract_json(getattr(response, "text", "") or "")
         except Exception as exc:
@@ -417,7 +442,7 @@ class GeminiClaimNarrator:
                     response = self._client.models.generate_content(
                         model=GEMINI_MODEL,
                         contents=contents,
-                        config=types.GenerateContentConfig(tools=[tool]),
+                        config=_det_config(types, tools=[tool]),
                     )
                     break
                 except Exception as exc:
