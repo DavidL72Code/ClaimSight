@@ -149,7 +149,27 @@ class MobileSamRefiner:
         mask = np.asarray(outputs[0])
         while mask.ndim > 2:
             mask = mask[0]
-        return mask > 0.0
+
+        # Polarity is export-dependent: pick whichever side is concentrated INSIDE the
+        # prompt box (the true part), not spread across the background.
+        pos = mask > 0.0
+        y0, y1 = max(0, box.y), min(mask.shape[0], box.y + box.height)
+        x0, x1 = max(0, box.x), min(mask.shape[1], box.x + box.width)
+
+        def outside_fraction(m: np.ndarray) -> float:
+            total = int(m.sum())
+            if total == 0:
+                return 1.0
+            inside = int(m[y0:y1, x0:x1].sum())
+            return (total - inside) / total
+
+        neg = ~pos
+        chosen = pos if outside_fraction(pos) <= outside_fraction(neg) else neg
+
+        # Reject garbage: empty, or still mostly outside the prompt box.
+        if not chosen.any() or outside_fraction(chosen) > 0.5:
+            return None
+        return chosen
 
     def _bbox_from_mask(self, mask: np.ndarray):
         ys, xs = np.where(mask)
