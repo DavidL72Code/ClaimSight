@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageStat
 
-from app.core.config import SAM2_MODEL_ID, SEGMENTATION_PROVIDER
+from app.core.config import ENABLE_SAM2_ONNX, SAM2_MODEL_ID, SEGMENTATION_PROVIDER
 from app.models.schemas import BoundingBox, DamageRegion
 
 
@@ -332,9 +332,23 @@ class GeminiSegmentationService(SegmentationService):
         self._narrator = GeminiClaimNarrator()
         self._fallback = ClassicalSegmentationService()
 
+        # Optional MobileSAM (ONNX, CPU) mask refiner — layered on Gemini's boxes.
+        self._refiner = None
+        if ENABLE_SAM2_ONNX:
+            try:
+                from app.services.mobilesam import MobileSamRefiner
+
+                self._refiner = MobileSamRefiner()
+            except Exception:
+                self._refiner = None
+
     @property
     def provider_name(self) -> str:
-        return "gemini" if self._narrator.enabled else self._fallback.provider_name
+        if not self._narrator.enabled:
+            return self._fallback.provider_name
+        if self._refiner is not None and self._refiner.ready:
+            return "gemini+sam2"
+        return "gemini"
 
     def analyze(self, image_path: Path, original_filename: str) -> list[DamageRegion]:
         return self.analyze_images([image_path], [original_filename])
@@ -347,10 +361,18 @@ class GeminiSegmentationService(SegmentationService):
         #   None  -> Gemini errored/unavailable -> fall back to the classical detector
         #   []    -> Gemini ran and found no damage -> return no regions (do NOT hallucinate)
         #   [...] -> real detections
-        if regions is not None:
-            return regions
-        # Fallback can only inspect a single image; use the first.
-        return self._fallback.analyze(image_paths[0], original_filenames[0])
+        if regions is None:
+            # Fallback can only inspect a single image; use the first.
+            return self._fallback.analyze(image_paths[0], original_filenames[0])
+
+        # Refine each detected box into a tight MobileSAM mask box (best-effort).
+        if regions and self._refiner is not None and self._refiner.ready:
+            for index, path in enumerate(image_paths):
+                in_image = [r for r in regions if (r.image_index or 0) == index]
+                if in_image:
+                    self._refiner.refine_image(path, in_image)
+
+        return regions
 
 
 def get_segmentation_service() -> SegmentationService:

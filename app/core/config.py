@@ -25,6 +25,11 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip()
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip()
 SEGMENTATION_PROVIDER = os.getenv("SEGMENTATION_PROVIDER", "gemini").strip().lower()
 SAM2_MODEL_ID = os.getenv("SAM2_MODEL_ID", "facebook/sam2-hiera-tiny").strip()
+# Optional MobileSAM (ONNX, CPU) mask refiner layered on Gemini's boxes.
+ENABLE_SAM2_ONNX = _env_bool("ENABLE_SAM2_ONNX", False)
+MOBILESAM_ONNX_REPO = os.getenv("MOBILESAM_ONNX_REPO", "").strip()
+MOBILESAM_ENCODER_FILE = os.getenv("MOBILESAM_ENCODER_FILE", "mobile_sam.encoder.onnx").strip()
+MOBILESAM_DECODER_FILE = os.getenv("MOBILESAM_DECODER_FILE", "mobile_sam.decoder.onnx").strip()
 ALLOW_CORS_WILDCARD = _env_bool("ALLOW_CORS_WILDCARD", False)
 _raw_allowed_origins = [
     origin.strip()

@@ -12,3 +12,6 @@ requests==2.33.0
 urllib3==2.7.0
 python-dotenv==1.2.2
 filelock==3.20.3
+# Optional MobileSAM (ONNX, CPU) mask refiner — only active when ENABLE_SAM2_ONNX=1
+onnxruntime==1.19.2
+huggingface_hub==0.25.2
