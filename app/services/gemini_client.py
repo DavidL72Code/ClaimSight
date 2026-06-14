@@ -157,8 +157,10 @@ class GeminiClaimNarrator:
             'part_id (a short stable id like "P1", "P2", ... unique per part); '
             "panel (the part name, e.g. \"front bumper\", \"driver door\", \"windshield\"); "
             "damage_type; severity (low|moderate|high); confidence (0-1); "
-            "image_index (0-based index of the SINGLE image where this part is clearest); "
-            "box_2d = [ymin, xmin, ymax, xmax] as integers 0-1000 normalized to THAT image's size; "
+            "image_index (the integer N from the 'IMAGE INDEX N:' label that immediately "
+            "precedes the SINGLE image where this part is clearest — use that exact number, do not "
+            "guess from content); "
+            "box_2d = [ymin, xmin, ymax, xmax] as integers 0-1000 normalized to THAT same image's size; "
             "estimated_repair_cost_usd = a realistic US-dollar repair or replacement cost for THAT "
             "specific part on THIS specific vehicle, accounting for OEM part prices, parts "
             "exclusivity/scarcity, paint/labor, and how expensive the vehicle is (an exotic or "
@@ -226,8 +228,12 @@ class GeminiClaimNarrator:
                 ],
             }
 
+            # Label each image with its index so image_index is anchored to upload
+            # ORDER, not the model's guess about content. Without this, changing the
+            # upload order swaps which image boxes land on.
             contents: list = []
-            for path in image_paths:
+            for index, path in enumerate(image_paths):
+                contents.append(types.Part.from_text(text=f"IMAGE INDEX {index}:"))
                 contents.append(
                     types.Part.from_bytes(
                         data=path.read_bytes(),
