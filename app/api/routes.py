@@ -1,4 +1,3 @@
-from hashlib import sha256
 from hmac import compare_digest
 from io import BytesIO
 from pathlib import Path
@@ -35,9 +34,6 @@ MAX_IMAGES_PER_REQUEST = 8
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 _request_log: dict[str, list[float]] = {}
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
-# Content-hash cache: identical image bytes -> identical assessment (reproducibility).
-_assessment_cache: dict[str, AssessmentResponse] = {}
-_ASSESSMENT_CACHE_MAX = 64
 
 
 def _health_payload() -> dict[str, object]:
@@ -92,7 +88,6 @@ async def assess_damage(
 
     filenames: list[str] = []
     destinations: list[Path] = []
-    digests: list[str] = []
     for upload in uploads:
         original_filename = _safe_display_filename(upload.filename)
         extension = Path(original_filename).suffix.lower()
@@ -111,29 +106,27 @@ async def assess_damage(
         destination.write_bytes(content)
         filenames.append(original_filename)
         destinations.append(destination)
-        digests.append(sha256(content).hexdigest())
 
-    # Reproducibility: identical images IN THE SAME ORDER -> identical assessment.
-    # Order matters because each box's image_index refers to upload position, so the
-    # key must NOT be sorted (re-ordering legitimately changes box-to-image mapping).
-    cache_key = "|".join(digests)
-    cached = _assessment_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    regions = segmentation_service.analyze_images(destinations, filenames)
-    segmentation_provider = regions[0].source if regions else segmentation_service.provider_name
-    assessment = report_service.build_assessment(
-        filenames,
-        destinations,
-        regions,
-        segmentation_provider,
-    )
-
-    if len(_assessment_cache) >= _ASSESSMENT_CACHE_MAX:
-        _assessment_cache.clear()
-    _assessment_cache[cache_key] = assessment
-    return assessment
+    # No caching: every request runs the model fresh (so output reflects the model,
+    # not stored memory) and no user's assessment is held in shared server state.
+    try:
+        regions = segmentation_service.analyze_images(destinations, filenames)
+        segmentation_provider = (
+            regions[0].source if regions else segmentation_service.provider_name
+        )
+        return report_service.build_assessment(
+            filenames,
+            destinations,
+            regions,
+            segmentation_provider,
+        )
+    finally:
+        # Don't retain claim photos on the server after the assessment is built.
+        for path in destinations:
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def _enforce_rate_limit(request: Request) -> None:
