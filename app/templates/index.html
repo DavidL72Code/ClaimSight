@@ -123,6 +123,70 @@
       const results = document.getElementById("results");
       const regions = document.getElementById("regions");
 
+      const parseOptionalInteger = (value) => {
+        const normalized = value.trim();
+        if (!normalized) {
+          return null;
+        }
+        const parsed = Number.parseInt(normalized, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const collectClaimContext = () => ({
+        make: document.getElementById("vehicle-make").value.trim(),
+        model: document.getElementById("vehicle-model").value.trim(),
+        trim: document.getElementById("vehicle-trim").value.trim(),
+        year: parseOptionalInteger(document.getElementById("vehicle-year").value),
+        mileage: parseOptionalInteger(document.getElementById("vehicle-mileage").value),
+        pre_existing_damage: document.getElementById("pre-existing-damage").value.trim(),
+      });
+
+      const mergeVehicleContext = (payloadClaimContext = {}) => {
+        const enteredContext = collectClaimContext();
+        return {
+          make: payloadClaimContext.make || enteredContext.make || "",
+          model: payloadClaimContext.model || enteredContext.model || "",
+          trim: payloadClaimContext.trim || enteredContext.trim || "",
+          year:
+            payloadClaimContext.year !== null && payloadClaimContext.year !== undefined
+              ? payloadClaimContext.year
+              : enteredContext.year,
+          mileage:
+            payloadClaimContext.mileage !== null && payloadClaimContext.mileage !== undefined
+              ? payloadClaimContext.mileage
+              : enteredContext.mileage,
+          pre_existing_damage:
+            payloadClaimContext.pre_existing_damage || enteredContext.pre_existing_damage || "",
+        };
+      };
+
+      const mergeVehicleLabel = (label, claimContext) => {
+        const trimmedLabel = (label || "").trim();
+        const yearPrefix = claimContext.year ? `${claimContext.year} ` : "";
+
+        if (trimmedLabel && claimContext.year && !trimmedLabel.startsWith(String(claimContext.year))) {
+          return `${yearPrefix}${trimmedLabel}`;
+        }
+        if (trimmedLabel) {
+          return trimmedLabel;
+        }
+
+        const fallbackParts = [claimContext.make, claimContext.model, claimContext.trim]
+          .map((part) => (part || "").trim())
+          .filter(Boolean);
+        const fallbackLabel = fallbackParts.join(" ");
+        if (claimContext.year && fallbackLabel) {
+          return `${claimContext.year} ${fallbackLabel}`;
+        }
+        if (fallbackLabel) {
+          return fallbackLabel;
+        }
+        if (claimContext.year) {
+          return `${claimContext.year} passenger vehicle`;
+        }
+        return "Unknown";
+      };
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const fileInput = document.getElementById("claim-image");
@@ -158,8 +222,10 @@
             throw new Error(payload.detail || "Assessment failed.");
           }
 
+          const claimContext = mergeVehicleContext(payload.claim_context || {});
           document.getElementById("filename").textContent = payload.filename;
-          document.getElementById("vehicle-type").textContent = payload.vehicle_type || "Unknown";
+          document.getElementById("vehicle-type").textContent =
+            mergeVehicleLabel(payload.vehicle_type, claimContext);
           document.getElementById("vehicle-value").textContent = payload.estimated_vehicle_value_usd
             ? `$${payload.estimated_vehicle_value_usd.toLocaleString()}`
             : "Unknown";
@@ -168,11 +234,11 @@
           document.getElementById("estimated-cost").textContent =
             `$${payload.estimated_total_cost_usd.toLocaleString()}`;
           document.getElementById("reported-mileage").textContent =
-            payload.claim_context?.mileage != null
-              ? `${payload.claim_context.mileage.toLocaleString()} mi`
+            claimContext.mileage != null
+              ? `${claimContext.mileage.toLocaleString()} mi`
               : "Not provided";
           document.getElementById("prior-damage").textContent =
-            payload.claim_context?.pre_existing_damage || "None reported";
+            claimContext.pre_existing_damage || "None reported";
           document.getElementById("recommended-action").textContent = payload.recommended_action;
           document.getElementById("pricing-factors").textContent = payload.pricing_factors?.length
             ? payload.pricing_factors.join(" ")
