@@ -320,12 +320,17 @@ const renderEvidence = (payload) => {
   elements.sourcesList.innerHTML = "";
   if (sources.length) {
     sources.forEach((src) => {
+      // Only allow http(s) links — block javascript:/data: URLs (XSS) from
+      // untrusted web-search results.
+      const safeUrl = /^https?:\/\//i.test(src.url || "") ? src.url : "";
       const li = document.createElement("li");
       const a = document.createElement("a");
-      a.href = src.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = src.title || src.url;
+      if (safeUrl) {
+        a.href = safeUrl;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      a.textContent = src.title || safeUrl || "(source)";
       li.appendChild(a);
       elements.sourcesList.appendChild(li);
     });
@@ -462,7 +467,8 @@ const renderActiveOverlay = () => {
     box.style.height = `${displayRect.height}px`;
 
     // If MobileSAM produced a mask, overlay its shape filling the box rect.
-    if (region.mask_png) {
+    // Only accept image data URLs (reject any non-image/external src).
+    if (typeof region.mask_png === "string" && region.mask_png.startsWith("data:image/")) {
       const mask = document.createElement("img");
       mask.className = "damage-mask";
       mask.src = region.mask_png;

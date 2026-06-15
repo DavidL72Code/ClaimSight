@@ -133,6 +133,11 @@ def _enforce_rate_limit(request: Request) -> None:
     client_host = request.client.host if request.client else "unknown"
     now = monotonic()
     window_start = now - RATE_LIMIT_WINDOW_SECONDS
+
+    # Evict clients with no recent activity so the log can't grow unboundedly.
+    for host in [h for h, ts in _request_log.items() if not ts or ts[-1] < window_start]:
+        _request_log.pop(host, None)
+
     recent = [timestamp for timestamp in _request_log.get(client_host, []) if timestamp >= window_start]
 
     if len(recent) >= RATE_LIMIT_MAX_REQUESTS:
