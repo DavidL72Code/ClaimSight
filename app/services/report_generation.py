@@ -33,6 +33,10 @@ class ClaimReportService:
         total_loss_reason = next(
             (region.total_loss_reason for region in regions if region.total_loss_reason), ""
         )
+        valuation_methodology = next(
+            (region.valuation_methodology for region in regions if region.valuation_methodology),
+            "",
+        )
         sources = next((region.vehicle_sources for region in regions if region.vehicle_sources), [])
         search_queries = next(
             (region.vehicle_search_queries for region in regions if region.vehicle_search_queries),
@@ -93,6 +97,7 @@ class ClaimReportService:
             filenames=filenames,
             vehicle_type=resolved_vehicle_label or "passenger vehicle",
             estimated_vehicle_value_usd=adjusted_vehicle_value,
+            valuation_methodology=valuation_methodology,
             total_loss=is_total_loss,
             total_loss_reason=total_loss_reason,
             overall_severity=overall_severity,

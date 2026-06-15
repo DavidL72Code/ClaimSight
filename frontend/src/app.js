@@ -36,6 +36,7 @@ const elements = {
   estimatedCost: document.getElementById("estimated-cost"),
   recommendedAction: document.getElementById("recommended-action"),
   pricingFactors: document.getElementById("pricing-factors"),
+  valuationMethodology: document.getElementById("valuation-methodology"),
   segmentationProvider: document.getElementById("segmentation-provider"),
   reportProvider: document.getElementById("report-provider"),
   fallbackNote: document.getElementById("fallback-note"),
@@ -393,6 +394,8 @@ const updateSummary = (payload) => {
   elements.pricingFactors.textContent = pricingFactors.length
     ? pricingFactors.join(" ")
     : "No additional pricing adjustments were applied.";
+  elements.valuationMethodology.textContent = payload.valuation_methodology
+    || "No valuation methodology was returned. The estimate may be coming from a weak or generic market match.";
   elements.segmentationProvider.textContent = payload.meta.segmentation_provider;
   elements.reportProvider.textContent = payload.meta.report_provider;
   elements.fallbackNote.textContent = payload.meta.fallback_used
