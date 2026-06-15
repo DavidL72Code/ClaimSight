@@ -252,7 +252,9 @@ class GeminiClaimNarrator:
                 ),
             )
             text = getattr(response, "text", None)
-            logger.warning("Gemini detection raw response (model=%s): %r", GEMINI_MODEL, text)
+            logger.warning(
+                "Gemini detection response (model=%s): %d chars", GEMINI_MODEL, len(text or "")
+            )
             if not text:
                 logger.warning("Gemini detection returned empty text; falling back.")
                 return None
@@ -465,7 +467,7 @@ class GeminiClaimNarrator:
                 return
 
             text = getattr(response, "text", None)
-            logger.warning("Gemini grounded valuation raw response: %r", text)
+            logger.warning("Gemini grounded valuation response: %d chars", len(text or ""))
             if not text:
                 set_status("empty grounded response")
                 return
