@@ -106,6 +106,7 @@
             </div>
           </dl>
           <p id="pricing-factors" class="fallback-note"></p>
+          <p id="valuation-methodology" class="summary-text"></p>
           <p id="fallback-note" class="fallback-note"></p>
           <p id="summary-text" class="summary-text"></p>
         </div>
@@ -243,6 +244,9 @@
           document.getElementById("pricing-factors").textContent = payload.pricing_factors?.length
             ? payload.pricing_factors.join(" ")
             : "No additional pricing adjustments were applied.";
+          document.getElementById("valuation-methodology").textContent =
+            payload.valuation_methodology ||
+            "No valuation methodology was returned. The estimate may be coming from a weak or generic market match.";
           document.getElementById("segmentation-provider").textContent =
             payload.meta.segmentation_provider;
           document.getElementById("report-provider").textContent = payload.meta.report_provider;

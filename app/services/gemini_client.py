@@ -359,7 +359,7 @@ class GeminiClaimNarrator:
             "whether it is an economic or structural total loss (repairs approach/exceed value, "
             "or structural/fire damage makes it unrepairable). "
             'Respond ONLY with JSON: {"vehicle_label": str, "estimated_vehicle_value_usd": int, '
-            '"total_loss": bool, "total_loss_reason": str}.'
+            '"valuation_methodology": str, "total_loss": bool, "total_loss_reason": str}.'
         )
         try:
             from google.genai import types
@@ -386,6 +386,7 @@ class GeminiClaimNarrator:
             value = 0
         total_loss = bool(payload.get("total_loss", False))
         reason = str(payload.get("total_loss_reason", "") or "")
+        valuation_methodology = str(payload.get("valuation_methodology", "") or "")
 
         for region in regions:
             if new_label:
@@ -395,6 +396,8 @@ class GeminiClaimNarrator:
             region.vehicle_total_loss = region.vehicle_total_loss or total_loss
             if reason:
                 region.total_loss_reason = reason
+            if valuation_methodology:
+                region.valuation_methodology = valuation_methodology
             if sources:
                 region.vehicle_sources = sources
             region.vehicle_search_queries = [query]
@@ -444,7 +447,7 @@ class GeminiClaimNarrator:
             "(repairs approach/exceed its value, or the structure — chassis, carbon-fiber tub, frame — "
             "or fire damage makes it unrepairable). "
             'Respond with ONLY JSON: {"vehicle_label": str, "estimated_vehicle_value_usd": int, '
-            '"total_loss": bool, "total_loss_reason": str}.'
+            '"valuation_methodology": str, "total_loss": bool, "total_loss_reason": str}.'
         )
         try:
             from google.genai import types
@@ -513,6 +516,7 @@ class GeminiClaimNarrator:
                 value = 0
             total_loss = bool(data.get("total_loss", False))
             reason = str(data.get("total_loss_reason", "") or "")
+            valuation_methodology = str(data.get("valuation_methodology", "") or "")
 
             sources, queries = self._extract_grounding(response)
             logger.warning("Gemini grounded valuation used %d source(s).", len(sources))
@@ -526,6 +530,8 @@ class GeminiClaimNarrator:
                 region.vehicle_total_loss = region.vehicle_total_loss or total_loss
                 if reason:
                     region.total_loss_reason = reason
+                if valuation_methodology:
+                    region.valuation_methodology = valuation_methodology
                 if sources:
                     region.vehicle_sources = sources
                 if queries:
