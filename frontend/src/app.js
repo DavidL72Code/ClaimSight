@@ -98,6 +98,53 @@ const collectClaimContext = () => {
   return context;
 };
 
+const mergeVehicleContext = (payloadClaimContext = {}) => {
+  const enteredContext = collectClaimContext();
+  return {
+    make: payloadClaimContext.make || enteredContext.make || "",
+    model: payloadClaimContext.model || enteredContext.model || "",
+    trim: payloadClaimContext.trim || enteredContext.trim || "",
+    year:
+      payloadClaimContext.year !== null && payloadClaimContext.year !== undefined
+        ? payloadClaimContext.year
+        : enteredContext.year,
+    mileage:
+      payloadClaimContext.mileage !== null && payloadClaimContext.mileage !== undefined
+        ? payloadClaimContext.mileage
+        : enteredContext.mileage,
+    pre_existing_damage:
+      payloadClaimContext.pre_existing_damage || enteredContext.pre_existing_damage || "",
+  };
+};
+
+const mergeVehicleLabel = (label, claimContext) => {
+  const trimmedLabel = (label || "").trim();
+  const yearPrefix = claimContext.year ? `${claimContext.year} ` : "";
+
+  if (trimmedLabel && claimContext.year && !trimmedLabel.startsWith(String(claimContext.year))) {
+    return `${yearPrefix}${trimmedLabel}`;
+  }
+
+  if (trimmedLabel) {
+    return trimmedLabel;
+  }
+
+  const fallbackParts = [claimContext.make, claimContext.model, claimContext.trim]
+    .map((part) => (part || "").trim())
+    .filter(Boolean);
+  const fallbackLabel = fallbackParts.join(" ");
+  if (claimContext.year && fallbackLabel) {
+    return `${claimContext.year} ${fallbackLabel}`;
+  }
+  if (fallbackLabel) {
+    return fallbackLabel;
+  }
+  if (claimContext.year) {
+    return `${claimContext.year} passenger vehicle`;
+  }
+  return "—";
+};
+
 const isValidClientImage = (file) => {
   if (!allowedClientMimeTypes.has(file.type)) {
     setStatus("Use JPG, PNG, or WebP images.");
@@ -326,11 +373,11 @@ const renderThumbs = () => {
 
 const updateSummary = (payload) => {
   const imageCount = payload.meta?.image_count || 1;
-  const claimContext = payload.claim_context || {};
+  const claimContext = mergeVehicleContext(payload.claim_context || {});
   const pricingFactors = payload.pricing_factors || [];
   elements.filename.textContent =
     imageCount > 1 ? `${imageCount} images` : payload.filename;
-  elements.vehicleType.textContent = payload.vehicle_type || "—";
+  elements.vehicleType.textContent = mergeVehicleLabel(payload.vehicle_type, claimContext);
   const vehicleValue = payload.estimated_vehicle_value_usd || 0;
   elements.vehicleValue.textContent =
     vehicleValue > 0 ? `$${vehicleValue.toLocaleString()}` : "Unknown";
