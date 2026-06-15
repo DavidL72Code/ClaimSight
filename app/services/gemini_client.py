@@ -544,24 +544,39 @@ class GeminiClaimNarrator:
         regions: list[DamageRegion],
         claim_context: ClaimContext,
     ) -> str:
-        reported_parts = [
-            str(claim_context.year) if claim_context.year else "",
-            claim_context.make,
-            claim_context.model,
-            claim_context.trim,
-        ]
-        reported_label = " ".join(part for part in reported_parts if part).strip()
         detected_label = next((r.vehicle_label for r in regions if r.vehicle_label), "")
-        return reported_label or detected_label or "vehicle"
+        detected_parts = detected_label.split()
+
+        make = claim_context.make.strip()
+        model = claim_context.model.strip()
+        trim = claim_context.trim.strip()
+
+        if not make and detected_parts:
+            make = detected_parts[0]
+        if not model and len(detected_parts) > 1:
+            model = " ".join(detected_parts[1:])
+
+        core_parts = [make, model, trim]
+        core_label = " ".join(part for part in core_parts if part).strip()
+
+        if claim_context.year and core_label:
+            return f"{claim_context.year} {core_label}"
+        if core_label:
+            return core_label
+        if claim_context.year and detected_label:
+            return f"{claim_context.year} {detected_label}"
+        return detected_label or "vehicle"
 
     def _build_comparable_query(self, label: str, claim_context: ClaimContext) -> str:
         parts = [label]
+        if claim_context.year is not None:
+            parts.append(f"model year {claim_context.year}")
         if claim_context.mileage is not None:
             parts.append(f"{claim_context.mileage} miles")
         parts.extend(
             [
-                "used listing",
-                "resale value",
+                "comparable used listings",
+                "market value",
                 "USD",
             ]
         )
