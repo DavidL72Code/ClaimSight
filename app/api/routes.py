@@ -10,7 +10,9 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from app.core.config import (
+    ALLOWED_ORIGINS,
     API_ACCESS_TOKEN,
+    ENFORCE_ORIGIN,
     MAX_IMAGE_PIXELS,
     MAX_UPLOAD_BYTES,
     RATE_LIMIT_MAX_REQUESTS,
@@ -68,6 +70,7 @@ async def assess_damage(
     files: list[UploadFile] = File(default=[]),
     file: Optional[UploadFile] = File(default=None),
 ) -> AssessmentResponse:
+    _enforce_origin_allowlist(request)
     _enforce_optional_api_token(request)
     _enforce_rate_limit(request)
 
@@ -129,8 +132,38 @@ async def assess_damage(
                 pass
 
 
+def _enforce_origin_allowlist(request: Request) -> None:
+    """Reject requests not originating from an approved site (cheap deterrent).
+
+    Opt-in via ENFORCE_ORIGIN. Browsers send Origin honestly on cross-site POSTs;
+    non-browser tools can forge it, so this stops casual/bot/cross-site abuse, not a
+    determined attacker. Disabled by default so it can't break the live site.
+    """
+    if not ENFORCE_ORIGIN:
+        return
+
+    origin = request.headers.get("origin", "").rstrip("/")
+    if origin and origin in {o.rstrip("/") for o in ALLOWED_ORIGINS}:
+        return
+
+    referer = request.headers.get("referer", "")
+    if referer and any(referer.startswith(o) for o in ALLOWED_ORIGINS):
+        return
+
+    raise HTTPException(status_code=403, detail="Requests are only accepted from the official app.")
+
+
+def _client_ip(request: Request) -> str:
+    # Behind HF's proxy the socket peer is the proxy, so per-user limiting needs the
+    # forwarded client IP. (Forgeable, but so is rotating source IPs — fine for throttling.)
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def _enforce_rate_limit(request: Request) -> None:
-    client_host = request.client.host if request.client else "unknown"
+    client_host = _client_ip(request)
     now = monotonic()
     window_start = now - RATE_LIMIT_WINDOW_SECONDS
 
