@@ -50,4 +50,7 @@ ALLOWED_HOSTS = [
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
 MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", str(12_000_000)))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
-RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "12"))
+RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "5"))
+# Reject /api/assess requests whose Origin/Referer isn't in ALLOWED_ORIGINS.
+# Opt-in (default off) so it can't break the live site until the real domain is allowlisted.
+ENFORCE_ORIGIN = _env_bool("ENFORCE_ORIGIN", False)
