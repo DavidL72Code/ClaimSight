@@ -146,14 +146,29 @@ class ClaimReportService:
         )
 
     def _resolve_vehicle_label(self, detected_label: str, claim_context: ClaimContext) -> str:
-        user_parts = [
-            str(claim_context.year) if claim_context.year else "",
-            claim_context.make,
-            claim_context.model,
-            claim_context.trim,
-        ]
-        user_label = " ".join(part for part in user_parts if part).strip()
-        return user_label or detected_label or "passenger vehicle"
+        detected_parts = detected_label.split()
+
+        make = claim_context.make.strip()
+        model = claim_context.model.strip()
+        trim = claim_context.trim.strip()
+
+        if not make and detected_parts:
+            make = detected_parts[0]
+        if not model and len(detected_parts) > 1:
+            model = " ".join(detected_parts[1:])
+
+        label_parts = [make, model, trim]
+        core_label = " ".join(part for part in label_parts if part).strip()
+
+        if claim_context.year and core_label:
+            return f"{claim_context.year} {core_label}"
+        if core_label:
+            return core_label
+        if claim_context.year and detected_label:
+            return f"{claim_context.year} {detected_label}"
+        if claim_context.year:
+            return f"{claim_context.year} passenger vehicle"
+        return detected_label or "passenger vehicle"
 
     def _adjust_vehicle_value(
         self,
