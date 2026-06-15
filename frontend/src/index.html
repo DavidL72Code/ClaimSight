@@ -38,14 +38,53 @@
           <span>Upload claim photo</span>
         </div>
         <form id="upload-form" class="upload-form">
-          <label class="dropzone" for="claim-image" id="dropzone">
-            <input id="claim-image" name="files" type="file" accept="image/*" multiple hidden />
-            <span class="drop-title">Drop claim photos here</span>
-            <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
-          </label>
-          <div class="intake-actions">
-            <button type="submit" class="cta">Assess claim</button>
-            <p id="status" class="status">No claim photos selected.</p>
+          <div class="intake-main">
+            <label class="dropzone" for="claim-image" id="dropzone">
+              <input id="claim-image" name="files" type="file" accept="image/*" multiple hidden />
+              <span class="drop-title">Drop claim photos here</span>
+              <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
+            </label>
+            <div class="intake-actions">
+              <button type="submit" class="cta">Assess claim</button>
+              <p id="status" class="status">No claim photos selected.</p>
+            </div>
+          </div>
+          <div class="vehicle-context">
+            <div class="context-heading">
+              <strong>Vehicle details for better pricing insight</strong>
+              <p>These details help adjust the value estimate and separate prior damage from this loss.</p>
+            </div>
+            <div class="vehicle-grid">
+              <label>
+                <span>Make</span>
+                <input id="vehicle-make-input" name="make" type="text" placeholder="Audi" />
+              </label>
+              <label>
+                <span>Model</span>
+                <input id="vehicle-model-input" name="model" type="text" placeholder="RS e-tron GT" />
+              </label>
+              <label>
+                <span>Trim</span>
+                <input id="vehicle-trim-input" name="trim" type="text" placeholder="Prestige" />
+              </label>
+              <label>
+                <span>Year</span>
+                <input id="vehicle-year-input" name="year" type="number" min="1980" max="2027" placeholder="2023" />
+              </label>
+              <label>
+                <span>Mileage</span>
+                <input id="vehicle-mileage-input" name="mileage" type="number" min="0" max="500000" placeholder="24500" />
+              </label>
+              <label class="vehicle-notes">
+                <span>Pre-existing damage</span>
+                <textarea
+                  id="pre-existing-damage-input"
+                  name="pre_existing_damage"
+                  rows="3"
+                  placeholder="Prior rear-bumper scuffs, small wheel rash, windshield chip, etc."
+                ></textarea>
+              </label>
+            </div>
           </div>
         </form>
         <div id="upload-queue" class="upload-queue hidden" aria-label="Uploaded images">
@@ -92,6 +131,8 @@
         <dl class="summary-grid stagger">
           <div><dt>Vehicle</dt><dd id="vehicle-type">—</dd></div>
           <div><dt>Est. vehicle value</dt><dd id="vehicle-value">—</dd></div>
+          <div><dt>Reported mileage</dt><dd id="reported-mileage">—</dd></div>
+          <div><dt>Prior damage</dt><dd id="prior-damage">—</dd></div>
           <div><dt>Repairability</dt><dd id="repairability">—</dd></div>
           <div><dt>Estimated repair cost</dt><dd id="estimated-cost">—</dd></div>
           <div><dt>Recommended action</dt><dd id="recommended-action">—</dd></div>
@@ -100,6 +141,10 @@
           <div><dt>Summary engine</dt><dd id="report-provider">—</dd></div>
         </dl>
 
+        <div class="pricing-insight">
+          <span class="evidence-label">Pricing factors</span>
+          <p id="pricing-factors">Vehicle details will appear here when provided.</p>
+        </div>
         <p id="fallback-note" class="fallback-note">Waiting for assessment output.</p>
         <p id="summary-text" class="summary-text">
           The assessment narrative will appear here after the backend reviews the claim image.

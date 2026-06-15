@@ -8,6 +8,12 @@ const elements = {
   form: document.getElementById("upload-form"),
   fileInput: document.getElementById("claim-image"),
   dropzone: document.getElementById("dropzone"),
+  vehicleMakeInput: document.getElementById("vehicle-make-input"),
+  vehicleModelInput: document.getElementById("vehicle-model-input"),
+  vehicleTrimInput: document.getElementById("vehicle-trim-input"),
+  vehicleYearInput: document.getElementById("vehicle-year-input"),
+  vehicleMileageInput: document.getElementById("vehicle-mileage-input"),
+  preExistingDamageInput: document.getElementById("pre-existing-damage-input"),
   emptyPreview: document.getElementById("empty-preview"),
   previewImage: document.getElementById("preview-image"),
   damageOverlay: document.getElementById("damage-overlay"),
@@ -23,10 +29,13 @@ const elements = {
   filename: document.getElementById("filename"),
   vehicleType: document.getElementById("vehicle-type"),
   vehicleValue: document.getElementById("vehicle-value"),
+  reportedMileage: document.getElementById("reported-mileage"),
+  priorDamage: document.getElementById("prior-damage"),
   severity: document.getElementById("overall-severity"),
   repairability: document.getElementById("repairability"),
   estimatedCost: document.getElementById("estimated-cost"),
   recommendedAction: document.getElementById("recommended-action"),
+  pricingFactors: document.getElementById("pricing-factors"),
   segmentationProvider: document.getElementById("segmentation-provider"),
   reportProvider: document.getElementById("report-provider"),
   fallbackNote: document.getElementById("fallback-note"),
@@ -53,6 +62,40 @@ let activeImageIndex = 0;
 
 const setStatus = (message) => {
   elements.status.textContent = message;
+};
+
+const maxVehicleYear = new Date().getFullYear() + 1;
+if (elements.vehicleYearInput) {
+  elements.vehicleYearInput.max = String(maxVehicleYear);
+}
+
+const parseOptionalInteger = (value) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const collectClaimContext = () => {
+  const context = {
+    make: elements.vehicleMakeInput.value.trim(),
+    model: elements.vehicleModelInput.value.trim(),
+    trim: elements.vehicleTrimInput.value.trim(),
+    year: parseOptionalInteger(elements.vehicleYearInput.value),
+    mileage: parseOptionalInteger(elements.vehicleMileageInput.value),
+    pre_existing_damage: elements.preExistingDamageInput.value.trim(),
+  };
+
+  if (context.year !== null && (context.year < 1980 || context.year > maxVehicleYear)) {
+    throw new Error(`Vehicle year must be between 1980 and ${maxVehicleYear}.`);
+  }
+  if (context.mileage !== null && (context.mileage < 0 || context.mileage > 500000)) {
+    throw new Error("Mileage must be between 0 and 500,000.");
+  }
+
+  return context;
 };
 
 const isValidClientImage = (file) => {
@@ -283,16 +326,26 @@ const renderThumbs = () => {
 
 const updateSummary = (payload) => {
   const imageCount = payload.meta?.image_count || 1;
+  const claimContext = payload.claim_context || {};
+  const pricingFactors = payload.pricing_factors || [];
   elements.filename.textContent =
     imageCount > 1 ? `${imageCount} images` : payload.filename;
   elements.vehicleType.textContent = payload.vehicle_type || "—";
   const vehicleValue = payload.estimated_vehicle_value_usd || 0;
   elements.vehicleValue.textContent =
     vehicleValue > 0 ? `$${vehicleValue.toLocaleString()}` : "Unknown";
+  elements.reportedMileage.textContent =
+    claimContext.mileage !== null && claimContext.mileage !== undefined
+      ? `${claimContext.mileage.toLocaleString()} mi`
+      : "Not provided";
+  elements.priorDamage.textContent = claimContext.pre_existing_damage || "None reported";
   elements.severity.textContent = payload.overall_severity;
   elements.repairability.textContent = payload.repairability;
   elements.estimatedCost.textContent = `$${payload.estimated_total_cost_usd.toLocaleString()}`;
   elements.recommendedAction.textContent = payload.recommended_action;
+  elements.pricingFactors.textContent = pricingFactors.length
+    ? pricingFactors.join(" ")
+    : "No additional pricing adjustments were applied.";
   elements.segmentationProvider.textContent = payload.meta.segmentation_provider;
   elements.reportProvider.textContent = payload.meta.report_provider;
   elements.fallbackNote.textContent = payload.meta.fallback_used
@@ -555,9 +608,6 @@ elements.form.addEventListener("submit", async (event) => {
     return;
   }
 
-  const formData = new FormData();
-  selectedImages.forEach((item) => formData.append("files", item.file));
-
   setStatus(
     selectedImages.length > 1
       ? `Assessing ${selectedImages.length} images...`
@@ -565,6 +615,15 @@ elements.form.addEventListener("submit", async (event) => {
   );
 
   try {
+    const formData = new FormData();
+    selectedImages.forEach((item) => formData.append("files", item.file));
+    const claimContext = collectClaimContext();
+    Object.entries(claimContext).forEach(([key, value]) => {
+      if (value !== null && value !== "") {
+        formData.append(key, String(value));
+      }
+    });
+
     const response = await fetch(`${apiBaseUrl}/api/assess`, {
       method: "POST",
       body: formData,

@@ -83,12 +83,40 @@ form {
   font-weight: 600;
 }
 
-input[type="file"] {
+.field {
+  flex: 1 1 180px;
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 0.84rem;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.full-width {
+  flex-basis: 100%;
+}
+
+input[type="file"],
+input[type="text"],
+input[type="number"],
+textarea {
   flex: 1 1 280px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+}
+
+textarea {
+  min-height: 100px;
+  resize: vertical;
 }
 
 button {
