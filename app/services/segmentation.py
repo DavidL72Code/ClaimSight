@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageStat
 
 from app.core.config import ENABLE_SAM2_ONNX, SAM2_MODEL_ID, SEGMENTATION_PROVIDER
-from app.models.schemas import BoundingBox, DamageRegion
+from app.models.schemas import BoundingBox, ClaimContext, DamageRegion
 
 
 class SegmentationService(ABC):
@@ -16,7 +16,10 @@ class SegmentationService(ABC):
         raise NotImplementedError
 
     def analyze_images(
-        self, image_paths: list[Path], original_filenames: list[str]
+        self,
+        image_paths: list[Path],
+        original_filenames: list[str],
+        claim_context: ClaimContext | None = None,
     ) -> list[DamageRegion]:
         """Multi-image entry point.
 
@@ -354,9 +357,12 @@ class GeminiSegmentationService(SegmentationService):
         return self.analyze_images([image_path], [original_filename])
 
     def analyze_images(
-        self, image_paths: list[Path], original_filenames: list[str]
+        self,
+        image_paths: list[Path],
+        original_filenames: list[str],
+        claim_context: ClaimContext | None = None,
     ) -> list[DamageRegion]:
-        regions = self._narrator.detect_regions(image_paths, original_filenames)
+        regions = self._narrator.detect_regions(image_paths, original_filenames, claim_context)
         # detect_regions returns:
         #   None  -> Gemini errored/unavailable -> fall back to the classical detector
         #   []    -> Gemini ran and found no damage -> return no regions (do NOT hallucinate)

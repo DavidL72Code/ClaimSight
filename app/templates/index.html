@@ -21,6 +21,35 @@
         <form id="upload-form">
           <label for="claim-image" class="label">Claim image</label>
           <input id="claim-image" name="file" type="file" accept="image/*" required />
+          <label class="field">
+            <span>Make</span>
+            <input id="vehicle-make" name="make" type="text" placeholder="Audi" />
+          </label>
+          <label class="field">
+            <span>Model</span>
+            <input id="vehicle-model" name="model" type="text" placeholder="RS e-tron GT" />
+          </label>
+          <label class="field">
+            <span>Trim</span>
+            <input id="vehicle-trim" name="trim" type="text" placeholder="Prestige" />
+          </label>
+          <label class="field">
+            <span>Year</span>
+            <input id="vehicle-year" name="year" type="number" min="1980" max="2027" placeholder="2023" />
+          </label>
+          <label class="field">
+            <span>Mileage</span>
+            <input id="vehicle-mileage" name="mileage" type="number" min="0" max="500000" placeholder="24500" />
+          </label>
+          <label class="field full-width">
+            <span>Pre-existing damage</span>
+            <textarea
+              id="pre-existing-damage"
+              name="pre_existing_damage"
+              rows="3"
+              placeholder="Prior bumper scuffs, wheel rash, cracked windshield, etc."
+            ></textarea>
+          </label>
           <button type="submit">Assess damage</button>
         </form>
         <p id="status" class="status"></p>
@@ -35,6 +64,10 @@
               <dd id="filename">-</dd>
             </div>
             <div>
+              <dt>Vehicle</dt>
+              <dd id="vehicle-type">-</dd>
+            </div>
+            <div>
               <dt>Overall severity</dt>
               <dd id="overall-severity">-</dd>
             </div>
@@ -43,8 +76,20 @@
               <dd id="repairability">-</dd>
             </div>
             <div>
+              <dt>Vehicle value</dt>
+              <dd id="vehicle-value">-</dd>
+            </div>
+            <div>
               <dt>Estimated cost</dt>
               <dd id="estimated-cost">-</dd>
+            </div>
+            <div>
+              <dt>Reported mileage</dt>
+              <dd id="reported-mileage">-</dd>
+            </div>
+            <div>
+              <dt>Prior damage</dt>
+              <dd id="prior-damage">-</dd>
             </div>
             <div>
               <dt>Recommended action</dt>
@@ -59,6 +104,7 @@
               <dd id="report-provider">-</dd>
             </div>
           </dl>
+          <p id="pricing-factors" class="fallback-note"></p>
           <p id="fallback-note" class="fallback-note"></p>
           <p id="summary-text" class="summary-text"></p>
         </div>
@@ -87,6 +133,13 @@
 
         const formData = new FormData();
         formData.append("file", fileInput.files[0]);
+        ["make", "model", "trim", "year", "mileage", "pre_existing_damage"].forEach((name) => {
+          const field = form.elements.namedItem(name);
+          const value = field?.value?.trim?.() ?? "";
+          if (value) {
+            formData.append(name, value);
+          }
+        });
 
         status.textContent = "Running assessment...";
         results.classList.add("hidden");
@@ -105,11 +158,24 @@
           }
 
           document.getElementById("filename").textContent = payload.filename;
+          document.getElementById("vehicle-type").textContent = payload.vehicle_type || "Unknown";
+          document.getElementById("vehicle-value").textContent = payload.estimated_vehicle_value_usd
+            ? `$${payload.estimated_vehicle_value_usd.toLocaleString()}`
+            : "Unknown";
           document.getElementById("overall-severity").textContent = payload.overall_severity;
           document.getElementById("repairability").textContent = payload.repairability;
           document.getElementById("estimated-cost").textContent =
-            `$${payload.estimated_total_cost_usd}`;
+            `$${payload.estimated_total_cost_usd.toLocaleString()}`;
+          document.getElementById("reported-mileage").textContent =
+            payload.claim_context?.mileage != null
+              ? `${payload.claim_context.mileage.toLocaleString()} mi`
+              : "Not provided";
+          document.getElementById("prior-damage").textContent =
+            payload.claim_context?.pre_existing_damage || "None reported";
           document.getElementById("recommended-action").textContent = payload.recommended_action;
+          document.getElementById("pricing-factors").textContent = payload.pricing_factors?.length
+            ? payload.pricing_factors.join(" ")
+            : "No additional pricing adjustments were applied.";
           document.getElementById("segmentation-provider").textContent =
             payload.meta.segmentation_provider;
           document.getElementById("report-provider").textContent = payload.meta.report_provider;

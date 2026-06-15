@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BoundingBox(BaseModel):
@@ -11,6 +11,15 @@ class BoundingBox(BaseModel):
 class Source(BaseModel):
     title: str = ""
     url: str = ""
+
+
+class ClaimContext(BaseModel):
+    make: str = ""
+    model: str = ""
+    trim: str = ""
+    year: int | None = None
+    mileage: int | None = None
+    pre_existing_damage: str = ""
 
 
 class DamageRegion(BaseModel):
@@ -30,8 +39,8 @@ class DamageRegion(BaseModel):
     vehicle_label: str = ""
     vehicle_total_loss: bool = False
     total_loss_reason: str = ""
-    vehicle_sources: list[Source] = []
-    vehicle_search_queries: list[str] = []
+    vehicle_sources: list[Source] = Field(default_factory=list)
+    vehicle_search_queries: list[str] = Field(default_factory=list)
     grounding_status: str = ""
 
 
@@ -45,7 +54,7 @@ class AssessmentMeta(BaseModel):
 
 class AssessmentResponse(BaseModel):
     filename: str
-    filenames: list[str] = []
+    filenames: list[str] = Field(default_factory=list)
     vehicle_type: str
     estimated_vehicle_value_usd: int = 0
     total_loss: bool = False
@@ -56,6 +65,8 @@ class AssessmentResponse(BaseModel):
     recommended_action: str
     summary: str
     regions: list[DamageRegion]
-    sources: list[Source] = []
-    search_queries: list[str] = []
+    sources: list[Source] = Field(default_factory=list)
+    search_queries: list[str] = Field(default_factory=list)
+    claim_context: ClaimContext = Field(default_factory=ClaimContext)
+    pricing_factors: list[str] = Field(default_factory=list)
     meta: AssessmentMeta

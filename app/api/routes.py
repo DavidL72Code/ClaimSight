@@ -1,3 +1,4 @@
+from datetime import datetime
 from hmac import compare_digest
 from io import BytesIO
 from pathlib import Path
@@ -6,7 +7,7 @@ from time import monotonic
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from app.core.config import (
@@ -21,7 +22,7 @@ from app.core.config import (
     SEGMENTATION_PROVIDER,
     UPLOAD_DIR,
 )
-from app.models.schemas import AssessmentResponse
+from app.models.schemas import AssessmentResponse, ClaimContext
 from app.services.report_generation import ClaimReportService
 from app.services.segmentation import get_segmentation_service
 
@@ -69,6 +70,12 @@ async def assess_damage(
     request: Request,
     files: list[UploadFile] = File(default=[]),
     file: Optional[UploadFile] = File(default=None),
+    make: str = Form(default=""),
+    model: str = Form(default=""),
+    trim: str = Form(default=""),
+    year: Optional[int] = Form(default=None),
+    mileage: Optional[int] = Form(default=None),
+    pre_existing_damage: str = Form(default=""),
 ) -> AssessmentResponse:
     _enforce_origin_allowlist(request)
     _enforce_optional_api_token(request)
@@ -88,6 +95,15 @@ async def assess_damage(
         )
 
     _validate_content_length(request, count=len(uploads))
+
+    claim_context = _build_claim_context(
+        make=make,
+        model=model,
+        trim=trim,
+        year=year,
+        mileage=mileage,
+        pre_existing_damage=pre_existing_damage,
+    )
 
     filenames: list[str] = []
     destinations: list[Path] = []
@@ -113,7 +129,7 @@ async def assess_damage(
     # No caching: every request runs the model fresh (so output reflects the model,
     # not stored memory) and no user's assessment is held in shared server state.
     try:
-        regions = segmentation_service.analyze_images(destinations, filenames)
+        regions = segmentation_service.analyze_images(destinations, filenames, claim_context)
         segmentation_provider = (
             regions[0].source if regions else segmentation_service.provider_name
         )
@@ -122,6 +138,7 @@ async def assess_damage(
             destinations,
             regions,
             segmentation_provider,
+            claim_context,
         )
     finally:
         # Don't retain claim photos on the server after the assessment is built.
@@ -256,3 +273,35 @@ def _safe_display_filename(filename: str) -> str:
     name = Path(normalized).name.strip() or "claim-image"
     name = _SAFE_FILENAME_PATTERN.sub("_", name)
     return name[:120] or "claim-image"
+
+
+def _build_claim_context(
+    *,
+    make: str,
+    model: str,
+    trim: str,
+    year: Optional[int],
+    mileage: Optional[int],
+    pre_existing_damage: str,
+) -> ClaimContext:
+    current_year = datetime.now().year
+    normalized_year = year
+    normalized_mileage = mileage
+    max_year = current_year + 1
+
+    if normalized_year is not None and not 1980 <= normalized_year <= max_year:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Vehicle year must be between 1980 and {max_year}.",
+        )
+    if normalized_mileage is not None and not 0 <= normalized_mileage <= 500000:
+        raise HTTPException(status_code=400, detail="Mileage must be between 0 and 500,000.")
+
+    return ClaimContext(
+        make=make.strip(),
+        model=model.strip(),
+        trim=trim.strip(),
+        year=normalized_year,
+        mileage=normalized_mileage,
+        pre_existing_damage=pre_existing_damage.strip(),
+    )
