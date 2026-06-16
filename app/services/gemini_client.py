@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import statistics
 from pathlib import Path
 
 from PIL import Image
@@ -358,8 +359,10 @@ class GeminiClaimNarrator:
             "Estimate its actual cash value (ACV) in US dollars from the results, and decide "
             "whether it is an economic or structural total loss (repairs approach/exceed value, "
             "or structural/fire damage makes it unrepairable). "
+            "Return 2 to 5 comparable listings or market references with their price_usd values when possible. "
             'Respond ONLY with JSON: {"vehicle_label": str, "estimated_vehicle_value_usd": int, '
-            '"valuation_methodology": str, "total_loss": bool, "total_loss_reason": str}.'
+            '"valuation_methodology": str, "comparables": [{"source_title": str, "price_usd": int, "notes": str}], '
+            '"total_loss": bool, "total_loss_reason": str}.'
         )
         try:
             from google.genai import types
@@ -386,18 +389,27 @@ class GeminiClaimNarrator:
             value = 0
         total_loss = bool(payload.get("total_loss", False))
         reason = str(payload.get("total_loss_reason", "") or "")
-        valuation_methodology = str(payload.get("valuation_methodology", "") or "")
+        model_methodology = str(payload.get("valuation_methodology", "") or "")
+        comparable_prices = self._extract_comparable_prices(payload)
+        grounded_value, valuation_methodology = self._resolve_grounded_value(
+            label=label,
+            prices=comparable_prices,
+            model_value=value,
+            model_methodology=model_methodology,
+        )
 
         for region in regions:
             if new_label:
                 region.vehicle_label = new_label
-            if value > 0:
-                region.vehicle_value_usd = value
+            if grounded_value > 0:
+                region.vehicle_value_usd = grounded_value
             region.vehicle_total_loss = region.vehicle_total_loss or total_loss
             if reason:
                 region.total_loss_reason = reason
             if valuation_methodology:
                 region.valuation_methodology = valuation_methodology
+            if comparable_prices:
+                region.valuation_comparable_prices_usd = comparable_prices
             if sources:
                 region.vehicle_sources = sources
             region.vehicle_search_queries = [query]
@@ -446,8 +458,10 @@ class GeminiClaimNarrator:
             f"visible damage: {damaged}. Decide whether it is an economic or structural total loss "
             "(repairs approach/exceed its value, or the structure — chassis, carbon-fiber tub, frame — "
             "or fire damage makes it unrepairable). "
+            "Return 2 to 5 comparable listings or market references with their price_usd values when possible. "
             'Respond with ONLY JSON: {"vehicle_label": str, "estimated_vehicle_value_usd": int, '
-            '"valuation_methodology": str, "total_loss": bool, "total_loss_reason": str}.'
+            '"valuation_methodology": str, "comparables": [{"source_title": str, "price_usd": int, "notes": str}], '
+            '"total_loss": bool, "total_loss_reason": str}.'
         )
         try:
             from google.genai import types
@@ -516,7 +530,14 @@ class GeminiClaimNarrator:
                 value = 0
             total_loss = bool(data.get("total_loss", False))
             reason = str(data.get("total_loss_reason", "") or "")
-            valuation_methodology = str(data.get("valuation_methodology", "") or "")
+            model_methodology = str(data.get("valuation_methodology", "") or "")
+            comparable_prices = self._extract_comparable_prices(data)
+            grounded_value, valuation_methodology = self._resolve_grounded_value(
+                label=label or self._resolve_listing_label(regions, claim_context),
+                prices=comparable_prices,
+                model_value=value,
+                model_methodology=model_methodology,
+            )
 
             sources, queries = self._extract_grounding(response)
             logger.warning("Gemini grounded valuation used %d source(s).", len(sources))
@@ -524,14 +545,16 @@ class GeminiClaimNarrator:
             for region in regions:
                 if label:
                     region.vehicle_label = label
-                if value > 0:
-                    region.vehicle_value_usd = value
+                if grounded_value > 0:
+                    region.vehicle_value_usd = grounded_value
                 # Grounded total-loss can only add confidence to a positive verdict.
                 region.vehicle_total_loss = region.vehicle_total_loss or total_loss
                 if reason:
                     region.total_loss_reason = reason
                 if valuation_methodology:
                     region.valuation_methodology = valuation_methodology
+                if comparable_prices:
+                    region.valuation_comparable_prices_usd = comparable_prices
                 if sources:
                     region.vehicle_sources = sources
                 if queries:
@@ -587,6 +610,50 @@ class GeminiClaimNarrator:
             ]
         )
         return " ".join(part for part in parts if part)
+
+    def _extract_comparable_prices(self, payload: dict) -> list[int]:
+        comparables = payload.get("comparables") or []
+        prices: list[int] = []
+        if not isinstance(comparables, list):
+            return prices
+        for item in comparables:
+            if not isinstance(item, dict):
+                continue
+            try:
+                price = int(item.get("price_usd", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if 5000 <= price <= 1000000:
+                prices.append(price)
+        return prices
+
+    def _resolve_grounded_value(
+        self,
+        *,
+        label: str,
+        prices: list[int],
+        model_value: int,
+        model_methodology: str,
+    ) -> tuple[int, str]:
+        cleaned_prices = sorted(price for price in prices if 5000 <= price <= 1000000)
+        if len(cleaned_prices) >= 2:
+            median_value = round(statistics.median(cleaned_prices))
+            methodology = (
+                f"Grounded from {len(cleaned_prices)} comparable market prices for {label}: "
+                + ", ".join(f'${price:,}' for price in cleaned_prices)
+                + f". Final base valuation uses the median comparable price of ${median_value:,} "
+                + "before any local mileage, year, or prior-damage adjustments."
+            )
+            return median_value, methodology
+
+        if model_value > 0 and model_methodology:
+            methodology = (
+                f"{model_methodology} Only {len(cleaned_prices)} comparable price point(s) were captured, "
+                + "so the model estimate was kept as a weaker grounded fallback."
+            )
+            return model_value, methodology
+
+        return model_value, model_methodology
 
     def _extract_grounding(self, response) -> tuple[list[Source], list[str]]:
         """Pull the web sources and search queries the grounded call relied on."""

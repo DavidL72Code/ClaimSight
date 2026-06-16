@@ -16,7 +16,8 @@ def test_build_assessment_uses_vehicle_context_for_pricing() -> None:
             source="mock",
             vehicle_value_usd=20000,
             vehicle_label="Audi RS e-tron GT",
-            valuation_methodology="Compared nearby listings and adjusted down for mileage and prior damage.",
+            valuation_methodology="Grounded from 3 comparable market prices.",
+            valuation_comparable_prices_usd=[19500, 20000, 21000],
         )
     ]
 
@@ -40,7 +41,8 @@ def test_build_assessment_uses_vehicle_context_for_pricing() -> None:
     assert response.estimated_vehicle_value_usd < 20000
     assert any("mileage" in factor.lower() for factor in response.pricing_factors)
     assert "pre-accident damage" in response.summary.lower()
-    assert "Compared nearby listings" in response.valuation_methodology
+    assert "Grounded from 3 comparable market prices." in response.valuation_methodology
+    assert response.valuation_comparable_prices_usd == [19500, 20000, 21000]
 
 
 def test_build_assessment_handles_partial_vehicle_details() -> None:
