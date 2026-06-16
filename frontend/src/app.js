@@ -67,6 +67,7 @@ const setStatus = (message) => {
 };
 
 const maxVehicleYear = new Date().getFullYear() + 1;
+const emptyDamageValues = new Set(["", "n/a", "na", "none", "no", "none reported", "no prior damage"]);
 if (elements.vehicleYearInput) {
   elements.vehicleYearInput.max = String(maxVehicleYear);
 }
@@ -81,13 +82,16 @@ const parseOptionalInteger = (value) => {
 };
 
 const collectClaimContext = () => {
+  const normalizedPreExistingDamage = elements.preExistingDamageInput.value.trim();
   const context = {
     make: elements.vehicleMakeInput.value.trim(),
     model: elements.vehicleModelInput.value.trim(),
     trim: elements.vehicleTrimInput.value.trim(),
     year: parseOptionalInteger(elements.vehicleYearInput.value),
     mileage: parseOptionalInteger(elements.vehicleMileageInput.value),
-    pre_existing_damage: elements.preExistingDamageInput.value.trim(),
+    pre_existing_damage: emptyDamageValues.has(normalizedPreExistingDamage.toLowerCase())
+      ? ""
+      : normalizedPreExistingDamage,
   };
 
   if (context.year !== null && (context.year < 1980 || context.year > maxVehicleYear)) {
@@ -120,7 +124,7 @@ const mergeVehicleContext = (payloadClaimContext = {}) => {
 };
 
 const mergeVehicleLabel = (label, claimContext) => {
-  const trimmedLabel = (label || "").trim();
+  const trimmedLabel = (label || "").trim().replace(/^\d{4}\s+/, "");
   const yearPrefix = claimContext.year ? `${claimContext.year} ` : "";
 
   if (trimmedLabel && claimContext.year && !trimmedLabel.startsWith(String(claimContext.year))) {

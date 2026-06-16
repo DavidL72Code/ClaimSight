@@ -1,7 +1,10 @@
 from datetime import datetime
+import re
 
 from app.models.schemas import AssessmentMeta, AssessmentResponse, ClaimContext, DamageRegion
 from app.services.gemini_client import GeminiClaimNarrator
+
+_YEAR_PREFIX_PATTERN = re.compile(r"^\d{4}\s+")
 
 
 class ClaimReportService:
@@ -160,7 +163,8 @@ class ClaimReportService:
         )
 
     def _resolve_vehicle_label(self, detected_label: str, claim_context: ClaimContext) -> str:
-        detected_parts = detected_label.split()
+        stripped_detected_label = _YEAR_PREFIX_PATTERN.sub("", detected_label.strip(), count=1)
+        detected_parts = stripped_detected_label.split()
 
         make = claim_context.make.strip()
         model = claim_context.model.strip()
@@ -178,11 +182,11 @@ class ClaimReportService:
             return f"{claim_context.year} {core_label}"
         if core_label:
             return core_label
-        if claim_context.year and detected_label:
-            return f"{claim_context.year} {detected_label}"
+        if claim_context.year and stripped_detected_label:
+            return f"{claim_context.year} {stripped_detected_label}"
         if claim_context.year:
             return f"{claim_context.year} passenger vehicle"
-        return detected_label or "passenger vehicle"
+        return stripped_detected_label or "passenger vehicle"
 
     def _adjust_vehicle_value(
         self,

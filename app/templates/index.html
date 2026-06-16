@@ -124,6 +124,7 @@
       const status = document.getElementById("status");
       const results = document.getElementById("results");
       const regions = document.getElementById("regions");
+      const emptyDamageValues = new Set(["", "n/a", "na", "none", "no", "none reported", "no prior damage"]);
 
       const parseOptionalInteger = (value) => {
         const normalized = value.trim();
@@ -134,14 +135,19 @@
         return Number.isFinite(parsed) ? parsed : null;
       };
 
-      const collectClaimContext = () => ({
-        make: document.getElementById("vehicle-make").value.trim(),
-        model: document.getElementById("vehicle-model").value.trim(),
-        trim: document.getElementById("vehicle-trim").value.trim(),
-        year: parseOptionalInteger(document.getElementById("vehicle-year").value),
-        mileage: parseOptionalInteger(document.getElementById("vehicle-mileage").value),
-        pre_existing_damage: document.getElementById("pre-existing-damage").value.trim(),
-      });
+      const collectClaimContext = () => {
+        const normalizedPreExistingDamage = document.getElementById("pre-existing-damage").value.trim();
+        return {
+          make: document.getElementById("vehicle-make").value.trim(),
+          model: document.getElementById("vehicle-model").value.trim(),
+          trim: document.getElementById("vehicle-trim").value.trim(),
+          year: parseOptionalInteger(document.getElementById("vehicle-year").value),
+          mileage: parseOptionalInteger(document.getElementById("vehicle-mileage").value),
+          pre_existing_damage: emptyDamageValues.has(normalizedPreExistingDamage.toLowerCase())
+            ? ""
+            : normalizedPreExistingDamage,
+        };
+      };
 
       const mergeVehicleContext = (payloadClaimContext = {}) => {
         const enteredContext = collectClaimContext();
@@ -163,7 +169,7 @@
       };
 
       const mergeVehicleLabel = (label, claimContext) => {
-        const trimmedLabel = (label || "").trim();
+        const trimmedLabel = (label || "").trim().replace(/^\d{4}\s+/, "");
         const yearPrefix = claimContext.year ? `${claimContext.year} ` : "";
 
         if (trimmedLabel && claimContext.year && !trimmedLabel.startsWith(String(claimContext.year))) {

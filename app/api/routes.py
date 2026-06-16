@@ -37,6 +37,7 @@ MAX_IMAGES_PER_REQUEST = 8
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 _request_log: dict[str, list[float]] = {}
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
+_EMPTY_DAMAGE_VALUES = {"", "n/a", "na", "none", "no", "none reported", "no prior damage"}
 
 
 def _health_payload() -> dict[str, object]:
@@ -297,11 +298,20 @@ def _build_claim_context(
     if normalized_mileage is not None and not 0 <= normalized_mileage <= 500000:
         raise HTTPException(status_code=400, detail="Mileage must be between 0 and 500,000.")
 
+    normalized_pre_existing_damage = _normalize_pre_existing_damage(pre_existing_damage)
+
     return ClaimContext(
         make=make.strip(),
         model=model.strip(),
         trim=trim.strip(),
         year=normalized_year,
         mileage=normalized_mileage,
-        pre_existing_damage=pre_existing_damage.strip(),
+        pre_existing_damage=normalized_pre_existing_damage,
     )
+
+
+def _normalize_pre_existing_damage(value: str) -> str:
+    normalized = value.strip()
+    if normalized.lower() in _EMPTY_DAMAGE_VALUES:
+        return ""
+    return normalized
