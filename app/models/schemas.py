@@ -40,6 +40,7 @@ class DamageRegion(BaseModel):
     vehicle_total_loss: bool = False
     total_loss_reason: str = ""
     valuation_methodology: str = ""
+    valuation_comparable_prices_usd: list[int] = Field(default_factory=list)
     vehicle_sources: list[Source] = Field(default_factory=list)
     vehicle_search_queries: list[str] = Field(default_factory=list)
     grounding_status: str = ""
@@ -59,6 +60,7 @@ class AssessmentResponse(BaseModel):
     vehicle_type: str
     estimated_vehicle_value_usd: int = 0
     valuation_methodology: str = ""
+    valuation_comparable_prices_usd: list[int] = Field(default_factory=list)
     total_loss: bool = False
     total_loss_reason: str = ""
     overall_severity: str

@@ -37,6 +37,7 @@ const elements = {
   recommendedAction: document.getElementById("recommended-action"),
   pricingFactors: document.getElementById("pricing-factors"),
   valuationMethodology: document.getElementById("valuation-methodology"),
+  valuationComparables: document.getElementById("valuation-comparables"),
   segmentationProvider: document.getElementById("segmentation-provider"),
   reportProvider: document.getElementById("report-provider"),
   fallbackNote: document.getElementById("fallback-note"),
@@ -376,6 +377,7 @@ const updateSummary = (payload) => {
   const imageCount = payload.meta?.image_count || 1;
   const claimContext = mergeVehicleContext(payload.claim_context || {});
   const pricingFactors = payload.pricing_factors || [];
+  const comparablePrices = payload.valuation_comparable_prices_usd || [];
   elements.filename.textContent =
     imageCount > 1 ? `${imageCount} images` : payload.filename;
   elements.vehicleType.textContent = mergeVehicleLabel(payload.vehicle_type, claimContext);
@@ -396,6 +398,9 @@ const updateSummary = (payload) => {
     : "No additional pricing adjustments were applied.";
   elements.valuationMethodology.textContent = payload.valuation_methodology
     || "No valuation methodology was returned. The estimate may be coming from a weak or generic market match.";
+  elements.valuationComparables.textContent = comparablePrices.length
+    ? comparablePrices.map((price) => `$${price.toLocaleString()}`).join(" · ")
+    : "No comparable listing prices were captured for this assessment.";
   elements.segmentationProvider.textContent = payload.meta.segmentation_provider;
   elements.reportProvider.textContent = payload.meta.report_provider;
   elements.fallbackNote.textContent = payload.meta.fallback_used
