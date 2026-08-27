@@ -44,42 +44,16 @@
         <aside class="employee-thread-sidebar">
           <div class="employee-thread-head">
             <span>Disputes</span>
-            <strong>2 open</strong>
+            <strong id="employee-thread-count">—</strong>
           </div>
-          <button class="employee-thread active" type="button" data-thread-id="CLM-1048">
-            <span class="employee-thread-avatar">48</span>
-            <span class="employee-thread-copy">
-              <strong>CLM-1048</strong>
-              <small>Rear hatch dispute</small>
-              <em>The rear hatch will not close and I uploaded another photo.</em>
-            </span>
-            <span class="employee-thread-time">2m</span>
-          </button>
-          <button class="employee-thread" type="button" data-thread-id="CLM-1047">
-            <span class="employee-thread-avatar">47</span>
-            <span class="employee-thread-copy">
-              <strong>CLM-1047</strong>
-              <small>Evidence question</small>
-              <em>Which headlight photos do you still need?</em>
-            </span>
-            <span class="employee-thread-time">18m</span>
-          </button>
-          <button class="employee-thread" type="button" data-thread-id="CLM-1046">
-            <span class="employee-thread-avatar">46</span>
-            <span class="employee-thread-copy">
-              <strong>CLM-1046</strong>
-              <small>Appeal request</small>
-              <em>I want to dispute the estimate before final report.</em>
-            </span>
-            <span class="employee-thread-time">1h</span>
-          </button>
+          <div id="employee-thread-list"></div>
         </aside>
 
         <section class="employee-chat-panel">
           <header class="employee-chat-header">
             <div>
               <span>Case conversation</span>
-              <strong id="message-case-id">CLM-1048</strong>
+              <strong id="message-case-id">—</strong>
             </div>
             <a id="message-case-link" class="text-action" href="./employee-assessment.html?claim=CLM-1048">View case</a>
           </header>
@@ -103,6 +77,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
     <script src="./firebase-config.js"></script>
     <script src="./employee-auth.js?v=security-1"></script>

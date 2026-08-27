@@ -112,7 +112,9 @@ service cloud.firestore {
           ownsCaseId(request.resource.data.case_id)
           && request.resource.data.actor_uid == request.auth.uid
           && request.resource.data.actor_role == "customer"
-          && request.resource.data.type in ["claim_submitted", "appeal_submitted", "decision_accepted", "evidence_added"]
+          && request.resource.data.type in ["claim_submitted", "appeal_submitted", "decision_accepted", "evidence_added", "message"]
+          && request.resource.data.label is string
+          && request.resource.data.label.size() <= 2000
         )
         || isAssignedToCase(request.resource.data.case_id)
         || isManager();

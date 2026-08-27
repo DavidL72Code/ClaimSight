@@ -30,7 +30,7 @@
   /* gradients carry most of the "modern" read */
   --grad-accent:      linear-gradient(135deg, #4f39f6 0%, #7546ff 45%, #a855f7 100%);
   --grad-accent-soft: linear-gradient(135deg, rgba(79,57,246,.13), rgba(168,85,247,.09));
-  --grad-ink:         linear-gradient(115deg, #0d0d18 0%, #241c56 58%, #4f39f6 100%);
+  --grad-ink:         linear-gradient(100deg, #0d0d18 0%, #1b1545 52%, #3a2ac0 100%);
   --grad-hairline:    linear-gradient(90deg, transparent, var(--accent-line) 28%, rgba(6,182,212,.30) 72%, transparent);
 
   /* elevation — violet-tinted so shadows stay inside the palette */
@@ -5779,3 +5779,714 @@ h1, h2, h3 {
     --sidebar-w: 268px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Modern layer
+
+   Appended last on purpose: the sections above establish layout and
+   the earlier "calm" pass flattened the visual language. This layer
+   re-applies depth — gradient brand surfaces, glass chrome, glow on
+   the primary path, spring hovers — without moving any geometry, so
+   the pages keep their existing structure and responsive behaviour.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── ambient canvas ─────────────────────────────────────────────
+   Two soft colour fields behind everything, fixed so they read as
+   light in the room rather than as content that scrolls. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 44% at 12% -6%,  rgba(79,57,246,.16), transparent 62%),
+    radial-gradient(46% 38% at 92% 4%,   rgba(168,85,247,.13), transparent 60%),
+    radial-gradient(64% 46% at 74% 102%, rgba(6,182,212,.11),  transparent 64%),
+    var(--bg);
+}
+
+/* the canvas must show through the page-level wrappers */
+.landing-shell,
+.page,
+body.app-shell {
+  background: transparent;
+}
+
+::selection {
+  background: rgba(79,57,246,.18);
+  color: var(--ink);
+}
+
+/* ── scrollbar ─────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--line-strong);
+}
+
+*::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
+
+/* ── shared surface treatment ───────────────────────────────────
+   Cards get the roomier radius, a lifted shadow, and a gradient
+   hairline along the top edge that catches the eye without adding
+   another border colour. */
+.panel,
+.card,
+.claim-card,
+.ops-card,
+.consumer-panel,
+.review-panel,
+.claim-summary-card,
+.claim-alert-card,
+.claim-timeline-card,
+.evidence-checklist-card {
+  position: relative;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.panel::before,
+.card::before,
+.consumer-panel::before,
+.review-panel::before,
+.claim-summary-card::before,
+.claim-timeline-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  border-radius: 1px;
+  background: var(--grad-hairline);
+  pointer-events: none;
+}
+
+.claim-card,
+.ops-card {
+  transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out),
+              border-color .25s var(--ease-out);
+}
+
+.claim-card:hover,
+.ops-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-lg);
+}
+
+/* section eyebrows: gradient text instead of grey caps */
+.kicker,
+.consumer-panel-head > span:first-child,
+.claim-summary-card > span:first-child,
+.evidence-checklist-card > span:first-child {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.kicker { letter-spacing: .22em; }
+
+/* ── primary actions: gradient fill, glow, shine sweep ─────────── */
+.cta,
+.claim-home-cta,
+.claim-home-nav-cta,
+.claim-home-employee-link,
+.new-claim-button,
+.timeline-action-button,
+.claim-assistant-toggle,
+button[type="submit"],
+.home-login-form button[type="submit"],
+.employee-login-form button[type="submit"] {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  background: var(--grad-accent);
+  background-size: 160% 160%;
+  color: var(--on-accent);
+  box-shadow: var(--glow);
+  transition: transform .2s var(--ease-spring), box-shadow .2s var(--ease-out),
+              background-position .45s var(--ease-out);
+}
+
+/* the sweep: a soft highlight that crosses on hover */
+.cta::after,
+.claim-home-cta::after,
+.new-claim-button::after,
+.timeline-action-button::after,
+button[type="submit"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 32%, rgba(255,255,255,.32) 50%, transparent 68%);
+  transform: translateX(-120%);
+  transition: transform .6s var(--ease-out);
+  pointer-events: none;
+}
+
+.cta:hover::after,
+.claim-home-cta:hover::after,
+.new-claim-button:hover::after,
+.timeline-action-button:hover::after,
+button[type="submit"]:hover::after {
+  transform: translateX(120%);
+}
+
+.cta:hover,
+.cta:focus-visible,
+.claim-home-cta:hover,
+.claim-home-cta:focus-visible,
+.claim-home-nav-cta:hover,
+.claim-home-nav-cta:focus-visible,
+.claim-home-employee-link:hover,
+.new-claim-button:hover,
+.timeline-action-button:hover,
+button[type="submit"]:hover {
+  background: var(--grad-accent);
+  background-position: 100% 0;
+  transform: translateY(-2px);
+  box-shadow: var(--glow-strong);
+}
+
+.cta:active,
+.claim-home-cta:active,
+.new-claim-button:active,
+.timeline-action-button:active,
+button[type="submit"]:active {
+  transform: translateY(0) scale(.985);
+  box-shadow: var(--glow);
+}
+
+/* the "+" disc on the new-claim button reads as glass on gradient */
+.new-claim-button span {
+  background: rgba(255,255,255,.20);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.24);
+}
+
+/* ── secondary actions: glass, not grey ───────────────────────── */
+.secondary-action,
+.claim-home-ghost,
+.back-button,
+.workflow-nav-button,
+.google-login-button {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(8px);
+  transition: transform .2s var(--ease-spring), border-color .2s var(--ease-out),
+              background .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+
+.secondary-action:hover,
+.claim-home-ghost:hover,
+.back-button:hover,
+.workflow-nav-button:hover,
+.google-login-button:hover {
+  border-color: var(--accent-line);
+  background: var(--surface);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+/* inline text actions get an animated underline */
+.text-action {
+  position: relative;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.text-action::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: var(--grad-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .25s var(--ease-out);
+}
+
+.text-action:hover::after,
+.text-action:focus-visible::after { transform: scaleX(1); }
+
+/* ── form controls ────────────────────────────────────────────── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border-color: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  transition: border-color .18s var(--ease-out), background .18s var(--ease-out),
+              box-shadow .18s var(--ease-out);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover,
+select:hover,
+textarea:hover { border-color: var(--line-strong); }
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 4px var(--accent-dim), var(--shadow-sm);
+}
+
+/* dashed upload target: gradient wash, lifts on hover */
+.dropzone {
+  border-radius: var(--radius);
+  border-color: var(--accent-line);
+  background: var(--grad-accent-soft);
+  transition: border-color .2s var(--ease-out), background .2s var(--ease-out),
+              transform .2s var(--ease-out);
+}
+
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── landing: hero ────────────────────────────────────────────── */
+.claim-home-card {
+  background:
+    radial-gradient(110% 70% at 88% -14%, rgba(79,57,246,.10), transparent 58%),
+    radial-gradient(80% 60% at 4% 108%,   rgba(6,182,212,.08), transparent 60%),
+    var(--surface);
+}
+
+.claim-home-nav {
+  background: rgba(255,255,255,.66);
+  backdrop-filter: saturate(180%) blur(16px);
+}
+
+.claim-home-brand,
+.brand {
+  background: var(--grad-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -.03em;
+}
+
+/* eyebrow: gradient border pill with a live dot */
+.claim-home-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-color: var(--accent-line);
+  background: var(--grad-accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+
+.claim-home-eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,57,246,.18);
+  animation: cs-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes cs-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(79,57,246,.18); }
+  50%      { box-shadow: 0 0 0 6px rgba(79,57,246,.05); }
+}
+
+.claim-home-copy h1 {
+  background: var(--grad-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -.035em;
+}
+
+.claim-home-sub { color: var(--ink-soft); }
+
+/* trust marks: gradient discs with a white tick */
+.claim-home-trust li::before {
+  background: var(--grad-accent);
+  box-shadow: 0 2px 8px -3px rgba(79,57,246,.6);
+}
+
+.claim-home-trust li::after {
+  border-left-color: #fff;
+  border-bottom-color: #fff;
+}
+
+/* hero photos: deeper corners and a hairline ring */
+.claim-home-photo {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 6px rgba(20,16,54,.08), 0 34px 60px -28px rgba(20,16,54,.42),
+              inset 0 0 0 1px rgba(255,255,255,.5);
+  transition: box-shadow .3s var(--ease-out);
+}
+
+.claim-home-photo img { border-radius: inherit; }
+
+/* ── landing: numbered flow panels ───────────────────────────── */
+.claim-home-scroll-panels article {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(79,57,246,.05), transparent 40%),
+    var(--surface);
+  box-shadow: var(--shadow);
+  transition: border-color .25s var(--ease-out), box-shadow .25s var(--ease-out);
+}
+
+.claim-home-scroll-panels article:hover {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-lg);
+}
+
+/* the step number becomes an oversized gradient numeral */
+.claim-home-scroll-panels span {
+  display: block;
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -.04em;
+  line-height: 1;
+}
+
+/* ── landing: proof grid ─────────────────────────────────────── */
+.claim-proof-copy h2 {
+  background: var(--grad-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -.03em;
+}
+
+.claim-proof-copy > span:first-child {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.claim-proof-grid figure {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 6px rgba(20,16,54,.06), 0 26px 54px -26px rgba(20,16,54,.30);
+}
+
+.claim-proof-grid figcaption {
+  backdrop-filter: blur(10px);
+}
+
+/* ── signed-in chrome: sidebar / topbar ─────────────────────── */
+.topbar {
+  background: rgba(255,255,255,.78);
+  backdrop-filter: saturate(180%) blur(16px);
+}
+
+.icon-button,
+.logout-button {
+  border-radius: var(--radius-sm);
+  transition: transform .18s var(--ease-spring), background .18s var(--ease-out),
+              border-color .18s var(--ease-out), color .18s var(--ease-out);
+}
+
+.icon-button:hover,
+.logout-button:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.notification-count {
+  background: var(--grad-accent);
+  box-shadow: 0 2px 8px -2px rgba(79,57,246,.7);
+}
+
+.notification-dropdown,
+.claim-assistant-panel,
+.home-login-dialog {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* nav items: soft hover, gradient pill when active */
+.employee-menu-list a,
+.workflow-tab {
+  position: relative;
+  transition: background .18s var(--ease-out), color .18s var(--ease-out);
+}
+
+.employee-menu-list a:hover,
+.workflow-tab:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+@media (min-width: 900px) {
+  body.app-shell > .topbar {
+    background:
+      linear-gradient(180deg, rgba(79,57,246,.05), transparent 220px),
+      rgba(255,255,255,.86);
+    backdrop-filter: saturate(180%) blur(18px);
+  }
+
+  body.app-shell .employee-menu-list a,
+  body.app-shell .workflow-tab {
+    min-height: 38px;
+    border-radius: var(--radius-sm);
+  }
+
+  body.app-shell .employee-menu-list a.active,
+  body.app-shell .workflow-tab.active {
+    background: var(--grad-accent);
+    color: var(--on-accent);
+    box-shadow: var(--glow);
+  }
+}
+
+/* ── consumer dashboard ─────────────────────────────────────── */
+.consumer-dashboard-header h1 {
+  background: var(--grad-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -.035em;
+}
+
+.claim-summary-card {
+  border-color: var(--accent-line);
+  background:
+    linear-gradient(135deg, rgba(79,57,246,.09), rgba(6,182,212,.04) 60%, transparent),
+    var(--surface);
+}
+
+.claim-alert-card {
+  border-color: rgba(217,119,6,.28);
+  background:
+    linear-gradient(135deg, rgba(217,119,6,.10), rgba(217,119,6,.02)),
+    var(--surface);
+}
+
+/* progress rail: gradient for completed legs, halo on the current step */
+.claim-timeline > li.done::after {
+  background: var(--grad-accent);
+}
+
+.claim-timeline > li.done::before,
+.claim-timeline > li.active::before {
+  border-color: transparent;
+  background: var(--grad-accent);
+}
+
+.claim-timeline > li.active::before {
+  box-shadow: 0 0 0 5px rgba(79,57,246,.14), var(--glow);
+  animation: cs-halo 2.6s ease-in-out infinite;
+}
+
+@keyframes cs-halo {
+  0%, 100% { box-shadow: 0 0 0 5px rgba(79,57,246,.14), var(--glow); }
+  50%      { box-shadow: 0 0 0 9px rgba(79,57,246,.06), var(--glow); }
+}
+
+.timeline-next-card {
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(79,57,246,.07), rgba(6,182,212,.04)),
+    var(--surface);
+}
+
+/* ── tables ─────────────────────────────────────────────────── */
+.claim-table {
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.claim-table th {
+  background: var(--surface-2);
+  color: var(--muted);
+  letter-spacing: .08em;
+}
+
+.claim-table tbody tr {
+  transition: background .18s var(--ease-out);
+}
+
+.claim-table tbody tr:hover td {
+  background: var(--accent-dim);
+}
+
+/* ── status chips and badges ────────────────────────────────── */
+.priority-badge,
+.signal-chip,
+.api-chip {
+  border-radius: 999px;
+}
+
+.priority-badge {
+  letter-spacing: .04em;
+}
+
+.priority-badge.urgent {
+  background: linear-gradient(135deg, rgba(220,38,38,.14), rgba(220,38,38,.05));
+  box-shadow: inset 0 0 0 1px rgba(220,38,38,.24);
+}
+
+.priority-badge.review {
+  background: linear-gradient(135deg, rgba(217,119,6,.16), rgba(217,119,6,.05));
+  box-shadow: inset 0 0 0 1px rgba(217,119,6,.26);
+}
+
+.priority-badge.routine {
+  background: linear-gradient(135deg, rgba(13,159,110,.14), rgba(13,159,110,.04));
+  box-shadow: inset 0 0 0 1px rgba(13,159,110,.24);
+}
+
+.signal-chip {
+  border-radius: var(--radius);
+  transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+
+.signal-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.damage-tag {
+  border-radius: 999px;
+  box-shadow: 0 2px 8px -2px rgba(20,16,54,.4);
+}
+
+/* ── assistant launcher ─────────────────────────────────────── */
+.claim-assistant-toggle {
+  box-shadow: var(--glow-strong);
+}
+
+.claim-assistant-toggle:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+.claim-assistant-message.assistant {
+  background: var(--grad-accent-soft);
+}
+
+.claim-assistant-message.user {
+  background: var(--grad-accent);
+  color: var(--on-accent);
+}
+
+/* ── footer ─────────────────────────────────────────────────── */
+.site-footer {
+  border-top: 0;
+  background: var(--grad-hairline) top / 100% 1px no-repeat;
+}
+
+/* ── entrance motion ────────────────────────────────────────────
+   One staggered rise for the signed-in pages, which previously
+   appeared with no transition at all. */
+@keyframes cs-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.consumer-dashboard-shell > *,
+.page > .panel,
+.ops-shell > * {
+  animation: cs-rise .55s var(--ease-out) both;
+}
+
+.consumer-dashboard-shell > *:nth-child(2) { animation-delay: .06s; }
+.consumer-dashboard-shell > *:nth-child(3) { animation-delay: .12s; }
+.consumer-dashboard-shell > *:nth-child(4) { animation-delay: .18s; }
+.consumer-dashboard-shell > *:nth-child(5) { animation-delay: .24s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .consumer-dashboard-shell > *,
+  .page > .panel,
+  .ops-shell > *,
+  .claim-home-eyebrow::before,
+  .claim-timeline > li.active::before {
+    animation: none;
+  }
+
+  .cta::after,
+  .claim-home-cta::after,
+  .new-claim-button::after,
+  .timeline-action-button::after,
+  button[type="submit"]::after {
+    display: none;
+  }
+}
+
+/* ── landing hero, second pass ──────────────────────────────────
+   A faint ruled grid gives the hero card texture, and a colour
+   field behind the photo stack keeps the imagery from floating on
+   flat white. Both are decorative and sit under the content. */
+.claim-home-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(79,57,246,.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(79,57,246,.055) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(90% 70% at 50% 0%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(90% 70% at 50% 0%, #000 0%, transparent 78%);
+}
+
+.claim-home-nav,
+.claim-home-hero { position: relative; z-index: 1; }
+
+.claim-home-stage::before {
+  content: "";
+  position: absolute;
+  inset: -22% -14%;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(48% 48% at 34% 38%, rgba(79,57,246,.40), transparent 72%),
+    radial-gradient(44% 44% at 74% 66%, rgba(6,182,212,.34), transparent 74%),
+    radial-gradient(40% 40% at 58% 92%, rgba(168,85,247,.28), transparent 76%);
+  filter: blur(52px);
+}
+
+.claim-home-copy h1 {
+  font-size: clamp(2.6rem, 4.9vw, 4.4rem);
+  font-weight: 800;
+  letter-spacing: -.042em;
+}
+
+.claim-home-sub { font-size: 1.0625rem; }

@@ -1,229 +1,248 @@
+/**
+ * Customer message thread, backed by Firestore.
+ *
+ * This previously stored threads in localStorage under
+ * "claimsight.customer-message-threads", so messages never left the browser
+ * and the adjuster could not see them. Both sides now share the same
+ * case_activity documents (type "message"), live.
+ */
 (() => {
-const customerMessageStorageKey = "claimsight.customer-message-threads";
-const currentClaimStorageKey = "claimsight.consumer-current-claim";
-const messageFirebaseConfig = window.FIREBASE_CONFIG || {};
-const firebaseStorageEnabled = Boolean(
-  window.firebase
-  && typeof window.firebase.storage === "function"
-  && messageFirebaseConfig.apiKey
-  && messageFirebaseConfig.projectId
-  && messageFirebaseConfig.appId
-);
+  const firebaseConfig = window.FIREBASE_CONFIG || {};
+  const firebaseEnabled = Boolean(
+    window.firebase && firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId
+  );
+  const currentClaimStorageKey = "claimsight.consumer-current-claim";
 
-const defaultMessageThreads = {
-  "CLM-1048": {
-    title: "CLM-1048",
-    subtitle: "Rear hatch dispute",
-    latest: "We received your dispute and are checking the liftgate.",
-    messages: [
-      { from: "customer", text: "The final review missed that the hatch will not close after the impact.", time: "2:14 PM" },
-      { from: "employee", text: "We received your dispute and are checking the liftgate alignment against the added photo.", time: "2:16 PM" },
-      { from: "customer", text: "Thank you. I can upload another angle if needed.", time: "2:18 PM" },
-    ],
-  },
-};
+  const threadList = document.getElementById("customer-message-threads");
+  const chatHistory = document.getElementById("customer-chat-history");
+  const messageForm = document.getElementById("customer-message-form");
+  const messageInput = document.getElementById("customer-message-input");
+  const messageFiles = document.getElementById("customer-message-files");
+  const attachmentPreview = document.getElementById("customer-message-attachments");
 
-const escapeMessageHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  "\"": "&quot;",
-  "'": "&#039;",
-}[char]));
-
-const readStoredThreads = () => {
-  try {
-    const raw = window.localStorage.getItem(customerMessageStorageKey);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
-
-const writeStoredThreads = (threads) => {
-  try {
-    window.localStorage.setItem(customerMessageStorageKey, JSON.stringify(threads));
-  } catch {
-    // Preview mode may block storage; chat still works until refresh.
-  }
-};
-
-const fallbackAdjusters = [
-  { id: "adj-alex-morgan", name: "Alex Morgan", email: "alex.morgan@claimsight.com" },
-  { id: "adj-jordan-lee", name: "Jordan Lee", email: "jordan.lee@claimsight.com" },
-  { id: "adj-sam-rivera", name: "Sam Rivera", email: "sam.rivera@claimsight.com" },
-  { id: "adj-taylor-kim", name: "Taylor Kim", email: "taylor.kim@claimsight.com" },
-];
-
-const fallbackAssignedAgent = (claimId = "") =>
-  fallbackAdjusters[Math.abs(String(claimId).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)) % fallbackAdjusters.length]
-  || fallbackAdjusters[0];
-
-const storedThreads = readStoredThreads();
-const threads = storedThreads && Object.keys(storedThreads).length
-  ? { ...defaultMessageThreads, ...storedThreads }
-  : defaultMessageThreads;
-let selectedThreadId = new URLSearchParams(window.location.search).get("claim")
-  || window.localStorage.getItem(currentClaimStorageKey)
-  || Object.keys(threads)[0];
-
-if (selectedThreadId && !threads[selectedThreadId]) {
-  const assignedAgent = fallbackAssignedAgent(selectedThreadId);
-  threads[selectedThreadId] = {
-    title: selectedThreadId,
-    subtitle: `Assigned to ${assignedAgent.name}`,
-    latest: `${assignedAgent.name} was assigned to your claim.`,
-    messages: [
-      {
-        from: "employee",
-        text: `Your claim has been assigned to ${assignedAgent.name}. You can message here if you need to add details, ask about evidence, or follow up on the review.`,
-        time: new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).format(new Date()),
-      },
-    ],
+  const esc = (v = "") => String(v).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+  const timeOf = (iso) => {
+    const d = iso ? new Date(iso) : new Date();
+    return new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).format(d);
   };
-}
+  const tsToIso = (ts) => {
+    if (!ts) return "";
+    if (typeof ts.toDate === "function") return ts.toDate().toISOString();
+    return typeof ts === "string" ? ts : "";
+  };
+  const setEmpty = (node, text) => {
+    if (node) node.innerHTML = `<article class="empty">${esc(text)}</article>`;
+  };
 
-if (!threads[selectedThreadId]) {
-  selectedThreadId = Object.keys(threads)[0];
-}
+  const params = new URLSearchParams(location.search);
+  let activeClaimId = params.get("claim")
+    || window.localStorage.getItem(currentClaimStorageKey)
+    || null;
 
-const threadList = document.getElementById("customer-message-threads");
-const caseCount = document.getElementById("customer-message-case-count");
-const chatHistory = document.getElementById("customer-chat-history");
-const caseId = document.getElementById("customer-message-case-id");
-const caseLink = document.getElementById("customer-message-case-link");
-const messageForm = document.getElementById("customer-message-form");
-const messageInput = document.getElementById("customer-message-input");
-const messageFiles = document.getElementById("customer-message-files");
-const attachmentPreview = document.getElementById("customer-message-attachments");
-
-const buildAttachments = () => Array.from(messageFiles?.files || []).map((file) => ({
-  file,
-  name: file.name,
-  size: file.size,
-  type: file.type || "application/octet-stream",
-  source: "customer_message",
-}));
-
-const uploadAttachments = async (threadId) => {
-  const attachments = buildAttachments();
-  if (!attachments.length || !firebaseStorageEnabled) {
-    return attachments.map(({ file, ...metadata }) => metadata);
-  }
-
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(messageFirebaseConfig);
-  const storage = window.firebase.storage(app);
-  return Promise.all(attachments.map(async ({ file, ...metadata }) => {
-    const safeName = metadata.name.replace(/[^A-Za-z0-9._-]+/g, "-");
-    const ref = storage.ref().child(`claim-messages/${threadId}/${Date.now()}-${safeName}`);
-    await ref.put(file);
-    const download_url = await ref.getDownloadURL();
-    return { ...metadata, download_url };
-  }));
-};
-
-const renderAttachmentPreview = () => {
-  if (!attachmentPreview) {
+  if (!firebaseEnabled) {
+    setEmpty(chatHistory, "Messaging needs Firebase configuration.");
     return;
   }
-  const attachments = buildAttachments();
-  attachmentPreview.innerHTML = attachments.map((file) => `
-    <span>${escapeMessageHtml(file.name)}</span>
-  `).join("");
-};
 
-const renderMessageAttachments = (attachments = []) => {
-  if (!attachments.length) {
-    return "";
-  }
-  return `
-    <div class="message-attachment-list">
-      ${attachments.map((file) => {
-        const label = escapeMessageHtml(file.name || "Attachment");
-        return file.download_url
-          ? `<a href="${escapeMessageHtml(file.download_url)}" target="_blank" rel="noopener noreferrer">${label}</a>`
-          : `<span>${label}</span>`;
-      }).join("")}
-    </div>
-  `;
-};
-
-const renderThreads = () => {
-  const visibleThreads = selectedThreadId ? [threads[selectedThreadId]].filter(Boolean) : Object.values(threads);
-  if (caseCount) {
-    caseCount.textContent = `${visibleThreads.length} active`;
-  }
-  if (!threadList) {
+  let app = null;
+  let db = null;
+  let auth = null;
+  try {
+    app = window.firebase.apps?.length
+      ? window.firebase.app()
+      : window.firebase.initializeApp(firebaseConfig);
+    db = window.firebase.firestore(app);
+    auth = window.firebase.auth(app);
+  } catch {
+    setEmpty(chatHistory, "Messaging is unavailable right now.");
     return;
   }
-  threadList.innerHTML = visibleThreads.map((thread) => `
-    <button class="employee-thread ${thread.title === selectedThreadId ? "active" : ""}" type="button" data-thread-id="${escapeMessageHtml(thread.title)}">
-      <span class="employee-thread-avatar">${escapeMessageHtml(thread.title.slice(-2))}</span>
-      <span class="employee-thread-copy">
-        <strong>${escapeMessageHtml(thread.title)}</strong>
-        <small>${escapeMessageHtml(thread.subtitle)}</small>
-        <em>${escapeMessageHtml(thread.latest)}</em>
-      </span>
-      <span class="employee-thread-time">Now</span>
-    </button>
-  `).join("");
-};
 
-const renderThread = (threadId) => {
-  const thread = threads[threadId] || threads[selectedThreadId];
-  selectedThreadId = thread.title;
-  window.localStorage.setItem(currentClaimStorageKey, selectedThreadId);
+  const storage = typeof window.firebase.storage === "function"
+    ? window.firebase.storage(app)
+    : null;
 
-  if (caseId) {
-    caseId.textContent = thread.title;
-  }
-  if (caseLink) {
-    caseLink.href = "./case-review.html";
-  }
-  if (chatHistory) {
-    chatHistory.innerHTML = thread.messages.map((message) => `
-      <article class="imessage-bubble ${message.from === "customer" ? "customer" : "employee"}">
-        <p>${escapeMessageHtml(message.text)}</p>
-        ${renderMessageAttachments(message.attachments)}
-        <span>${escapeMessageHtml(message.time)}</span>
+  let claims = [];
+  let unsubMessages = null;
+  let unsubClaims = null;
+
+  const renderAttachmentPreview = () => {
+    if (!attachmentPreview) return;
+    const files = Array.from(messageFiles?.files || []);
+    attachmentPreview.innerHTML = files.length
+      ? files.map((f) => `<span>${esc(f.name)}</span>`).join("")
+      : "";
+  };
+
+  const uploadAttachments = async (claimId) => {
+    const files = Array.from(messageFiles?.files || []);
+    if (!files.length || !storage) return [];
+    const out = [];
+    for (const file of files) {
+      try {
+        const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
+        const ref = storage.ref().child(`claim-messages/${claimId}/${Date.now()}-${safe}`);
+        await ref.put(file);
+        out.push({ name: file.name, download_url: await ref.getDownloadURL() });
+      } catch {
+        // Best-effort: the message text still sends without the attachment.
+      }
+    }
+    return out;
+  };
+
+  const renderMessageAttachments = (attachments = []) => {
+    if (!Array.isArray(attachments) || !attachments.length) return "";
+    return `<div class="message-attachment-list">${attachments.map((a) => (
+      a.download_url
+        ? `<a href="${esc(a.download_url)}" target="_blank" rel="noopener noreferrer">${esc(a.name || "Attachment")}</a>`
+        : `<span>${esc(a.name || "Attachment")}</span>`
+    )).join("")}</div>`;
+  };
+
+  const renderThreads = () => {
+    if (!threadList) return;
+    if (!claims.length) {
+      setEmpty(threadList, "No claims yet.");
+      return;
+    }
+    threadList.innerHTML = claims.map((c, i) => `
+      <button class="employee-thread ${c.id === activeClaimId ? "active" : ""}" type="button" data-thread-id="${esc(c.id)}">
+        <span class="employee-thread-avatar">${esc(String(i + 1).padStart(2, "0"))}</span>
+        <span class="employee-thread-copy">
+          <strong>${esc(c.claim_reference || c.id)}</strong>
+          <small>${esc(c.assigned_agent?.name ? `Assigned to ${c.assigned_agent.name}` : "Awaiting assignment")}</small>
+          <em>${esc(c.status_label || c.status || "")}</em>
+        </span>
+      </button>
+    `).join("");
+  };
+
+  const renderMessages = (events) => {
+    if (!chatHistory) return;
+    if (!events.length) {
+      setEmpty(chatHistory, "No messages yet. Send your adjuster a note below.");
+      return;
+    }
+    chatHistory.innerHTML = events.map((e) => `
+      <article class="imessage-bubble ${e.actor_role === "customer" ? "customer" : "employee"}">
+        <p>${esc(e.label || "")}</p>
+        ${renderMessageAttachments(e.attachments)}
+        <span>${esc(e.actor_name || (e.actor_role === "customer" ? "You" : "Adjuster"))} · ${esc(timeOf(tsToIso(e.created_at)))}</span>
       </article>
     `).join("");
     chatHistory.scrollTop = chatHistory.scrollHeight;
-  }
-  renderThreads();
-};
+  };
 
-threadList?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-thread-id]");
-  if (!button) {
-    return;
-  }
-  renderThread(button.dataset.threadId);
-});
+  const subscribeMessages = (claimId) => {
+    unsubMessages?.();
+    unsubMessages = null;
+    if (!claimId) return;
+    setEmpty(chatHistory, "Loading messages...");
+    try {
+      unsubMessages = db.collection("case_activity")
+        .where("case_id", "==", claimId)
+        .where("type", "==", "message")
+        .orderBy("created_at", "asc")
+        .limit(200)
+        .onSnapshot(
+          (snap) => renderMessages(snap.docs.map((d) => d.data())),
+          () => setEmpty(chatHistory, "Messages are unavailable right now.")
+        );
+    } catch {
+      setEmpty(chatHistory, "Messages are unavailable right now.");
+    }
+  };
 
-messageForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const text = messageInput?.value.trim();
-  const pendingAttachments = buildAttachments();
-  if (!text && !pendingAttachments.length) {
-    return;
-  }
-  const attachments = await uploadAttachments(selectedThreadId);
-  const thread = threads[selectedThreadId];
-  const time = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).format(new Date());
-  thread.messages.push({ from: "customer", text: text || "Attached evidence", time, attachments });
-  thread.latest = text || `${attachments.length} attachment${attachments.length === 1 ? "" : "s"} sent`;
-  writeStoredThreads(threads);
-  messageInput.value = "";
-  if (messageFiles) {
-    messageFiles.value = "";
-  }
-  renderAttachmentPreview();
-  renderThread(selectedThreadId);
-});
+  const selectClaim = (claimId) => {
+    if (!claimId) return;
+    activeClaimId = claimId;
+    try { window.localStorage.setItem(currentClaimStorageKey, claimId); } catch {}
+    renderThreads();
+    subscribeMessages(claimId);
+  };
 
-messageFiles?.addEventListener("change", renderAttachmentPreview);
-renderThread(selectedThreadId);
+  threadList?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-thread-id]");
+    if (button) selectClaim(button.dataset.threadId);
+  });
+
+  messageFiles?.addEventListener("change", renderAttachmentPreview);
+
+  messageForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const text = messageInput?.value.trim() || "";
+    const hasFiles = Array.from(messageFiles?.files || []).length > 0;
+    if ((!text && !hasFiles) || !activeClaimId) return;
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const submit = messageForm.querySelector("button[type='submit']");
+    if (submit) submit.disabled = true;
+    try {
+      const attachments = await uploadAttachments(activeClaimId);
+      await db.collection("case_activity").add({
+        case_id: activeClaimId,
+        type: "message",
+        label: text || "Attached claim file",
+        actor_role: "customer",
+        actor_uid: user.uid,
+        actor_name: user.displayName || "Customer",
+        attachments,
+        created_at: window.firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      if (messageInput) messageInput.value = "";
+      if (messageFiles) messageFiles.value = "";
+      renderAttachmentPreview();
+    } catch {
+      setEmpty(chatHistory, "Could not send that message. Try again.");
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
+
+  const subscribeClaims = (uid) => {
+    unsubClaims?.();
+    unsubClaims = null;
+    if (!uid) return;
+    try {
+      unsubClaims = db.collection("cases")
+        .where("owner_uid", "==", uid)
+        .orderBy("updated_at", "desc")
+        .limit(50)
+        .onSnapshot(
+          (snap) => {
+            claims = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            if (!activeClaimId || !claims.some((c) => c.id === activeClaimId)) {
+              const next = claims[0]?.id;
+              if (next) {
+                activeClaimId = next;
+                subscribeMessages(next);
+              }
+            }
+            renderThreads();
+          },
+          () => setEmpty(threadList, "Could not load your claims.")
+        );
+    } catch {
+      setEmpty(threadList, "Could not load your claims.");
+    }
+  };
+
+  window.addEventListener("beforeunload", () => {
+    unsubMessages?.();
+    unsubClaims?.();
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (!user) {
+      setEmpty(chatHistory, "Sign in to message your adjuster.");
+      return;
+    }
+    subscribeClaims(user.uid);
+    if (activeClaimId) subscribeMessages(activeClaimId);
+  });
 })();
