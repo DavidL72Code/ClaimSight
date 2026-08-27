@@ -318,3 +318,168 @@ def test_second_pass_fallback_is_labelled_as_not_ai() -> None:
     finally:
         routes.firebase_claim_lookup.verify_bearer_token = original
         routes.claim_assistant.second_pass_review = original_review
+
+
+# ── confidence-independent consistency flags ─────────────────────
+# The model reported 0.95-0.99 confidence on an assessment that omitted all
+# structural work and accepted a wrong model year, so these checks look at
+# the numbers rather than asking the model how sure it is.
+from app.services.report_generation import ClaimReportService  # noqa: E402
+
+
+def _build(regions, ctx=None, value=None):
+    svc = ClaimReportService()
+    out = svc.build_assessment(
+        ["a.jpg"], [Path("a.jpg")], regions, "test", ctx or ClaimContext()
+    )
+    return {f.code for f in out.assessment_flags}, out
+
+
+def _r(panel="hood", severity="high", cost=500, conf=0.97, value=10000, year=0):
+    return DamageRegion(
+        panel=panel, damage_type="crumpled", severity=severity, confidence=conf,
+        bounding_box=BoundingBox(x=0, y=0, width=10, height=10),
+        estimated_repair_cost_usd=cost, source="test",
+        vehicle_value_usd=value, vehicle_year_detected=year,
+    )
+
+
+def test_flags_thin_total_loss_margin() -> None:
+    # repair 2700 vs value 2746 -- the real Megane case, a 1.7% margin
+    codes, _ = _build([_r(cost=2700, value=2746)], ClaimContext())
+    assert "total_loss_margin_thin" in codes
+
+
+def test_does_not_flag_a_clear_margin() -> None:
+    codes, _ = _build([_r(cost=6100, value=3089)], ClaimContext())
+    assert "total_loss_margin_thin" not in codes
+
+
+def test_flags_high_severity_with_no_structural_line_item() -> None:
+    regions = [
+        _r(panel="front bumper"), _r(panel="hood"), _r(panel="windshield"),
+    ]
+    codes, _ = _build(regions)
+    assert "possible_underscoped_structural" in codes
+
+
+def test_structural_line_item_clears_the_flag() -> None:
+    regions = [
+        _r(panel="front bumper"), _r(panel="hood"),
+        _r(panel="front grille and radiator support"),
+    ]
+    codes, _ = _build(regions)
+    assert "possible_underscoped_structural" not in codes
+
+
+def test_flags_year_conflict_between_claim_and_photo() -> None:
+    codes, _ = _build([_r(year=2001)], ClaimContext(year=2003, make="Renault"))
+    assert "vehicle_identity_conflict" in codes
+
+
+def test_one_year_apart_is_tolerated() -> None:
+    codes, _ = _build([_r(year=2002)], ClaimContext(year=2003))
+    assert "vehicle_identity_conflict" not in codes
+
+
+def test_no_conflict_when_model_cannot_read_the_year() -> None:
+    codes, _ = _build([_r(year=0)], ClaimContext(year=2003))
+    assert "vehicle_identity_conflict" not in codes
+
+
+# ── the judge as a retry trigger ─────────────────────────────────
+class _ScriptedJudge:
+    """Judge returning a scripted sequence of grades."""
+
+    provider_name = "judge"
+
+    def __init__(self, grades):
+        self.grades = list(grades)
+        self.calls = 0
+
+    def evaluate_assessment(self, payload):
+        self.calls += 1
+        g = self.grades[min(self.calls - 1, len(self.grades) - 1)]
+        return {
+            "overall_score": g["score"],
+            "verdict": g.get("verdict", "needs_review"),
+            "rubric": [
+                {"dimension": d, "score": sc, "rationale": "r"}
+                for d, sc in g.get("rubric", {}).items()
+            ],
+            "concerns": [],
+        }
+
+
+class _CleanReport:
+    """Emits no flags, so only the judge can trigger anything."""
+
+    def build_assessment(self, filenames, paths, regions, provider, claim_context):
+        return _assessment(regions=regions)
+
+
+def test_judge_weak_dimension_triggers_a_retry() -> None:
+    judge = _ScriptedJudge([
+        {"score": 40, "rubric": {"valuation_support": 1}},   # initial: weak
+        {"score": 90, "rubric": {"valuation_support": 5}},   # after retry: better
+    ])
+    narrator = _Narrator()
+    pipeline = AssessmentPipeline(
+        _Segmentation(narrator), _CleanReport(), AssessmentEvaluator(narrator=judge)
+    )
+    out = pipeline.run(["a.jpg"], [Path("a.jpg")], ClaimContext())
+
+    assert len(out.retry_attempts) == 1
+    a = out.retry_attempts[0]
+    assert a.trigger_flag == "judge:valuation_support"
+    assert a.stage == "valuation"
+    assert narrator.reground_calls == 1
+    assert out.evaluation.overall_score == 90, "improved grade must be kept"
+
+
+def test_judge_triggered_retry_is_rolled_back_when_grade_drops() -> None:
+    judge = _ScriptedJudge([
+        {"score": 60, "rubric": {"valuation_support": 2}},
+        {"score": 30, "rubric": {"valuation_support": 1}},  # retry made it worse
+    ])
+    pipeline = AssessmentPipeline(
+        _Segmentation(_Narrator()), _CleanReport(), AssessmentEvaluator(narrator=judge)
+    )
+    out = pipeline.run(["a.jpg"], [Path("a.jpg")], ClaimContext())
+
+    assert out.retry_attempts[0].resolved is False
+    assert "did not improve" in out.retry_attempts[0].detail
+    assert out.evaluation.overall_score == 60, "must keep the better original grade"
+
+
+def test_strong_judge_grade_triggers_nothing() -> None:
+    judge = _ScriptedJudge([{"score": 95, "verdict": "accept",
+                             "rubric": {"valuation_support": 5, "evidence_grounding": 5}}])
+    narrator = _Narrator()
+    pipeline = AssessmentPipeline(
+        _Segmentation(narrator), _CleanReport(), AssessmentEvaluator(narrator=judge)
+    )
+    out = pipeline.run(["a.jpg"], [Path("a.jpg")], ClaimContext())
+    assert out.retry_attempts == []
+    assert narrator.reground_calls == 0 and narrator.detect_calls == 0
+
+
+def test_fallback_grade_is_not_used_as_a_trigger() -> None:
+    """The deterministic fallback derives its rubric from the same flags the
+    loop already handles, so trusting it as an independent signal would
+    double-count and retry on every ungrounded assessment."""
+    narrator = _Narrator()
+    pipeline = AssessmentPipeline(
+        _Segmentation(narrator), _CleanReport(), AssessmentEvaluator(narrator=None)
+    )
+    out = pipeline.run(["a.jpg"], [Path("a.jpg")], ClaimContext())
+    assert out.evaluation.fallback_used is True
+
+    # The fallback genuinely emits a weak dimension here (no cited sources),
+    # which is exactly the signal that must NOT be acted on.
+    weak = [r for r in out.evaluation.rubric if r.score <= 2]
+    assert weak, "fallback should have produced a weak dimension to ignore"
+    assert any(r.dimension == "valuation_support" for r in weak)
+
+    assert out.retry_attempts == [], "fallback rubric must not drive a retry"
+    assert narrator.reground_calls == 0 and narrator.detect_calls == 0

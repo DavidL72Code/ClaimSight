@@ -117,6 +117,9 @@ class DamageRegion(BaseModel):
     # Vehicle-level context (same across a vehicle's regions; 0/""/False when unknown).
     vehicle_value_usd: int = 0
     vehicle_label: str = ""
+    # Model year as read from the image; 0 when the model cannot tell.
+    # Cross-checked against the claimant's entered year to catch mismatches.
+    vehicle_year_detected: int = 0
     vehicle_total_loss: bool = False
     total_loss_reason: str = ""
     valuation_methodology: str = ""

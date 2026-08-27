@@ -57,8 +57,8 @@ DEBUG = _env_bool("DEBUG", False)
 ENABLE_API_DOCS = _env_bool("ENABLE_API_DOCS", APP_ENV != "production")
 API_ACCESS_TOKEN = os.getenv("API_ACCESS_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = _env_str("GEMINI_MODEL", "gemini-3.5-flash")
-CLAIM_ASSISTANT_MODEL = _env_str("CLAIM_ASSISTANT_MODEL", "gemini-3.1-flash-lite")
+GEMINI_MODEL = _env_str("GEMINI_MODEL", "gemini-3.5-flash-lite")
+CLAIM_ASSISTANT_MODEL = _env_str("CLAIM_ASSISTANT_MODEL", "gemini-3.5-flash-lite")
 # Free web-search grounding (1000 searches/month free): https://tavily.com
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip()
 # Assessment quality controls.

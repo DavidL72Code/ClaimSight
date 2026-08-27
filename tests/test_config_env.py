@@ -57,7 +57,7 @@ def test_unparseable_numeric_falls_back(monkeypatch) -> None:
 
 def test_blank_model_names_fall_back(monkeypatch) -> None:
     cfg = _reload(monkeypatch, GEMINI_MODEL="", EVALUATOR_MODEL="", SECOND_PASS_MODEL="")
-    assert cfg.GEMINI_MODEL == "gemini-3.5-flash"
+    assert cfg.GEMINI_MODEL == "gemini-3.5-flash-lite"
     assert cfg.EVALUATOR_MODEL == cfg.CLAIM_ASSISTANT_MODEL
     assert cfg.SECOND_PASS_MODEL == cfg.CLAIM_ASSISTANT_MODEL
 

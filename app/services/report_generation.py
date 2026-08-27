@@ -306,6 +306,72 @@ class ClaimReportService:
                 )
             )
 
+        # ── consistency checks that do NOT depend on model confidence ──
+        # The model reported 0.95-0.99 confidence on an assessment that omitted
+        # all structural work and accepted a wrong model year, so self-reported
+        # confidence cannot be the only gate.
+
+        # A near-tie between repair and value means the repair/total-loss call
+        # rests on two estimates being right to within a few percent.
+        if adjusted_vehicle_value > 0 and total_cost > 0:
+            margin = abs(total_cost - adjusted_vehicle_value) / adjusted_vehicle_value
+            if margin <= 0.10:
+                flags.append(
+                    AssessmentFlag(
+                        code="total_loss_margin_thin",
+                        level="high",
+                        title="Repair and value are too close to call",
+                        detail=(
+                            f"Estimated repairs (${total_cost:,}) are within {margin:.0%} of "
+                            f"vehicle value (${adjusted_vehicle_value:,}), so a small revision to "
+                            "either figure would flip the repair-versus-total-loss outcome."
+                        ),
+                    )
+                )
+
+        # Several panels called "high" with no structural line item usually means
+        # the estimate covers visible panels only.
+        high_regions = [r for r in regions if r.severity == "high"]
+        structural_terms = (
+            "frame", "rail", "pillar", "unibody", "chassis", "radiator support",
+            "subframe", "apron", "firewall", "structural", "crossmember",
+        )
+        has_structural = any(
+            any(term in f"{r.panel} {r.damage_type}".lower() for term in structural_terms)
+            for r in regions
+        )
+        if len(high_regions) >= 3 and not has_structural:
+            flags.append(
+                AssessmentFlag(
+                    code="possible_underscoped_structural",
+                    level="warning",
+                    title="Structural damage may be unpriced",
+                    detail=(
+                        f"{len(high_regions)} panels are rated high severity but no structural "
+                        "component (frame, rail, pillar, radiator support) is priced. Impacts "
+                        "severe enough to destroy this many panels usually deform structure."
+                    ),
+                )
+            )
+
+        # The claimant's year versus what the model can actually see.
+        detected_year = next(
+            (r.vehicle_year_detected for r in regions if r.vehicle_year_detected), 0
+        )
+        if detected_year and claim_context.year and abs(detected_year - claim_context.year) > 1:
+            flags.append(
+                AssessmentFlag(
+                    code="vehicle_identity_conflict",
+                    level="warning",
+                    title="Reported year disagrees with the photos",
+                    detail=(
+                        f"The claim reports {claim_context.year} but the images look like "
+                        f"{detected_year}. Vehicle value depends on this, so confirm the year "
+                        "against the VIN or registration."
+                    ),
+                )
+            )
+
         if claim_context.pre_existing_damage:
             flags.append(
                 AssessmentFlag(

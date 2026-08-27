@@ -323,6 +323,9 @@ class GeminiClaimNarrator:
             "(ACV) in US dollars — the typical pre-accident resale value for that specific vehicle "
             "(an exotic/supercar is worth far more than a mainstream car). Report this as "
             "vehicle_label (make and model) and estimated_vehicle_value_usd. "
+            "Also report vehicle_year_detected: the model year you can actually infer from "
+            "the vehicle's styling and badging. Use 0 if you genuinely cannot tell. Judge it "
+            "from the image only - do not copy any year you were told. "
             "Then find every UNIQUE visibly damaged area across "
             + ("ALL images " if multi else "the image ")
             + "(dents, scratches, cracks, broken glass, crumpled panels, missing parts, paint damage), "
@@ -401,6 +404,7 @@ class GeminiClaimNarrator:
                 "type": "OBJECT",
                 "properties": {
                     "vehicle_label": {"type": "STRING"},
+                    "vehicle_year_detected": {"type": "INTEGER"},
                     "estimated_vehicle_value_usd": {"type": "INTEGER"},
                     "total_loss": {"type": "BOOLEAN"},
                     "total_loss_reason": {"type": "STRING"},
@@ -902,6 +906,10 @@ class GeminiClaimNarrator:
             items = payload.get("damages") or payload.get("regions") or []
             vehicle_label = str(payload.get("vehicle_label", "") or "")
             try:
+                vehicle_year_detected = int(payload.get("vehicle_year_detected") or 0)
+            except (TypeError, ValueError):
+                vehicle_year_detected = 0
+            try:
                 vehicle_value = int(payload.get("estimated_vehicle_value_usd", 0) or 0)
             except (TypeError, ValueError):
                 vehicle_value = 0
@@ -909,6 +917,7 @@ class GeminiClaimNarrator:
         elif isinstance(payload, list):
             items = payload
             vehicle_label = ""
+            vehicle_year_detected = 0
             vehicle_value = 0
             vehicle_total_loss = False
         else:
@@ -974,6 +983,7 @@ class GeminiClaimNarrator:
                     ai_assessor_model=GEMINI_MODEL,
                     vehicle_value_usd=vehicle_value,
                     vehicle_label=vehicle_label,
+                    vehicle_year_detected=vehicle_year_detected,
                     vehicle_total_loss=vehicle_total_loss,
                 )
             )
