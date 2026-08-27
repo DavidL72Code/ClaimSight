@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght@400&display=swap" />
     <link rel="stylesheet" href="./styles.css?v=ui-2" />
   </head>
-  <body data-portal="employee">
+  <body data-portal="employee" class="app-shell">
     <header class="topbar">
       <a class="brand" href="./employee-assessment.html">ClaimSight</a>
       <details class="employee-nav-menu">
@@ -23,11 +23,13 @@
           <a href="./employee-messages.html">Message Center</a>
         </nav>
       </details>
-      <a class="employee-notification-bell icon-button" href="./employee-notifications.html" aria-label="Employee notifications">
+      <div class="topbar-actions">
+        <a class="employee-notification-bell icon-button" href="./employee-notifications.html" aria-label="Employee notifications">
         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
         <span class="notification-count">3</span>
       </a>
-      <button class="logout-button" type="button" data-employee-logout>Logout</button>
+        <button class="logout-button" type="button" data-employee-logout>Logout</button>
+      </div>
     </header>
 
     <main class="page">

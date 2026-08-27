@@ -33,6 +33,8 @@
   --radius:     10px;
   --radius-lg:  14px;
 
+  --sidebar-w:  248px;
+
   --font-sans:  "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -5636,4 +5638,129 @@ h1, h2, h3 {
   }
 
   .claim-proof-grid figure { opacity: 1 !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Left navigation sidebar (>= 900px)
+
+   The signed-in pages share one topbar shape — brand | nav | actions —
+   so the rail is built by re-laying-out that existing header rather than
+   restructuring 13 pages of markup. Below 900px every rule here drops
+   away and the original horizontal topbar with its hamburger returns,
+   which is the right pattern on a phone anyway.
+   ══════════════════════════════════════════════════════════════ */
+@media (min-width: 900px) {
+  body.app-shell {
+    padding-left: var(--sidebar-w);
+  }
+
+  body.app-shell > .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 18px 12px;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    background: var(--surface);
+    backdrop-filter: none;
+    overflow: visible;
+  }
+
+  body.app-shell > .topbar > .brand {
+    padding: 4px 10px 20px;
+  }
+
+  /* nav fills the middle and pushes the action cluster to the floor */
+  body.app-shell > .topbar > .employee-nav-menu,
+  body.app-shell > .topbar > .workflow-tabs {
+    margin-bottom: auto;
+    justify-self: stretch;
+  }
+
+  /* the hamburger is meaningless in a rail — show the list itself */
+  body.app-shell .employee-nav-menu > summary {
+    display: none;
+  }
+
+  body.app-shell .employee-nav-menu::details-content {
+    content-visibility: visible;
+    block-size: auto;
+    overflow: visible;
+  }
+
+  body.app-shell .employee-menu-list,
+  body.app-shell .workflow-tabs {
+    position: static;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: auto;
+    gap: 1px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  body.app-shell .employee-menu-list a,
+  body.app-shell .workflow-tab {
+    justify-content: flex-start;
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    font-size: .875rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  body.app-shell .employee-menu-list a.active,
+  body.app-shell .workflow-tab.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: none;
+  }
+
+  /* account row pinned to the bottom, separated by a hairline */
+  body.app-shell > .topbar > .topbar-actions,
+  body.app-shell > .topbar > .api-chip {
+    justify-self: stretch;
+    justify-content: space-between;
+    max-width: none;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 0;
+  }
+
+  /* dropdowns would be clipped by a 248px rail, so open them alongside it */
+  body.app-shell .notification-dropdown {
+    left: calc(100% + 14px);
+    right: auto;
+    top: auto;
+    bottom: 0;
+  }
+
+  /* the landing page keeps its own marketing nav */
+  body:not(.app-shell) > .topbar {
+    position: sticky;
+  }
+}
+
+/* Wide screens: let the rail breathe a little */
+@media (min-width: 1500px) {
+  body.app-shell {
+    --sidebar-w: 268px;
+  }
 }
