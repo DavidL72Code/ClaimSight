@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Final Report</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a href="./dashboard.html">Dashboard</a>
+          <a href="./new-claim.html">New Claim</a>
+          <a href="./edit-claim.html">Edit Claim</a>
+          <a href="./case-review.html">Decision Review</a>
+          <a href="./messages.html">Messages</a>
+          <a class="active" href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+      <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page">
+      <section class="workflow-section page-hero-section">
+        <div class="workflow-heading">
+          <span>Finalized claim</span>
+          <h1 class="page-title">Final Report</h1>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <div class="panel-heading">
+          <span>Finalized claim package</span>
+          <strong id="consumer-final-status">Read-only report access</strong>
+        </div>
+        <div class="report-generator-body">
+          <div id="consumer-final-empty" class="report-generator-copy">
+            <strong>No finalized report yet</strong>
+            <p>Select or submit a claim first. Export unlocks when the claim reaches final review.</p>
+          </div>
+          <div id="consumer-final-report" class="consumer-final-report hidden">
+            <div class="consumer-final-copy">
+              <strong id="consumer-final-reference">—</strong>
+              <span id="consumer-final-vehicle">Vehicle unavailable</span>
+            </div>
+            <div class="consumer-final-grid">
+              <div>
+                <span>Final status</span>
+                <strong id="consumer-final-status-copy">—</strong>
+              </div>
+              <div>
+                <span>Adjuster</span>
+                <strong id="consumer-final-reviewer">—</strong>
+              </div>
+              <div>
+                <span>Final action</span>
+                <strong id="consumer-final-action">—</strong>
+              </div>
+              <div>
+                <span>Reviewed total</span>
+                <strong id="consumer-final-total">—</strong>
+              </div>
+            </div>
+            <div class="consumer-detail-copy">
+              <span>Final note</span>
+              <p id="consumer-final-note">The final adjuster note will appear here when the case is complete.</p>
+            </div>
+            <div class="consumer-detail-copy">
+              <span>Report version history</span>
+              <div id="consumer-report-history" class="audit-log-list">
+                <article>
+                  <strong>Version 1</strong>
+                  <p>Generated when the claim is finalized.</p>
+                </article>
+              </div>
+            </div>
+          </div>
+          <div class="report-actions report-actions-inline">
+            <a id="consumer-final-export" class="secondary-action hidden" href="#">Export PDF</a>
+            <p id="consumer-final-export-status" class="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="workflow-next">
+        <div class="workflow-next-actions">
+          <a class="workflow-nav-button back" href="./case-review.html">Back</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Consumer Final Report</footer>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./consumer-case.js?v=pdf-export-fix-3"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>

@@ -8,5 +8,6 @@ __pycache__/
 *.log
 *.map
 data/uploads/
+data/*.db
 frontend/dist/
 node_modules/

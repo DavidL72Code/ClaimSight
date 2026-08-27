@@ -3,200 +3,125 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ClaimSight</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <title>ClaimSight | Auto Claim Portal</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css?v=forgot-password-1" />
   </head>
-  <body>
+  <body data-portal="consumer-home">
+    <main class="landing-shell">
+      <section class="claim-home-sticky-zone">
+        <div class="claim-home-card" aria-label="ClaimSight auto insurance homepage">
+          <header class="claim-home-nav">
+            <a class="claim-home-brand" href="./index.html">(CLAIMSIGHT)</a>
+            <div class="claim-home-nav-actions">
+              <button id="home-login-open" class="claim-home-login-button" type="button">LOG IN</button>
+            </div>
+          </header>
 
-    <!-- ── topbar ─────────────────────────────────────────────── -->
-    <header class="topbar">
-      <a class="brand" href="/">ClaimSight</a>
-      <nav class="nav" aria-label="Primary navigation">
-        <a class="nav-button" href="#intake">Intake</a>
-        <a class="nav-button" href="#assessment">Assessment</a>
-        <a class="nav-button" href="#regions">Regions</a>
-      </nav>
-      <span id="backend-url-label" class="api-chip">Connecting</span>
-    </header>
+          <div class="claim-home-stage">
+          <figure class="claim-home-photo claim-home-photo-left">
+              <img src="assets/damage-hero-left.jpg" alt="Car with a crushed front end and shattered windscreen after a collision" />
+            </figure>
+            <figure class="claim-home-photo claim-home-photo-center">
+              <img src="assets/damage-hero-center.jpg" alt="Dented door and side panel of a vehicle with a taped-over window" />
+            </figure>
+            <figure class="claim-home-photo claim-home-photo-right">
+              <img src="assets/damage-hero-right.jpg" alt="Severe front-end collision damage on a vehicle awaiting assessment" />
+            </figure>
 
-    <main class="page">
-
-      <!-- ── hero ───────────────────────────────────────────────── -->
-      <section class="hero" id="intake">
-        <div class="hero-img"></div>
-        <div class="hero-copy">
-          <p class="kicker">AI-Powered Claims Review</p>
-          <h1>ClaimSight</h1>
-          <p class="hero-sub">Photo intake, damage triage, and adjuster notes — in one review screen.</p>
-        </div>
-        <div class="scroll-cue" aria-hidden="true"></div>
-      </section>
-
-      <!-- ── intake ─────────────────────────────────────────────── -->
-      <section class="intake-panel reveal" aria-label="Claim photo intake">
-        <div class="panel-heading">
-          <span>Upload claim photo</span>
-        </div>
-        <form id="upload-form" class="upload-form">
-          <div class="intake-main">
-            <label class="dropzone" for="claim-image" id="dropzone">
-              <input id="claim-image" name="files" type="file" accept="image/*" multiple hidden />
-              <span class="drop-title">Drop claim photos here</span>
-              <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
-            </label>
-            <div class="intake-actions">
-              <button type="submit" class="cta">Assess claim</button>
-              <p id="status" class="status">No claim photos selected.</p>
+            <div class="claim-home-title">
+              <h1 data-text="AUTO CRASH CLAIMS">AUTO CRASH CLAIMS</h1>
             </div>
           </div>
-          <div class="vehicle-context">
-            <div class="context-heading">
-              <strong>Vehicle details for better pricing insight</strong>
-              <p>Enter whatever you know. The assessment will use partial details when full vehicle information is not available.</p>
-            </div>
-            <div class="vehicle-grid">
-              <label>
-                <span>Make</span>
-                <input id="vehicle-make-input" name="make" type="text" placeholder="Audi" />
-              </label>
-              <label>
-                <span>Model</span>
-                <input id="vehicle-model-input" name="model" type="text" placeholder="RS e-tron GT" />
-              </label>
-              <label>
-                <span>Trim</span>
-                <input id="vehicle-trim-input" name="trim" type="text" placeholder="Prestige" />
-              </label>
-              <label>
-                <span>Year</span>
-                <input id="vehicle-year-input" name="year" type="number" min="1980" max="2027" placeholder="2023" />
-              </label>
-              <label>
-                <span>Mileage</span>
-                <input id="vehicle-mileage-input" name="mileage" type="number" min="0" max="500000" placeholder="24500" />
-              </label>
-              <label class="vehicle-notes">
-                <span>Pre-existing damage</span>
-                <textarea
-                  id="pre-existing-damage-input"
-                  name="pre_existing_damage"
-                  rows="3"
-                  placeholder="Prior rear-bumper scuffs, small wheel rash, windshield chip, etc."
-                ></textarea>
-              </label>
-            </div>
-          </div>
-        </form>
-        <div id="upload-queue" class="upload-queue hidden" aria-label="Uploaded images">
-          <div class="queue-heading">
-            <span id="queue-count">0 images</span>
-            <button type="button" id="clear-queue" class="queue-clear">Clear all</button>
-          </div>
-          <div class="queue-viewport">
-            <button type="button" id="queue-prev" class="queue-nav prev" aria-label="Previous image">‹</button>
-            <ul id="queue-list" class="queue-list"></ul>
-            <button type="button" id="queue-next" class="queue-nav next" aria-label="Next image">›</button>
+
+          <div class="claim-home-bottom">
+            <p>
+              Upload vehicle damage photos, track human review, and receive a finalized claim report
+              once your adjuster completes the decision.
+            </p>
+
+            <a class="claim-home-cta" href="./new-claim.html">START NEW CLAIM</a>
           </div>
         </div>
       </section>
 
-      <!-- ── sticky zoom + image preview ───────────────────────── -->
-      <div class="zoom-wrap" id="zoom-wrap">
-        <div class="zoom-sticky">
-          <section class="image-panel" aria-label="Claim image preview">
-            <div class="panel-heading">
-              <span>Claim image</span>
-              <strong id="image-state">Awaiting upload</strong>
-            </div>
-            <div class="preview-stage">
-              <div class="empty-preview" id="empty-preview">
-                <span>Image preview</span>
-              </div>
-              <img id="preview-image" class="preview-image hidden" alt="Claim preview" />
-              <div id="damage-overlay" class="damage-overlay" aria-hidden="true"></div>
-            </div>
-            <div id="thumb-strip" class="thumb-strip hidden" aria-label="Uploaded images"></div>
-          </section>
-          <div class="zoom-caption" id="zoom-caption">Scroll to explore the assessment</div>
-        </div>
-      </div>
-
-      <!-- ── assessment ─────────────────────────────────────────── -->
-      <section class="assessment-panel reveal" id="assessment">
-        <div class="panel-heading">
-          <span>Assessment</span>
-          <strong id="overall-severity">Pending</strong>
-        </div>
-
-        <dl class="summary-grid stagger">
-          <div><dt>Vehicle</dt><dd id="vehicle-type">—</dd></div>
-          <div><dt>Est. vehicle value</dt><dd id="vehicle-value">—</dd></div>
-          <div><dt>Reported mileage</dt><dd id="reported-mileage">—</dd></div>
-          <div><dt>Prior damage</dt><dd id="prior-damage">—</dd></div>
-          <div><dt>Repairability</dt><dd id="repairability">—</dd></div>
-          <div><dt>Estimated repair cost</dt><dd id="estimated-cost">—</dd></div>
-          <div><dt>Recommended action</dt><dd id="recommended-action">—</dd></div>
-          <div><dt>File</dt><dd id="filename">—</dd></div>
-          <div><dt>Segmentation</dt><dd id="segmentation-provider">—</dd></div>
-          <div><dt>Summary engine</dt><dd id="report-provider">—</dd></div>
-        </dl>
-
-        <div class="pricing-insight">
-          <span class="evidence-label">Pricing factors</span>
-          <p id="pricing-factors">Vehicle details will appear here when provided.</p>
-        </div>
-        <div class="pricing-insight">
-          <span class="evidence-label">Valuation methodology</span>
-          <p id="valuation-methodology">The app will explain how the vehicle value was derived after assessment.</p>
-        </div>
-        <div class="pricing-insight">
-          <span class="evidence-label">Comparable prices used</span>
-          <p id="valuation-comparables">Comparable market prices will appear here after assessment.</p>
-        </div>
-        <p id="fallback-note" class="fallback-note">Waiting for assessment output.</p>
-        <p id="summary-text" class="summary-text">
-          The assessment narrative will appear here after the backend reviews the claim image.
-        </p>
-
-        <div id="evidence" class="evidence hidden">
-          <div id="reason-block" class="reason-block hidden">
-            <span class="evidence-label">Total-loss reasoning</span>
-            <p id="total-loss-reason"></p>
-          </div>
-          <div id="sources-block" class="sources-block hidden">
-            <span class="evidence-label">Valuation sources (web-grounded)</span>
-            <ul id="sources-list" class="sources-list"></ul>
-            <p id="search-queries" class="search-queries"></p>
-          </div>
-          <p id="grounding-status" class="grounding-status hidden"></p>
-        </div>
-
-        <div class="report-actions">
-          <button id="download-report" class="secondary-action hidden" type="button">
-            Download report JSON
-          </button>
-        </div>
+      <section class="claim-home-scroll-panels" aria-label="Claim flow">
+        <article>
+          <span>(1)</span>
+          <strong>Upload the crash</strong>
+          <p>Start with vehicle photos, damage angles, and supporting documents.</p>
+        </article>
+        <article>
+          <span>(2)</span>
+          <strong>Human review</strong>
+          <p>The AI first pass is routed to an adjuster before anything is finalized.</p>
+        </article>
+        <article>
+          <span>(3)</span>
+          <strong>Accept or appeal</strong>
+          <p>Review the final reasoning, accept the outcome, or send it back with more evidence.</p>
+        </article>
       </section>
 
-      <!-- ── regions ────────────────────────────────────────────── -->
-      <section class="regions-panel reveal" id="regions">
-        <div class="panel-heading">
-          <span>Detected parts</span>
-          <strong id="region-count">0 parts</strong>
+      <section class="claim-proof-section" aria-label="What ClaimSight does">
+        <div class="claim-proof-copy">
+          <span>How it helps</span>
+          <h2>From crash photos to a reviewed claim decision.</h2>
+          <p>
+            ClaimSight organizes the messy parts of a car crash claim: image intake,
+            damage detection, adjuster review, supporting documents, and final report export.
+          </p>
         </div>
-        <div id="regions-list" class="regions-list">
-          <article class="region-row placeholder">
-            <span>No part data yet</span>
-            <strong>Upload claim photos to begin.</strong>
-          </article>
+        <div class="claim-proof-grid">
+          <figure>
+            <img src="assets/process-damage-photos.svg" alt="Claimant capturing damage photos on a phone, with four images attached" />
+            <figcaption>Damage photos</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/process-ai-first-pass.svg" alt="AI first pass marking two damage regions with confidence scores" />
+            <figcaption>AI first pass</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/process-human-review.svg" alt="Adjuster review checklist with approve and request-info actions" />
+            <figcaption>Human review</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/process-pdf-report.svg" alt="Generated claim assessment report showing repair estimate, vehicle value and cited comparables" />
+            <figcaption>Final report</figcaption>
+          </figure>
         </div>
       </section>
-
     </main>
 
-    <footer class="site-footer">ClaimSight — AI damage assessment</footer>
-
-    <script src="/config.js"></script>
-    <script src="/app.js"></script>
+    <div id="home-login-modal" class="home-login-modal hidden" role="dialog" aria-modal="true" aria-labelledby="home-login-title">
+      <div class="home-login-dialog">
+        <button id="home-login-close" class="home-login-close" type="button" aria-label="Close login">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+        <span class="home-login-kicker">Customer login</span>
+        <h2 id="home-login-title">Access your claim portal.</h2>
+        <form id="customer-login-form" class="home-login-form">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" placeholder="Password" autocomplete="current-password" required />
+          </label>
+          <button id="customer-forgot-password" class="forgot-password-link" type="button">Forgot password?</button>
+          <button type="submit">Log in</button>
+          <p id="customer-login-status" class="login-help-status" aria-live="polite"></p>
+        </form>
+        <a id="customer-google-login" class="google-login-button" href="./dashboard.html">
+          <span>G</span>
+          Continue with Google
+        </a>
+      </div>
+    </div>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./home.js"></script>
   </body>
 </html>

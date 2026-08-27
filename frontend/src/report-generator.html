@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Report Generator</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="employee">
+    <header class="topbar">
+      <a class="brand" href="./employee-assessment.html">ClaimSight</a>
+      <nav class="workflow-tabs" aria-label="Employee workflow navigation">
+        <a class="workflow-tab" href="./employee-assessment.html">Employee Assessment</a>
+        <a class="workflow-tab" href="./adjustment.html">Adjustment</a>
+        <a class="workflow-tab" href="./further-reasoning.html">Further Reasoning</a>
+        <a class="workflow-tab active" href="./report-generator.html">Report Generator</a>
+      </nav>
+      <a class="api-chip portal-chip" href="./index.html">Consumer Portal</a>
+    </header>
+
+    <main class="page">
+      <section class="workflow-section page-hero-section">
+        <div class="workflow-heading">
+          <span>Phase 4</span>
+          <h1 class="page-title">Report Generator</h1>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <div class="panel-heading">
+          <span>Export tools</span>
+          <strong>Prepare final claim package</strong>
+        </div>
+        <div class="report-generator-body">
+          <div class="report-generator-copy">
+            <strong>What the report includes</strong>
+            <p>
+              The final report can include the AI assessment, reviewer overrides, reasoning notes,
+              comparable valuation signals, and claim metadata in a print-ready format.
+            </p>
+            <p>
+              Use the browser print flow from this page to save the generated report as PDF once the
+              claim has completed adjustment and further reasoning review.
+            </p>
+          </div>
+          <div class="report-actions report-actions-inline">
+            <button class="secondary-action" type="button">Generate PDF-ready report</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="workflow-next">
+        <div class="workflow-next-actions">
+          <a class="workflow-nav-button back" href="./further-reasoning.html">Back</a>
+          <a class="workflow-nav-button next" href="./index.html">Next</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./employee-auth.js?v=security-1"></script>
+  </body>
+</html>

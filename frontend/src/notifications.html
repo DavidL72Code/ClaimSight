@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Notifications</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a href="./dashboard.html">Dashboard</a>
+          <a href="./new-claim.html">New Claim</a>
+          <a href="./edit-claim.html">Edit Claim</a>
+          <a href="./case-review.html">Decision Review</a>
+          <a href="./messages.html">Messages</a>
+          <a href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button active" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+      <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page">
+      <section class="workflow-section">
+        <div class="consumer-dashboard-header">
+          <div>
+            <p class="kicker">Customer portal</p>
+            <h1>Notifications</h1>
+          </div>
+          <a class="workflow-nav-button" href="./dashboard.html">Back</a>
+        </div>
+
+        <section class="consumer-panel notification-page-panel">
+          <div class="consumer-panel-head">
+            <span>Updates</span>
+            <button id="refresh-cases" class="text-action" type="button">Refresh</button>
+          </div>
+          <div id="notifications-page-list" class="notification-list full">
+            <article class="notification-item empty">No notifications yet.</article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Notifications</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./consumer-case.js?v=pdf-export-fix-3"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>

@@ -7,163 +7,75 @@ pinned: false
 
 # Insurance Damage Assessment Tool
 
-An MVP for insurance claim triage that combines image segmentation with multimodal report generation.
+An MVP for insurance claim triage that combines image segmentation, market-grounded valuation, and multimodal report generation.
 
-## Deployment shape
+## Problem
+
+Insurance claims teams often have to make early decisions from incomplete information:
+
+- Damage severity is judged from a small set of photos.
+- Vehicle value can be misestimated when adjusters do not have fast access to comparable market listings.
+- Intake details like year, mileage, trim, and prior damage are often partial or inconsistent.
+- Human adjusters still need a short, defensible explanation for why a claim may be repairable or headed toward total loss review.
+
+This project is meant to reduce that early triage friction by giving a structured first-pass assessment from photos plus whatever vehicle details the claimant can provide.
+
+## What We Built To Combat It
+
+ClaimSight turns vehicle photos and intake details into an adjuster-facing assessment:
+
+- Upload a vehicle damage image
+- Detect damage regions with Gemini's multimodal grounding, falling back to a classical CV detector if the model is unavailable
+- Detect damage regions and estimate repair exposure
+- Blend claimant-provided information such as year, mileage, trim, and prior damage with AI-detected vehicle identity
+- Ground vehicle valuation against comparable market listings instead of relying on a freeform guess
+- Produce a structured claim summary with valuation evidence, pricing factors, and total-loss reasoning
+- Display the assessment in a simple web UI for quick review
+
+## Technology Used
 
 - `backend`: FastAPI app intended for Hugging Face Spaces using Docker
 - `frontend/`: static app intended for Vercel
-
-## What this version does
-
-- Upload a vehicle damage image
-- Run a Hugging Face-hosted SAM 2 segmentation pipeline with graceful fallback if the model is not ready
-- Optionally use Gemini to generate a grounded structured claim summary
-- Display the assessment in a simple web UI
-
-## Stack
-
 - FastAPI
 - Jinja2 templates
 - Vanilla HTML/CSS/JS
+- Gemini structured-output vision for damage-region detection, with a classical OpenCV-style fallback detector
+- Optional MobileSAM (ONNX, CPU) mask refiner, off by default (`ENABLE_SAM2_ONNX`)
+- Gemini for multimodal damage understanding and narrative report generation
+- Tavily / Google Search grounding for comparable market research and vehicle valuation support
 
-## Run backend locally
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-Then open `http://127.0.0.1:8000`.
-
-## Run frontend locally
-
-```bash
-cd frontend
-VITE_API_BASE_URL=http://127.0.0.1:8000 node scripts/dev.mjs
-```
-
-Then open `http://127.0.0.1:4173`.
-
-## Backend environment
-
-Copy `.env.example` into your shell environment or export the variables manually.
-
-```bash
-export GEMINI_API_KEY=your_key_here
-export APP_ENV=production
-export DEBUG=false
-export ENABLE_API_DOCS=false
-export API_ACCESS_TOKEN=
-export GEMINI_MODEL=gemini-3.5-flash
-export SEGMENTATION_PROVIDER=sam2
-export SAM2_MODEL_ID=facebook/sam2-hiera-tiny
-export ALLOWED_ORIGINS=https://your-frontend.vercel.app
-export ALLOWED_HOSTS=your-space-subdomain.hf.space,*.hf.space
-export ALLOW_CORS_WILDCARD=false
-export MAX_UPLOAD_BYTES=8388608
-export MAX_IMAGE_PIXELS=12000000
-export RATE_LIMIT_WINDOW_SECONDS=60
-export RATE_LIMIT_MAX_REQUESTS=12
-```
-
-`SEGMENTATION_PROVIDER` options:
-
-- `sam2`: use the SAM 2 adapter and fall back to classical prompts if SAM 2 is unavailable
-- `classical`: use the built-in image-analysis pipeline
-- `mock`: use deterministic sample regions for demos
-
-## Security controls
+## Security
 
 - Uploads are limited by extension, declared MIME type, decoded image format, byte size, and pixel count.
 - Pillow image verification rejects spoofed files and decompression-bomb-style oversized images.
-- `/api/assess` has a simple in-memory per-IP rate limit for demo deployments.
-- `/api/assess` can require `Authorization: Bearer <token>` when `API_ACCESS_TOKEN` is set.
-- Production Docker defaults disable debug mode and API docs.
-- CORS defaults to local development origins; set `ALLOWED_ORIGINS` to the exact Vercel URL in production.
-- Wildcard CORS is ignored unless `ALLOW_CORS_WILDCARD=true`; do not enable it for the public demo.
+- `/api/assess` and `/api/claim-assistant` require a verified Firebase ID token and rate-limit by Firebase UID.
+- Legacy case and queue APIs require the Firebase `employee`, `manager`, or `admin` custom role.
+- Firestore and Storage rules enforce claim ownership, assigned-agent access, upload limits, and protected workflow fields.
+- Production defaults disable debug mode and API docs.
+- CORS and trusted host rules restrict which frontends and hosts can call the backend.
 - Trusted host checks are controlled with `ALLOWED_HOSTS`.
 - Security headers are set on both the FastAPI backend and Vercel frontend.
-- Health checks expose whether SAM 2 failed to load without returning raw exception text.
+- Health checks expose whether the segmentation provider failed to load without returning raw exception text.
 - Frontend assessment rows are rendered with DOM text nodes instead of HTML interpolation.
 - Gemini is prompted to treat image text and filenames as untrusted evidence, not instructions.
 - See [SECURITY.md](/Users/davidle/Documents/Insurance%20damage%20assessment%20tool/SECURITY.md) for the checklist mapping.
 
-Do not put `API_ACCESS_TOKEN` into the public Vercel frontend. Use it only for private API testing,
-or add a server-side proxy/auth layer before enabling it for a browser-facing production app.
+## Deployment
 
-The deployment requirements target Python 3.10+. The existing local `.venv` is Python 3.9, so it
-cannot install some security-fixed packages such as recent `python-multipart` and `requests`
-versions. Use the Docker/Hugging Face Python runtime or a fresh Python 3.10+ venv for dependency
-audits before a real public launch.
+- Backend deployed to Hugging Face Spaces with Docker using [Dockerfile](/Users/davidle/Documents/Insurance%20damage%20assessment%20tool/Dockerfile).
+- Frontend deployed separately to Vercel and pointed at the Hugging Face backend.
+- Core backend variables: `GEMINI_API_KEY`, `SEGMENTATION_PROVIDER` (`gemini` by default), `ALLOWED_ORIGINS`, `ALLOWED_HOSTS`, and one of
+  `FIREBASE_SERVICE_ACCOUNT_JSON` / `FIREBASE_SERVICE_ACCOUNT_PATH` / `GOOGLE_APPLICATION_CREDENTIALS`.
+- Without Firebase Admin credentials the backend still boots, but `/api/assess` and `/api/claim-assistant`
+  reject every request with `401` — verify `/api/health` and a signed-in assessment after deploying.
+- Core frontend build variables: `VITE_API_BASE_URL` plus the six `VITE_FIREBASE_*` values. The Vercel build
+  fails fast if any are missing, so a misconfigured project never publishes a blank-config site.
+- See [.env.example](.env.example) for the full annotated list.
 
-## SAM 2 notes
+### Required Firebase Security Deployment
 
-The app is wired to SAM 2 by default for the Hugging Face Space backend. The official
-`facebookresearch/sam2` repository documents `python>=3.10`, `torch>=2.5.1`, and
-`torchvision>=0.20.1`, and shows image inference with `SAM2ImagePredictor(...).set_image(...)`
-followed by `predict(...)`. It also supports loading checkpoints from Hugging Face with
-`SAM2ImagePredictor.from_pretrained(...)`.
-
-This project's existing `.venv` was created with Python 3.9, so it can keep running the fallback
-path, but a true local SAM 2 runtime will need a Python 3.10+ environment plus:
-
-```bash
-pip install -r requirements-sam2.txt
-```
-
-## API
-
-- `GET /health`
-- `GET /api/health`
-- `GET /`
-- `POST /api/assess`
-
-## Deploy backend to Hugging Face Spaces
-
-Use a `Docker` Space and point it at this repository root.
-
-- HF Space SDK: `Docker`
-- App port: `7860`
-- Main container entrypoint is already defined in [Dockerfile](/Users/davidle/Documents/Insurance%20damage%20assessment%20tool/Dockerfile)
-- Set secrets/variables in the Space:
-  - `GEMINI_API_KEY`
-  - `GEMINI_MODEL`
-  - `SEGMENTATION_PROVIDER`
-  - `SAM2_MODEL_ID`
-  - `ALLOWED_ORIGINS`
-  - `ALLOWED_HOSTS`
-  - `APP_ENV`
-  - `DEBUG`
-  - `ENABLE_API_DOCS`
-  - `API_ACCESS_TOKEN` if you are protecting the backend behind a private proxy
-- Recommended first SAM 2 model: `facebook/sam2-hiera-tiny`
-- Upgrade later if the Space has enough RAM: `facebook/sam2-hiera-small`
-- `INSTALL_SAM2=1` is set in the Dockerfile so the Space installs SAM 2 dependencies during build.
-
-The backend health URL will be:
-
-```text
-https://<your-space-subdomain>.hf.space/api/health
-```
-
-The health response includes the requested segmentation provider, active provider, SAM 2 model id,
-and whether the SAM 2 adapter is ready. If SAM 2 cannot load, the API still responds using the
-classical fallback so the demo does not hard-crash during cold starts or constrained deployments.
-
-## Deploy frontend to Vercel
-
-Point Vercel at the [frontend](/Users/davidle/Documents/Insurance%20damage%20assessment%20tool/frontend) directory.
-
-- Build command: `node scripts/build.mjs`
-- Output directory: `dist`
-- Environment variable:
-  - `VITE_API_BASE_URL=https://<your-space-subdomain>.hf.space`
-
-## Next steps
-
-- Confirm SAM 2 memory use on the selected Hugging Face Space tier
-- Store claim history in a database
-- Add side-by-side original image and predicted mask overlays
+1. Assign custom claims through a trusted Firebase Admin environment: customers use `role=customer`; adjusters use `role=employee`; supervisors use `role=manager` or `role=admin`.
+2. Deploy `firebase/firestore.rules`, `firebase/storage.rules`, and `firebase/firestore.indexes.json` before enabling real claim traffic.
+3. Run `python firebase/migrate_internal_notes.py` as a dry run, then rerun with `--apply` to move legacy internal notes out of customer-readable claim documents.
+4. Configure `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_PATH`, or `GOOGLE_APPLICATION_CREDENTIALS` on the backend so ID tokens can be verified.
+5. Do not deploy with blank Firebase frontend configuration. The employee preview login bypass is limited to localhost and `file://` development pages.

@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -13,12 +17,36 @@ class Source(BaseModel):
     url: str = ""
 
 
+class AssessmentFlag(BaseModel):
+    code: str
+    level: str
+    title: str
+    detail: str
+
+
+class CompletenessCheck(BaseModel):
+    code: str
+    status: str
+    title: str
+    detail: str
+
+
+class ReviewPayload(BaseModel):
+    claim_reference: str = ""
+    reviewer_name: str = ""
+    final_action: str = ""
+    notes: str = ""
+    reviewed_total_cost_usd: int = 0
+    ai_recommended_action: str = ""
+    completed_at: str = ""
+
+
 class ClaimContext(BaseModel):
     make: str = ""
     model: str = ""
     trim: str = ""
-    year: int | None = None
-    mileage: int | None = None
+    year: Optional[int] = None
+    mileage: Optional[int] = None
     pre_existing_damage: str = ""
 
 
@@ -46,12 +74,17 @@ class DamageRegion(BaseModel):
     grounding_status: str = ""
 
 
+class ReviewedRegion(DamageRegion):
+    review_note: str = ""
+
+
 class AssessmentMeta(BaseModel):
     segmentation_provider: str
     report_provider: str
     fallback_used: bool
     image_count: int = 1
     grounding_status: str = ""
+    generated_at: str = ""
 
 
 class AssessmentResponse(BaseModel):
@@ -73,4 +106,39 @@ class AssessmentResponse(BaseModel):
     search_queries: list[str] = Field(default_factory=list)
     claim_context: ClaimContext = Field(default_factory=ClaimContext)
     pricing_factors: list[str] = Field(default_factory=list)
+    assessment_flags: list[AssessmentFlag] = Field(default_factory=list)
+    completeness_checks: list[CompletenessCheck] = Field(default_factory=list)
     meta: AssessmentMeta
+
+
+class CaseSavePayload(AssessmentResponse):
+    reviewed_regions: list[ReviewedRegion] = Field(default_factory=list)
+    review: ReviewPayload = Field(default_factory=ReviewPayload)
+
+
+class ClaimAssistantMessage(BaseModel):
+    role: str = Field(default="user", pattern="^(user|assistant)$")
+    text: str = Field(default="", max_length=2000)
+
+
+class ClaimAssistantContext(BaseModel):
+    claim_reference: str = ""
+    page_title: str = ""
+    status: str = ""
+    vehicle: str = ""
+    adjuster: str = ""
+    ai_view: str = ""
+    final_action: str = ""
+    note: str = ""
+
+
+class ClaimAssistantRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1200)
+    context: ClaimAssistantContext = Field(default_factory=ClaimAssistantContext)
+    history: list[ClaimAssistantMessage] = Field(default_factory=list, max_length=12)
+
+
+class ClaimAssistantResponse(BaseModel):
+    answer: str
+    model: str
+    fallback_used: bool = False

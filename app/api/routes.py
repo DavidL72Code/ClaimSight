@@ -18,11 +18,15 @@ from app.core.config import (
     MAX_UPLOAD_BYTES,
     RATE_LIMIT_MAX_REQUESTS,
     RATE_LIMIT_WINDOW_SECONDS,
-    SAM2_MODEL_ID,
     SEGMENTATION_PROVIDER,
     UPLOAD_DIR,
+    CLAIM_ASSISTANT_MODEL,
 )
-from app.models.schemas import AssessmentResponse, ClaimContext
+from app.models.schemas import AssessmentResponse, CaseSavePayload, ClaimContext
+from app.models.schemas import ClaimAssistantRequest, ClaimAssistantResponse
+from app.services.case_repository import CaseRepository
+from app.services.firebase_claims import FirebaseClaimLookup
+from app.services.gemini_client import GeminiClaimNarrator
 from app.services.report_generation import ClaimReportService
 from app.services.segmentation import get_segmentation_service
 
@@ -30,6 +34,9 @@ router = APIRouter()
 
 segmentation_service = get_segmentation_service()
 report_service = ClaimReportService()
+case_repository = CaseRepository()
+claim_assistant = GeminiClaimNarrator()
+firebase_claim_lookup = FirebaseClaimLookup()
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -45,7 +52,6 @@ def _health_payload() -> dict[str, object]:
         "status": "ok",
         "segmentation_provider": SEGMENTATION_PROVIDER,
         "active_segmentation_provider": segmentation_service.provider_name,
-        "sam2_model_id": SAM2_MODEL_ID,
     }
 
     if hasattr(segmentation_service, "ready"):
@@ -80,7 +86,8 @@ async def assess_damage(
 ) -> AssessmentResponse:
     _enforce_origin_allowlist(request)
     _enforce_optional_api_token(request)
-    _enforce_rate_limit(request)
+    decoded_token = _require_firebase_user(request)
+    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
 
     # Accept either the multi-image field ("files") or the legacy single field ("file").
     uploads = [upload for upload in files if upload and upload.filename]
@@ -150,6 +157,107 @@ async def assess_damage(
                 pass
 
 
+@router.post("/api/cases")
+def save_case(request: Request, payload: CaseSavePayload) -> dict[str, object]:
+    _require_employee(request)
+    return case_repository.save_case(payload)
+
+
+@router.get("/api/cases")
+def list_cases(request: Request, limit: int = 25) -> dict[str, object]:
+    _require_employee(request)
+    normalized_limit = min(max(limit, 1), 100)
+    return {"cases": case_repository.list_cases(normalized_limit)}
+
+
+@router.get("/api/cases/{case_id}")
+def get_case(request: Request, case_id: str) -> dict[str, object]:
+    _require_employee(request)
+    payload = case_repository.get_case(case_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    return payload
+
+
+@router.get("/api/queue")
+def triage_queue(request: Request, limit: int = 25) -> dict[str, object]:
+    _require_employee(request)
+    normalized_limit = min(max(limit, 1), 100)
+    return {"cases": case_repository.list_queue(normalized_limit)}
+
+
+@router.post("/api/claim-assistant", response_model=ClaimAssistantResponse)
+def ask_claim_assistant(request: Request, payload: ClaimAssistantRequest) -> ClaimAssistantResponse:
+    _enforce_origin_allowlist(request)
+    _enforce_optional_api_token(request)
+
+    decoded_token = _require_firebase_user(request)
+    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
+    owned_context = firebase_claim_lookup.get_owned_claim_context(
+        uid=str(decoded_token.get("uid") or ""),
+        claim_reference=payload.context.claim_reference,
+    )
+    if not owned_context:
+        # Do not reveal whether a claim exists when it is not owned by this user.
+        raise HTTPException(status_code=404, detail="Claim not found.")
+
+    context = {
+        **owned_context,
+        "page_title": payload.context.page_title,
+        "customer_profile": {
+            "email": decoded_token.get("email") or "",
+            "name": decoded_token.get("name") or "",
+        },
+    }
+
+    history = [message.model_dump() for message in payload.history][-8:]
+    answer = claim_assistant.answer_claim_assistant(payload.message, context, history)
+
+    if not answer:
+        answer = _safe_assistant_fallback(payload.message, context)
+        return ClaimAssistantResponse(answer=answer, model="rules", fallback_used=True)
+
+    return ClaimAssistantResponse(
+        answer=answer,
+        model=CLAIM_ASSISTANT_MODEL,
+        fallback_used=False,
+    )
+
+
+def _safe_assistant_fallback(message: str, context: dict[str, object]) -> str:
+    question = message.lower()
+    claim_reference = str(context.get("claim_reference") or "this claim")
+    status = str(context.get("status") or "not selected yet")
+    vehicle = str(context.get("vehicle") or "")
+    profile = context.get("customer_profile") if isinstance(context.get("customer_profile"), dict) else {}
+    customer_name = str(profile.get("name") or "").strip()
+    reviewed_total = int(context.get("reviewed_total_cost_usd") or 0)
+    estimated_total = int(context.get("estimated_total_cost_usd") or 0)
+
+    if any(word in question for word in ["payout", "pay", "guarantee", "approve"]):
+        return (
+            f"I cannot promise payout, approval, or coverage. {claim_reference} is currently "
+            f"marked as {status}. The official decision must come from the adjuster and final report."
+        )
+    if any(word in question for word in ["amount", "estimate", "cost", "total"]):
+        if reviewed_total:
+            return f"The verified reviewed estimate visible for {claim_reference} is ${reviewed_total:,}. This is not a payment promise or coverage decision."
+        if estimated_total:
+            return f"The verified AI estimate visible for {claim_reference} is ${estimated_total:,}. This is not a payment promise or coverage decision."
+        return "I do not have a verified claim amount in the current context. Check the final report or message the adjuster."
+    if any(word in question for word in ["model", "vehicle", "car", "make", "trim"]):
+        return f"The verified vehicle shown for {claim_reference} is {vehicle}." if vehicle else "I do not have verified vehicle details in the current context."
+    if "name" in question:
+        return f"The signed-in customer name I can verify is {customer_name}." if customer_name else "I do not have a verified customer name in the current context."
+    if any(word in question for word in ["appeal", "dispute", "wrong"]):
+        return "If you disagree, use the appeal option during final review and include clear photos, repair notes, receipts, and a short explanation of what you believe is missing."
+    if any(word in question for word in ["evidence", "photo", "document", "upload"]):
+        return "Helpful evidence includes wide photos, close-ups, VIN/odometer photos, repair estimates, police reports, tow bills, and notes about prior damage."
+    if "status" in question or "progress" in question:
+        return f"{claim_reference} is currently marked as {status}. Submitted or in-review claims can still add evidence and message the adjuster."
+    return "I can explain claim status, evidence, appeals, reports, and visible reasoning. I cannot change a decision or promise payment."
+
+
 def _enforce_origin_allowlist(request: Request) -> None:
     """Reject requests not originating from an approved site (cheap deterrent).
 
@@ -180,8 +288,8 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _enforce_rate_limit(request: Request) -> None:
-    client_host = _client_ip(request)
+def _enforce_rate_limit(request: Request, identity: str = "") -> None:
+    client_host = f"uid:{identity}" if identity else f"ip:{_client_ip(request)}"
     now = monotonic()
     window_start = now - RATE_LIMIT_WINDOW_SECONDS
 
@@ -206,6 +314,22 @@ def _enforce_optional_api_token(request: Request) -> None:
     scheme, _, token = auth_header.partition(" ")
     if scheme.lower() != "bearer" or not compare_digest(token, API_ACCESS_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid or missing API access token.")
+
+
+def _require_firebase_user(request: Request) -> dict[str, object]:
+    decoded_token = firebase_claim_lookup.verify_bearer_token(
+        request.headers.get("authorization", "")
+    )
+    if not decoded_token:
+        raise HTTPException(status_code=401, detail="Valid Firebase authentication is required.")
+    return decoded_token
+
+
+def _require_employee(request: Request) -> dict[str, object]:
+    decoded_token = _require_firebase_user(request)
+    if decoded_token.get("role") not in {"employee", "manager", "admin"}:
+        raise HTTPException(status_code=403, detail="Employee access is required.")
+    return decoded_token
 
 
 def _validate_upload_size(content: bytes) -> None:

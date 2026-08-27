@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | New Claim</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a href="./dashboard.html">Dashboard</a>
+          <a class="active" href="./new-claim.html">New Claim</a>
+          <a href="./edit-claim.html">Edit Claim</a>
+          <a href="./case-review.html">Decision Review</a>
+          <a href="./messages.html">Messages</a>
+          <a href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+      <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page">
+      <section class="workflow-section">
+        <div class="consumer-dashboard-header">
+          <div>
+            <p class="kicker">New claim</p>
+            <h1>Start a claim</h1>
+          </div>
+          <a class="workflow-nav-button" href="./dashboard.html">Back</a>
+        </div>
+
+        <section class="intake-panel" aria-label="Claim photo intake">
+          <div class="panel-heading">
+            <span>Claim intake</span>
+            <strong>Photos and vehicle details</strong>
+          </div>
+          <form id="upload-form" class="upload-form">
+            <div class="intake-main">
+              <label class="dropzone" for="claim-image" id="dropzone">
+                <input id="claim-image" name="files" type="file" accept="image/*" multiple hidden />
+                <span class="drop-title">Drop claim photos here</span>
+                <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
+              </label>
+              <div class="intake-actions">
+                <button type="submit" class="cta">Submit claim</button>
+                <button id="save-draft" type="button" class="secondary-action">Continue later</button>
+                <p id="status" class="status">No claim photos selected.</p>
+              </div>
+            </div>
+            <div class="vehicle-context">
+              <div class="vehicle-grid">
+                <label>
+                  <span>Make</span>
+                  <input id="vehicle-make-input" name="make" type="text" placeholder="Audi" />
+                </label>
+                <label>
+                  <span>Model</span>
+                  <input id="vehicle-model-input" name="model" type="text" placeholder="RS e-tron GT" />
+                </label>
+                <label>
+                  <span>Trim</span>
+                  <input id="vehicle-trim-input" name="trim" type="text" placeholder="Prestige" />
+                </label>
+                <label>
+                  <span>Year</span>
+                  <input id="vehicle-year-input" name="year" type="number" min="1980" max="2027" placeholder="2023" />
+                </label>
+                <label>
+                  <span>Mileage</span>
+                  <input id="vehicle-mileage-input" name="mileage" type="number" min="0" max="500000" placeholder="24500" />
+                </label>
+                <label class="vehicle-notes">
+                  <span>Known prior damage</span>
+                  <textarea
+                    id="pre-existing-damage-input"
+                    name="pre_existing_damage"
+                    rows="3"
+                    placeholder="Share any prior damage you already know about."
+                  ></textarea>
+                </label>
+                <label>
+                  <span>Incident date</span>
+                  <input id="incident-date-input" name="incident_date" type="date" />
+                </label>
+                <label class="vehicle-notes">
+                  <span>What happened?</span>
+                  <textarea id="incident-description-input" name="incident_description" rows="3" placeholder="Describe where the impact occurred and what damage you noticed."></textarea>
+                </label>
+                <label class="vehicle-notes">
+                  <span>Supporting documents</span>
+                  <input
+                    id="supporting-documents"
+                    name="supporting_documents"
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx"
+                    multiple
+                  />
+                </label>
+              </div>
+              <section class="evidence-checklist-card claim-form-checklist" aria-label="Evidence checklist">
+                <div class="consumer-panel-head">
+                  <span>Evidence checklist</span>
+                  <strong>Required vs optional</strong>
+                </div>
+                <ul class="evidence-checklist">
+                  <li class="needed" data-evidence-check="photos">
+                    <span class="check-dot"></span>
+                    <div><strong>Damage photos</strong><p>Required · wide view and close-up photos of visible damage.</p></div>
+                  </li>
+                  <li class="needed" data-evidence-check="vehicle">
+                    <span class="check-dot"></span>
+                    <div><strong>Vehicle details</strong><p>Required · make, model, year, mileage if known.</p></div>
+                  </li>
+                  <li class="needed" data-evidence-check="incident">
+                    <span class="check-dot"></span>
+                    <div><strong>Incident details</strong><p>Required · date and a short description of what happened.</p></div>
+                  </li>
+                  <li class="optional" data-evidence-check="vin">
+                    <span class="check-dot"></span>
+                    <div><strong>VIN / odometer photo</strong><p>Optional but helpful for verification.</p></div>
+                  </li>
+                  <li class="optional" data-evidence-check="estimate">
+                    <span class="check-dot"></span>
+                    <div><strong>Repair estimate or invoice</strong><p>Optional · useful if a shop already inspected the vehicle.</p></div>
+                  </li>
+                  <li class="optional" data-evidence-check="documents">
+                    <span class="check-dot"></span>
+                    <div><strong>Police, tow, or storage documents</strong><p>Optional · upload only if they apply to this crash.</p></div>
+                  </li>
+                </ul>
+              </section>
+            </div>
+          </form>
+          <div id="upload-queue" class="upload-queue hidden" aria-label="Uploaded images">
+            <div class="queue-heading">
+              <span id="queue-count">0 images</span>
+              <button type="button" id="clear-queue" class="queue-clear">Clear all</button>
+            </div>
+            <div class="queue-viewport">
+              <button type="button" id="queue-prev" class="queue-nav prev" aria-label="Previous image">‹</button>
+              <ul id="queue-list" class="queue-list"></ul>
+              <button type="button" id="queue-next" class="queue-nav next" aria-label="Next image">›</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="image-panel new-claim-preview" aria-label="Claim image preview">
+          <div class="panel-heading">
+            <span>Image preview</span>
+            <strong id="image-state">Awaiting upload</strong>
+          </div>
+          <div class="preview-stage">
+            <div class="empty-preview" id="empty-preview">
+              <span>Image preview</span>
+            </div>
+            <img id="preview-image" class="preview-image hidden" alt="Claim preview" />
+            <div id="damage-overlay" class="damage-overlay" aria-hidden="true"></div>
+          </div>
+          <div id="thumb-strip" class="thumb-strip hidden" aria-label="Uploaded images"></div>
+        </section>
+
+        <section class="assessment-panel" id="assessment">
+          <div class="panel-heading">
+            <span>AI first pass</span>
+            <strong id="overall-severity">Pending</strong>
+          </div>
+
+          <dl class="summary-grid stagger">
+            <div><dt>Vehicle</dt><dd id="vehicle-type">—</dd></div>
+            <div><dt>Est. vehicle value</dt><dd id="vehicle-value">—</dd></div>
+            <div><dt>Reported mileage</dt><dd id="reported-mileage">—</dd></div>
+            <div><dt>Prior damage</dt><dd id="prior-damage">—</dd></div>
+            <div><dt>Repairability</dt><dd id="repairability">—</dd></div>
+            <div><dt>Estimated repair cost</dt><dd id="estimated-cost">—</dd></div>
+            <div><dt>Recommended action</dt><dd id="recommended-action">—</dd></div>
+            <div><dt>File</dt><dd id="filename">—</dd></div>
+            <div><dt>Segmentation</dt><dd id="segmentation-provider">—</dd></div>
+            <div><dt>Summary engine</dt><dd id="report-provider">—</dd></div>
+          </dl>
+
+          <div class="pricing-insight">
+            <span class="evidence-label">Assessment summary</span>
+            <p id="summary-text">The AI first pass will appear here after you submit.</p>
+          </div>
+          <p id="fallback-note" class="fallback-note">Waiting for assessment output.</p>
+
+          <div id="evidence" class="evidence hidden">
+            <div id="reason-block" class="reason-block hidden">
+              <span class="evidence-label">Claim reasoning</span>
+              <p id="total-loss-reason"></p>
+            </div>
+            <div id="sources-block" class="sources-block hidden">
+              <span class="evidence-label">Valuation sources</span>
+              <ul id="sources-list" class="sources-list"></ul>
+              <p id="search-queries" class="search-queries"></p>
+            </div>
+            <p id="grounding-status" class="grounding-status hidden"></p>
+          </div>
+        </section>
+
+        <section class="regions-panel" id="regions">
+          <div class="panel-heading">
+            <span>Detected parts</span>
+            <strong id="region-count">0 parts</strong>
+          </div>
+          <div id="regions-list" class="regions-list">
+            <article class="region-row placeholder">
+              <span>No part data yet</span>
+              <strong>Upload claim photos to begin.</strong>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — New Claim</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./app.js?v=workflow-upgrades-1"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>

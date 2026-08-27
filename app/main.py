@@ -27,7 +27,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Firebase-AppCheck"],
 )
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")

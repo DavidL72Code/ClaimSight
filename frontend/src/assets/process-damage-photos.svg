@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 400" width="560" height="400" role="img" aria-label="Claimant uploading damage photos">
+  <defs>
+    <linearGradient id="pdBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#181c16"/><stop offset="1" stop-color="#0e120d"/>
+    </linearGradient>
+    <linearGradient id="pdCar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#46523e"/><stop offset="1" stop-color="#28301f"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="400" fill="url(#pdBg)"/>
+  <g font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">
+    <!-- phone frame -->
+    <rect x="196" y="44" width="168" height="292" rx="22" fill="#0a0c0a" stroke="rgba(255,255,255,.16)" stroke-width="1.5"/>
+    <rect x="206" y="66" width="148" height="248" rx="12" fill="#12160f"/>
+    <rect x="252" y="52" width="56" height="7" rx="3.5" fill="rgba(255,255,255,.18)"/>
+    <!-- photo in viewfinder: car with dent -->
+    <rect x="206" y="66" width="148" height="150" fill="#1a1f17"/>
+    <path d="M216 186 q10 -34 30 -40 l14 -20 q28 -8 56 0 l16 22 q20 8 26 38 z" fill="url(#pdCar)" stroke="rgba(255,255,255,.14)"/>
+    <circle cx="240" cy="188" r="11" fill="#0b0d0a" stroke="rgba(255,255,255,.2)"/>
+    <circle cx="316" cy="188" r="11" fill="#0b0d0a" stroke="rgba(255,255,255,.2)"/>
+    <path d="M268 150 l16 12 l-12 12 l18 10" fill="none" stroke="#e05c4a" stroke-width="3" stroke-linecap="round"/>
+    <!-- focus reticle -->
+    <g stroke="#a7e34a" stroke-width="2.5" fill="none" stroke-linecap="round">
+      <path d="M246 116 h-14 v14"/><path d="M314 116 h14 v14"/>
+      <path d="M246 176 h-14 v-14"/><path d="M314 176 h14 v-14"/>
+    </g>
+    <!-- thumbnails strip -->
+    <g>
+      <rect x="216" y="228" width="40" height="34" rx="6" fill="#232a1f" stroke="#a7e34a" stroke-width="1.5"/>
+      <path d="M222 254 l10 -10 l8 7 l7 -9 l7 12 z" fill="#a7e34a" opacity=".55"/>
+      <rect x="262" y="228" width="40" height="34" rx="6" fill="#232a1f" stroke="rgba(255,255,255,.14)"/>
+      <path d="M268 254 l9 -11 l8 8 l8 -7 l7 10 z" fill="#7a8a76" opacity=".5"/>
+      <rect x="308" y="228" width="40" height="34" rx="6" fill="#171c14" stroke="rgba(255,255,255,.1)" stroke-dasharray="3 3"/>
+      <path d="M328 238 v14 M321 245 h14" stroke="#7a8a76" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <!-- shutter -->
+    <circle cx="280" cy="292" r="17" fill="none" stroke="#a7e34a" stroke-width="2.5"/>
+    <circle cx="280" cy="292" r="10" fill="#a7e34a"/>
+    <text x="280" y="360" text-anchor="middle" fill="#c4cfc0" font-size="15" font-weight="700">4 photos attached</text>
+    <text x="280" y="380" text-anchor="middle" fill="#7a8a76" font-size="12.5">Front, side, VIN, odometer</text>
+  </g>
+</svg>

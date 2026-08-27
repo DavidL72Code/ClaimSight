@@ -1,10 +1,42 @@
 const apiBaseUrl = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
+const firebaseConfig = window.FIREBASE_CONFIG || {};
+const portalMode = document.body.dataset.portal || "employee";
+const consumerMode = portalMode === "consumer";
 const maxClientUploadBytes = 8 * 1024 * 1024;
 const maxImages = 8;
 const allowedClientMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const firebaseEnabled = Boolean(
+  window.firebase
+  && firebaseConfig.apiKey
+  && firebaseConfig.projectId
+  && firebaseConfig.appId
+);
+const firebaseApp = firebaseEnabled
+  ? (window.firebase.apps?.length ? window.firebase.app() : window.firebase.initializeApp(firebaseConfig))
+  : null;
+const firestore = firebaseApp ? window.firebase.firestore(firebaseApp) : null;
+const firebaseAuth = firebaseApp && typeof window.firebase.auth === "function"
+  ? window.firebase.auth(firebaseApp)
+  : null;
+const casesCollection = firestore ? firestore.collection("cases") : null;
+const firebaseStorage = firebaseApp && typeof window.firebase.storage === "function"
+  ? window.firebase.storage(firebaseApp)
+  : null;
+const consumerClaimIdsStorageKey = "claimsight.consumer-claim-ids";
+const consumerCurrentClaimStorageKey = "claimsight.consumer-current-claim";
+const consumerDraftStorageKey = "claimsight.consumer-draft";
+const customerMessageStorageKey = "claimsight.customer-message-threads";
+const claimAdjusterPool = [
+  { id: "adj-alex-morgan", name: "Alex Morgan", email: "alex.morgan@claimsight.com" },
+  { id: "adj-jordan-lee", name: "Jordan Lee", email: "jordan.lee@claimsight.com" },
+  { id: "adj-sam-rivera", name: "Sam Rivera", email: "sam.rivera@claimsight.com" },
+  { id: "adj-taylor-kim", name: "Taylor Kim", email: "taylor.kim@claimsight.com" },
+];
 
 const elements = {
   backendUrlLabel: document.getElementById("backend-url-label"),
+  workflowMenuToggle: document.getElementById("workflow-menu-toggle"),
+  workflowMenuPanel: document.getElementById("workflow-menu-panel"),
   form: document.getElementById("upload-form"),
   fileInput: document.getElementById("claim-image"),
   dropzone: document.getElementById("dropzone"),
@@ -14,6 +46,10 @@ const elements = {
   vehicleYearInput: document.getElementById("vehicle-year-input"),
   vehicleMileageInput: document.getElementById("vehicle-mileage-input"),
   preExistingDamageInput: document.getElementById("pre-existing-damage-input"),
+  incidentDateInput: document.getElementById("incident-date-input"),
+  incidentDescriptionInput: document.getElementById("incident-description-input"),
+  supportingDocumentsInput: document.getElementById("supporting-documents"),
+  saveDraft: document.getElementById("save-draft"),
   emptyPreview: document.getElementById("empty-preview"),
   previewImage: document.getElementById("preview-image"),
   damageOverlay: document.getElementById("damage-overlay"),
@@ -38,6 +74,8 @@ const elements = {
   pricingFactors: document.getElementById("pricing-factors"),
   valuationMethodology: document.getElementById("valuation-methodology"),
   valuationComparables: document.getElementById("valuation-comparables"),
+  assessmentFlags: document.getElementById("assessment-flags"),
+  completenessChecks: document.getElementById("completeness-checks"),
   segmentationProvider: document.getElementById("segmentation-provider"),
   reportProvider: document.getElementById("report-provider"),
   fallbackNote: document.getElementById("fallback-note"),
@@ -52,11 +90,33 @@ const elements = {
   regions: document.getElementById("regions-list"),
   regionCount: document.getElementById("region-count"),
   downloadReport: document.getElementById("download-report"),
+  downloadHtmlReport: document.getElementById("download-html-report"),
+  saveCase: document.getElementById("save-case"),
+  reviewState: document.getElementById("review-state"),
+  claimReference: document.getElementById("claim-reference"),
+  reviewerName: document.getElementById("reviewer-name"),
+  reviewFinalAction: document.getElementById("review-final-action"),
+  reviewNotes: document.getElementById("review-notes"),
+  reviewAiTotal: document.getElementById("review-ai-total"),
+  reviewAdjustedTotal: document.getElementById("review-adjusted-total"),
+  reviewFinalActionDisplay: document.getElementById("review-final-action-display"),
+  reviewGuidance: document.getElementById("review-guidance"),
+  reviewRegions: document.getElementById("review-regions"),
+  opsState: document.getElementById("ops-state"),
+  refreshCases: document.getElementById("refresh-cases"),
+  refreshQueue: document.getElementById("refresh-queue"),
+  casesList: document.getElementById("cases-list"),
+  queueListPanel: document.getElementById("queue-list-panel"),
 };
 
-elements.backendUrlLabel.textContent = apiBaseUrl ? "Backend connected" : "Backend URL missing";
+if (elements.backendUrlLabel) {
+  elements.backendUrlLabel.textContent = apiBaseUrl ? "Backend connected" : "Backend URL missing";
+}
 
 let latestAssessment = null;
+let reviewState = null;
+let savedCases = [];
+let queueCases = [];
 // Ordered list of { file, dataUrl }. The array index is the image_index the
 // backend uses for each detected region.
 let selectedImages = [];
@@ -64,6 +124,24 @@ let activeImageIndex = 0;
 
 const setStatus = (message) => {
   elements.status.textContent = message;
+};
+
+const firestoreTimestampToIso = (value) => {
+  if (!value) {
+    return "";
+  }
+  if (typeof value.toDate === "function") {
+    return value.toDate().toISOString();
+  }
+  return String(value);
+};
+
+const setWorkflowMenuOpen = (open) => {
+  if (!elements.workflowMenuToggle || !elements.workflowMenuPanel) {
+    return;
+  }
+  elements.workflowMenuToggle.setAttribute("aria-expanded", String(open));
+  elements.workflowMenuPanel.classList.toggle("hidden", !open);
 };
 
 const maxVehicleYear = new Date().getFullYear() + 1;
@@ -79,6 +157,313 @@ const parseOptionalInteger = (value) => {
   }
   const parsed = Number.parseInt(normalized, 10);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatCurrency = (value) => {
+  const amount = Number(value) || 0;
+  return `$${amount.toLocaleString()}`;
+};
+
+const pickRandomAdjuster = () =>
+  claimAdjusterPool[Math.floor(Math.random() * claimAdjusterPool.length)] || claimAdjusterPool[0];
+
+const readConsumerClaimIds = () => {
+  try {
+    const raw = window.localStorage.getItem(consumerClaimIdsStorageKey);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeConsumerClaimIds = (ids) => {
+  window.localStorage.setItem(consumerClaimIdsStorageKey, JSON.stringify(Array.from(new Set(ids))));
+};
+
+const rememberConsumerClaim = (claimId) => {
+  if (!claimId) {
+    return;
+  }
+  writeConsumerClaimIds([claimId, ...readConsumerClaimIds()]);
+  window.localStorage.setItem(consumerCurrentClaimStorageKey, claimId);
+};
+
+const createCustomerMessageThread = (claimReference, assignedAgent) => {
+  try {
+    const raw = window.localStorage.getItem(customerMessageStorageKey);
+    const threads = raw ? JSON.parse(raw) : {};
+    threads[claimReference] = {
+      title: claimReference,
+      subtitle: assignedAgent?.name ? `Assigned to ${assignedAgent.name}` : "Claim conversation",
+      latest: assignedAgent?.name
+        ? `${assignedAgent.name} was assigned to your claim.`
+        : "Your claim was submitted and is ready for messages.",
+      messages: [
+        {
+          from: "employee",
+          text: assignedAgent?.name
+            ? `Your claim has been assigned to ${assignedAgent.name}. You can message here if you need to add context or ask about evidence.`
+            : "Your claim was submitted. You can message here if you need to add context or ask about evidence.",
+          time: new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).format(new Date()),
+        },
+      ],
+    };
+    window.localStorage.setItem(customerMessageStorageKey, JSON.stringify(threads));
+  } catch {
+    // Message thread creation is best-effort in preview mode.
+  }
+};
+
+const getDraftPayload = () => ({
+  draft_id: (() => {
+    try {
+      const existing = JSON.parse(window.localStorage.getItem(consumerDraftStorageKey) || "{}");
+      return existing.draft_id || `DRF-${Date.now().toString().slice(-8)}`;
+    } catch {
+      return `DRF-${Date.now().toString().slice(-8)}`;
+    }
+  })(),
+  saved_at: new Date().toISOString(),
+  make: elements.vehicleMakeInput?.value?.trim?.() || "",
+  model: elements.vehicleModelInput?.value?.trim?.() || "",
+  trim: elements.vehicleTrimInput?.value?.trim?.() || "",
+  year: elements.vehicleYearInput?.value || "",
+  mileage: elements.vehicleMileageInput?.value || "",
+  pre_existing_damage: elements.preExistingDamageInput?.value?.trim?.() || "",
+  incident_date: elements.incidentDateInput?.value || "",
+  incident_description: elements.incidentDescriptionInput?.value?.trim?.() || "",
+  supporting_documents: Array.from(elements.supportingDocumentsInput?.files || []).map((file) => ({
+    name: file.name,
+    size: file.size,
+    type: file.type || "application/octet-stream",
+  })),
+});
+
+const saveConsumerDraft = () => {
+  window.localStorage.setItem(consumerDraftStorageKey, JSON.stringify(getDraftPayload()));
+  setStatus("Draft saved. You can continue later from this browser.");
+};
+
+const restoreConsumerDraft = () => {
+  if (!consumerMode || !elements.form) {
+    return;
+  }
+  try {
+    const raw = window.localStorage.getItem(consumerDraftStorageKey);
+    if (!raw) {
+      return;
+    }
+    const draft = JSON.parse(raw);
+    if (elements.vehicleMakeInput) elements.vehicleMakeInput.value = draft.make || "";
+    if (elements.vehicleModelInput) elements.vehicleModelInput.value = draft.model || "";
+    if (elements.vehicleTrimInput) elements.vehicleTrimInput.value = draft.trim || "";
+    if (elements.vehicleYearInput) elements.vehicleYearInput.value = draft.year || "";
+    if (elements.vehicleMileageInput) elements.vehicleMileageInput.value = draft.mileage || "";
+    if (elements.preExistingDamageInput) elements.preExistingDamageInput.value = draft.pre_existing_damage || "";
+    if (elements.incidentDateInput) elements.incidentDateInput.value = draft.incident_date || "";
+    if (elements.incidentDescriptionInput) elements.incidentDescriptionInput.value = draft.incident_description || "";
+    setStatus(draft.saved_at ? `Draft restored from ${new Date(draft.saved_at).toLocaleDateString()}.` : "Draft restored.");
+  } catch {
+    window.localStorage.removeItem(consumerDraftStorageKey);
+  }
+};
+
+const deriveConsumerStatus = (payload = {}) => {
+  const review = payload.review || {};
+  const reviewerName = String(review.reviewer_name || "").trim();
+  const finalAction = String(review.final_action || payload.final_action || "").toLowerCase();
+  const statusCode = String(payload.status || "").toLowerCase();
+  const statusLabel = payload.status_label || "";
+
+  if (["finalized", "accepted", "closed"].includes(statusCode)) {
+    return { code: "finalized", label: statusLabel || "Finalized", reportReady: true };
+  }
+  if (statusCode === "appealed") {
+    return { code: "appealed", label: statusLabel || "Appealed", reportReady: false };
+  }
+
+  if (finalAction.includes("more evidence")) {
+    return { code: "needs_info", label: "Needs more information", reportReady: false };
+  }
+  if (finalAction) {
+    return { code: "final_review", label: "Final review", reportReady: false };
+  }
+  if (reviewerName) {
+    return { code: "in_review", label: "In review", reportReady: false };
+  }
+  return { code: "submitted", label: "Submitted", reportReady: false };
+};
+
+const buildConsumerNotifications = (payload, statusMeta, claimReference) => {
+  const review = payload.review || {};
+  const notifications = [
+    {
+      key: `${claimReference}-submitted`,
+      title: "Claim submitted",
+      message: `${claimReference} is in the review queue.`,
+    },
+  ];
+
+  if (review.reviewer_name) {
+    notifications.push({
+      key: `${claimReference}-reviewed`,
+      title: "Human reviewed",
+      message: `${review.reviewer_name} reviewed your claim.`,
+    });
+  }
+
+  if (statusMeta.code === "needs_info") {
+    notifications.push({
+      key: `${claimReference}-needs-info`,
+      title: "More information needed",
+      message: review.notes || "A reviewer requested more information before the claim can be finalized.",
+    });
+  } else if (statusMeta.code === "final_review") {
+    notifications.push({
+      key: `${claimReference}-final-review`,
+      title: "Status: Final review",
+      message: review.final_action || "Your claim is ready for final report review.",
+    });
+  }
+
+  return notifications;
+};
+
+const collectSupportingDocuments = async (claimReference) => {
+  const files = Array.from(elements.supportingDocumentsInput?.files || []);
+  if (!files.length) {
+    return [];
+  }
+
+  const uploadedAt = new Date().toISOString();
+  if (!firebaseStorage) {
+    return files.map((file) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/octet-stream",
+      uploaded_at: uploadedAt,
+    }));
+  }
+
+  const uploads = files.map(async (file) => {
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
+    const ref = firebaseStorage.ref().child(`claim-supporting-documents/${claimReference}/${Date.now()}-${safeName}`);
+    await ref.put(file);
+    const download_url = await ref.getDownloadURL();
+    return {
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/octet-stream",
+      uploaded_at: uploadedAt,
+      download_url,
+    };
+  });
+  return Promise.all(uploads);
+};
+
+const saveConsumerClaim = async (assessment) => {
+  if (!casesCollection) {
+    return null;
+  }
+
+  const currentUser = firebaseAuth?.currentUser || null;
+  if (firebaseAuth && !currentUser) {
+    throw new Error("Sign in before submitting a claim.");
+  }
+
+  const claimReference = `CLM-${Date.now().toString().slice(-8)}`;
+  const docId = claimReference;
+  const now = window.firebase.firestore.FieldValue.serverTimestamp();
+  const claimContext = mergeVehicleContext(assessment.claim_context || {});
+  const statusMeta = deriveConsumerStatus(assessment);
+  const queue = computeQueueMeta(assessment);
+  const assignedAgent = pickRandomAdjuster();
+  const payload = {
+    ...assessment,
+    claim_reference: claimReference,
+    claim_context: claimContext,
+    review: {
+      ...(assessment.review || {}),
+      claim_reference: claimReference,
+    },
+    queue,
+    status: statusMeta.code,
+    status_label: statusMeta.label,
+    report_ready: statusMeta.reportReady,
+    consumer_notifications: buildConsumerNotifications(assessment, statusMeta, claimReference),
+    supporting_documents: [],
+    incident_date: elements.incidentDateInput?.value || "",
+    incident_description: elements.incidentDescriptionInput?.value?.trim() || "",
+    customer_statement: elements.incidentDescriptionInput?.value?.trim() || assessment.summary || "",
+    assigned_agent: {
+      ...assignedAgent,
+      assigned_at: new Date().toISOString(),
+    },
+    owner_uid: currentUser?.uid || assessment.owner_uid || "",
+    customer_email: currentUser?.email || assessment.customer_email || assessment.email || "",
+    updated_at: now,
+    created_at: now,
+  };
+
+  await casesCollection.doc(docId).set(payload, { merge: true });
+  await firestore.collection("case_activity").add({
+    case_id: docId,
+    type: "claim_submitted",
+    label: "Claim submitted with initial photos and vehicle details.",
+    actor_role: "customer",
+    actor_uid: currentUser.uid,
+    actor_name: currentUser.displayName || "Customer",
+    created_at: now,
+  });
+  const supportingDocuments = await collectSupportingDocuments(claimReference);
+  if (supportingDocuments.length) {
+    await casesCollection.doc(docId).set(
+      {
+        supporting_documents: supportingDocuments,
+        updated_at: now,
+      },
+      { merge: true }
+    );
+  }
+  rememberConsumerClaim(claimReference);
+  createCustomerMessageThread(claimReference, assignedAgent);
+  return claimReference;
+};
+
+const normalizeCaseSummary = (docId, payload = {}) => ({
+  id: docId,
+  claim_reference: payload.review?.claim_reference || payload.claim_reference || docId,
+  reviewer_name: payload.review?.reviewer_name || payload.reviewer_name || "",
+  vehicle_type: payload.vehicle_type || "",
+  final_action: payload.review?.final_action || payload.final_action || payload.recommended_action || "",
+  repairability: payload.repairability || "",
+  overall_severity: payload.overall_severity || "",
+  estimated_total_cost_usd: payload.estimated_total_cost_usd || 0,
+  reviewed_total_cost_usd: payload.review?.reviewed_total_cost_usd || payload.reviewed_total_cost_usd || 0,
+  priority_score: payload.queue?.priority_score || 0,
+  queue_bucket: payload.queue?.bucket || "routine",
+  updated_at: firestoreTimestampToIso(payload.updated_at),
+});
+
+const computeQueueMeta = (assessment) => {
+  const flags = assessment.assessment_flags || [];
+  const checks = assessment.completeness_checks || [];
+  const review = assessment.review || {};
+  const finalAction = String(review.final_action || assessment.recommended_action || "").toLowerCase();
+  const repairability = String(assessment.repairability || "").toLowerCase();
+  const severity = String(assessment.overall_severity || "").toLowerCase();
+  let priorityScore = 0;
+
+  priorityScore += flags.filter((flag) => flag.level === "high").length * 3;
+  priorityScore += flags.filter((flag) => flag.level === "warning").length;
+  priorityScore += checks.filter((check) => check.status === "missing").length;
+  if (finalAction.includes("total loss") || repairability.includes("total loss")) priorityScore += 3;
+  if (finalAction.includes("more evidence")) priorityScore += 2;
+  if (severity === "high") priorityScore += 2;
+
+  const bucket = priorityScore >= 8 ? "urgent" : priorityScore >= 4 ? "review" : "routine";
+  return { priority_score: priorityScore, bucket };
 };
 
 const collectClaimContext = () => {
@@ -190,9 +575,43 @@ const formatBytes = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const getEvidenceState = () => {
+  const supportingFiles = Array.from(elements.supportingDocumentsInput?.files || []);
+  const fileNames = [
+    ...selectedImages.map((item) => item.file.name),
+    ...supportingFiles.map((file) => file.name),
+  ].join(" ").toLowerCase();
+  return {
+    photos: selectedImages.length >= 2,
+    vehicle: Boolean(
+      elements.vehicleMakeInput?.value?.trim()
+      && elements.vehicleModelInput?.value?.trim()
+      && elements.vehicleYearInput?.value
+    ),
+    incident: Boolean(
+      elements.incidentDateInput?.value
+      && (elements.incidentDescriptionInput?.value?.trim().length || 0) >= 20
+    ),
+    vin: /vin|odometer|mileage/.test(fileNames),
+    estimate: /estimate|invoice|quote/.test(fileNames),
+    documents: supportingFiles.length > 0,
+  };
+};
+
+const updateEvidenceChecklist = () => {
+  const evidenceState = getEvidenceState();
+  document.querySelectorAll("[data-evidence-check]").forEach((item) => {
+    const complete = Boolean(evidenceState[item.dataset.evidenceCheck]);
+    item.classList.toggle("complete", complete);
+    item.classList.toggle("needed", !complete && !item.classList.contains("optional"));
+  });
+  return evidenceState;
+};
+
 // The upload queue is the primary "what have I added" view, shown under the dropzone.
 const renderQueue = () => {
   elements.queueList.innerHTML = "";
+  updateEvidenceChecklist();
   if (selectedImages.length === 0) {
     elements.uploadQueue.classList.add("hidden");
     return;
@@ -269,8 +688,11 @@ const addFiles = async (fileList) => {
 
   // New images invalidate any prior assessment.
   latestAssessment = null;
+  reviewState = null;
   elements.damageOverlay.innerHTML = "";
-  elements.downloadReport.classList.add("hidden");
+  elements.downloadReport?.classList.add("hidden");
+  elements.downloadHtmlReport?.classList.add("hidden");
+  elements.saveCase?.classList.add("hidden");
   if (activeImageIndex >= selectedImages.length) {
     activeImageIndex = Math.max(0, selectedImages.length - 1);
   }
@@ -284,7 +706,10 @@ const addFiles = async (fileList) => {
 const removeImage = (index) => {
   selectedImages.splice(index, 1);
   latestAssessment = null;
-  elements.downloadReport.classList.add("hidden");
+  reviewState = null;
+  elements.downloadReport?.classList.add("hidden");
+  elements.downloadHtmlReport?.classList.add("hidden");
+  elements.saveCase?.classList.add("hidden");
   if (activeImageIndex >= selectedImages.length) {
     activeImageIndex = Math.max(0, selectedImages.length - 1);
   }
@@ -303,7 +728,10 @@ const clearQueue = () => {
   selectedImages = [];
   activeImageIndex = 0;
   latestAssessment = null;
-  elements.downloadReport.classList.add("hidden");
+  reviewState = null;
+  elements.downloadReport?.classList.add("hidden");
+  elements.downloadHtmlReport?.classList.add("hidden");
+  elements.saveCase?.classList.add("hidden");
   renderThumbs();
   renderQueue();
   showActiveImage();
@@ -397,21 +825,85 @@ const updateSummary = (payload) => {
   elements.repairability.textContent = payload.repairability;
   elements.estimatedCost.textContent = `$${payload.estimated_total_cost_usd.toLocaleString()}`;
   elements.recommendedAction.textContent = payload.recommended_action;
-  elements.pricingFactors.textContent = pricingFactors.length
-    ? pricingFactors.join(" ")
-    : "No additional pricing adjustments were applied.";
-  elements.valuationMethodology.textContent = payload.valuation_methodology
-    || "No valuation methodology was returned. The estimate may be coming from a weak or generic market match.";
-  elements.valuationComparables.textContent = comparablePrices.length
-    ? comparablePrices.map((price) => `$${price.toLocaleString()}`).join(" · ")
-    : "No comparable listing prices were captured for this assessment.";
+  if (elements.pricingFactors) {
+    elements.pricingFactors.textContent = pricingFactors.length
+      ? pricingFactors.join(" ")
+      : "No additional pricing adjustments were applied.";
+  }
+  if (elements.valuationMethodology) {
+    elements.valuationMethodology.textContent = payload.valuation_methodology
+      || "No valuation methodology was returned. The estimate may be coming from a weak or generic market match.";
+  }
+  if (elements.valuationComparables) {
+    elements.valuationComparables.textContent = comparablePrices.length
+      ? comparablePrices.map((price) => `$${price.toLocaleString()}`).join(" · ")
+      : "No comparable listing prices were captured for this assessment.";
+  }
   elements.segmentationProvider.textContent = payload.meta.segmentation_provider;
   elements.reportProvider.textContent = payload.meta.report_provider;
   elements.fallbackNote.textContent = payload.meta.fallback_used
     ? "Fallback summary used."
     : "Narrative generated from visual review.";
   elements.summaryText.textContent = payload.summary;
+  renderFlags(payload.assessment_flags || []);
+  renderCompleteness(payload.completeness_checks || []);
   renderEvidence(payload);
+};
+
+const renderFlags = (flags) => {
+  if (!elements.assessmentFlags) {
+    return;
+  }
+  elements.assessmentFlags.innerHTML = "";
+  if (!flags.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-copy";
+    empty.textContent = "No review flags were raised for this assessment.";
+    elements.assessmentFlags.appendChild(empty);
+    return;
+  }
+
+  flags.forEach((flag) => {
+    const item = document.createElement("article");
+    item.className = `signal-chip ${flag.level || "info"}`;
+
+    const title = document.createElement("strong");
+    title.textContent = flag.title;
+
+    const detail = document.createElement("p");
+    detail.textContent = flag.detail;
+
+    item.append(title, detail);
+    elements.assessmentFlags.appendChild(item);
+  });
+};
+
+const renderCompleteness = (checks) => {
+  if (!elements.completenessChecks) {
+    return;
+  }
+  elements.completenessChecks.innerHTML = "";
+  if (!checks.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-copy";
+    empty.textContent = "Claim completeness guidance will appear here.";
+    elements.completenessChecks.appendChild(empty);
+    return;
+  }
+
+  checks.forEach((check) => {
+    const item = document.createElement("article");
+    item.className = `check-item ${check.status || "partial"}`;
+
+    const title = document.createElement("strong");
+    title.textContent = check.title;
+
+    const detail = document.createElement("p");
+    detail.textContent = check.detail;
+
+    item.append(title, detail);
+    elements.completenessChecks.appendChild(item);
+  });
 };
 
 // Show the reasoning and the web sources behind the valuation / total-loss call,
@@ -531,6 +1023,188 @@ const renderRegions = (regions) => {
   elements.regions.appendChild(table);
 };
 
+const initializeReviewState = (payload) => {
+  const review = payload.review || {};
+  reviewState = {
+    claimReference: review.claim_reference || elements.claimReference?.value?.trim?.() || "",
+    reviewerName: review.reviewer_name || elements.reviewerName?.value?.trim?.() || "",
+    finalAction: review.final_action || "",
+    notes: review.notes || elements.reviewNotes?.value?.trim?.() || "",
+    regionEdits: (payload.reviewed_regions?.length ? payload.reviewed_regions : payload.regions || []).map((region, index) => ({
+      severity: region.severity,
+      estimated_repair_cost_usd: region.estimated_repair_cost_usd,
+      note: region.review_note || payload.reviewed_regions?.[index]?.review_note || "",
+    })),
+  };
+  if (elements.claimReference) elements.claimReference.value = reviewState.claimReference;
+  if (elements.reviewerName) elements.reviewerName.value = reviewState.reviewerName;
+  if (elements.reviewNotes) elements.reviewNotes.value = reviewState.notes;
+  if (elements.reviewFinalAction) elements.reviewFinalAction.value = reviewState.finalAction;
+};
+
+const getReviewedAssessment = () => {
+  if (!latestAssessment) {
+    return null;
+  }
+
+  const reviewedRegions = latestAssessment.regions.map((region, index) => {
+    const edit = reviewState?.regionEdits?.[index] || {};
+    return {
+      ...region,
+      severity: edit.severity || region.severity,
+      estimated_repair_cost_usd:
+        Number.isFinite(Number(edit.estimated_repair_cost_usd))
+          ? Number(edit.estimated_repair_cost_usd)
+          : region.estimated_repair_cost_usd,
+      review_note: edit.note || "",
+    };
+  });
+
+  const reviewedTotal = reviewedRegions.reduce(
+    (sum, region) => sum + (Number(region.estimated_repair_cost_usd) || 0),
+    0
+  );
+  const finalAction = reviewState?.finalAction || latestAssessment.recommended_action;
+
+  return {
+    ...latestAssessment,
+    reviewed_regions: reviewedRegions,
+    review: {
+      claim_reference: reviewState?.claimReference || "",
+      reviewer_name: reviewState?.reviewerName || "",
+      final_action: finalAction,
+      notes: reviewState?.notes || "",
+      reviewed_total_cost_usd: reviewedTotal,
+      ai_recommended_action: latestAssessment.recommended_action,
+      completed_at: new Date().toISOString(),
+    },
+  };
+};
+
+const updateReviewSummary = () => {
+  if (
+    !elements.reviewState
+    || !elements.reviewAiTotal
+    || !elements.reviewAdjustedTotal
+    || !elements.reviewFinalActionDisplay
+    || !elements.reviewGuidance
+  ) {
+    return;
+  }
+  const reviewedAssessment = getReviewedAssessment();
+  if (!reviewedAssessment) {
+    elements.reviewState.textContent = "Waiting for assessment";
+    elements.reviewAiTotal.textContent = "—";
+    elements.reviewAdjustedTotal.textContent = "—";
+    elements.reviewFinalActionDisplay.textContent = "—";
+    elements.reviewGuidance.textContent =
+      "Region-level overrides will appear here after an assessment is completed.";
+    return;
+  }
+
+  const reviewedTotal = reviewedAssessment.review.reviewed_total_cost_usd || 0;
+  const hasOverrides = reviewedAssessment.reviewed_regions.some((region, index) => {
+    const original = latestAssessment.regions[index];
+    return (
+      region.severity !== original.severity
+      || region.estimated_repair_cost_usd !== original.estimated_repair_cost_usd
+      || region.review_note
+    );
+  });
+
+  elements.reviewState.textContent = hasOverrides ? "Overrides in progress" : "AI output ready for review";
+  elements.reviewAiTotal.textContent = formatCurrency(latestAssessment.estimated_total_cost_usd);
+  elements.reviewAdjustedTotal.textContent = formatCurrency(reviewedTotal);
+  elements.reviewFinalActionDisplay.textContent = reviewedAssessment.review.final_action || "—";
+  elements.reviewGuidance.textContent = hasOverrides
+    ? "Reviewed estimate includes region-level overrides. Export will include both AI output and reviewer edits."
+    : "No overrides yet. Use the controls below to adjust severity, estimated cost, and reviewer notes.";
+};
+
+const renderReviewRegions = (regions) => {
+  if (!elements.reviewRegions) {
+    return;
+  }
+  elements.reviewRegions.innerHTML = "";
+  if (!regions.length) {
+    const empty = document.createElement("article");
+    empty.className = "review-region empty";
+    empty.innerHTML = "<strong>No reviewed parts yet</strong><p>Run an assessment to enable severity and cost overrides for each detected part.</p>";
+    elements.reviewRegions.appendChild(empty);
+    updateReviewSummary();
+    return;
+  }
+
+  regions.forEach((region, index) => {
+    const edit = reviewState?.regionEdits?.[index];
+    const card = document.createElement("article");
+    card.className = "review-region";
+
+    const header = document.createElement("div");
+    header.className = "review-region-header";
+    header.innerHTML = `<strong>${escapeHtml(region.part_id || `P${index + 1}`)} · ${escapeHtml(region.panel)}</strong><span>${escapeHtml(region.damage_type)}</span>`;
+
+    const grid = document.createElement("div");
+    grid.className = "review-region-grid";
+
+    const severityLabel = document.createElement("label");
+    const severityCaption = document.createElement("span");
+    severityCaption.textContent = "Severity";
+    const severitySelect = document.createElement("select");
+    ["low", "moderate", "high"].forEach((severity) => {
+      const option = document.createElement("option");
+      option.value = severity;
+      option.textContent = severity;
+      if (edit?.severity === severity) {
+        option.selected = true;
+      }
+      severitySelect.appendChild(option);
+    });
+    severitySelect.addEventListener("change", () => {
+      reviewState.regionEdits[index].severity = severitySelect.value;
+      updateReviewSummary();
+    });
+    severityLabel.append(severityCaption, severitySelect);
+
+    const costLabel = document.createElement("label");
+    const costCaption = document.createElement("span");
+    costCaption.textContent = "Reviewed cost (USD)";
+    const costInput = document.createElement("input");
+    costInput.type = "number";
+    costInput.min = "0";
+    costInput.step = "50";
+    costInput.value = String(edit?.estimated_repair_cost_usd ?? region.estimated_repair_cost_usd);
+    costInput.addEventListener("input", () => {
+      reviewState.regionEdits[index].estimated_repair_cost_usd = Math.max(
+        0,
+        Number.parseInt(costInput.value || "0", 10) || 0
+      );
+      updateReviewSummary();
+    });
+    costLabel.append(costCaption, costInput);
+
+    const noteLabel = document.createElement("label");
+    noteLabel.className = "review-note-field";
+    const noteCaption = document.createElement("span");
+    noteCaption.textContent = "Reviewer note";
+    const noteInput = document.createElement("textarea");
+    noteInput.rows = 3;
+    noteInput.placeholder = "Explain why this part was adjusted.";
+    noteInput.value = edit?.note || "";
+    noteInput.addEventListener("input", () => {
+      reviewState.regionEdits[index].note = noteInput.value.trim();
+      updateReviewSummary();
+    });
+    noteLabel.append(noteCaption, noteInput);
+
+    grid.append(severityLabel, costLabel, noteLabel);
+    card.append(header, grid);
+    elements.reviewRegions.appendChild(card);
+  });
+
+  updateReviewSummary();
+};
+
 const boxToDisplayRect = (box) => {
   const image = elements.previewImage;
   const rect = image.getBoundingClientRect();
@@ -597,19 +1271,278 @@ const renderActiveOverlay = () => {
 };
 
 const downloadAssessmentReport = () => {
-  if (!latestAssessment) {
+  const exportPayload = getReviewedAssessment();
+  if (!exportPayload) {
     return;
   }
 
-  const blob = new Blob([JSON.stringify(latestAssessment, null, 2)], {
+  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${latestAssessment.filename || "claim-assessment"}.json`;
+  link.download = `${exportPayload.filename || "claim-assessment"}-review.json`;
   link.click();
   URL.revokeObjectURL(url);
+};
+
+const escapeHtml = (value) =>
+  String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+
+const downloadHtmlReport = () => {
+  const exportPayload = getReviewedAssessment();
+  if (!exportPayload) {
+    return;
+  }
+
+  const reviewedRegions = exportPayload.reviewed_regions || [];
+  const flags = exportPayload.assessment_flags || [];
+  const checks = exportPayload.completeness_checks || [];
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClaimSight Review Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; color: #17201b; line-height: 1.5; }
+    h1, h2 { margin: 0 0 12px; }
+    .meta, .card { margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .tile { padding: 12px; border: 1px solid #d6ddd8; border-radius: 8px; background: #f8fbf9; }
+    .pill { display: inline-block; margin: 0 8px 8px 0; padding: 6px 10px; border-radius: 999px; background: #eef4ef; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #d6ddd8; vertical-align: top; }
+    .small { color: #516157; font-size: 0.92rem; }
+  </style>
+</head>
+<body>
+  <h1>ClaimSight Review Report</h1>
+  <div class="meta small">
+    Generated ${escapeHtml(exportPayload.meta?.generated_at || "")} |
+    Reviewed ${escapeHtml(exportPayload.review?.completed_at || "")}
+  </div>
+  <div class="card grid">
+    <div class="tile"><strong>Claim reference</strong><div>${escapeHtml(exportPayload.review?.claim_reference || "—")}</div></div>
+    <div class="tile"><strong>Reviewer</strong><div>${escapeHtml(exportPayload.review?.reviewer_name || "—")}</div></div>
+    <div class="tile"><strong>Vehicle</strong><div>${escapeHtml(exportPayload.vehicle_type || "—")}</div></div>
+    <div class="tile"><strong>Final action</strong><div>${escapeHtml(exportPayload.review?.final_action || exportPayload.recommended_action || "—")}</div></div>
+    <div class="tile"><strong>AI estimate</strong><div>${escapeHtml(formatCurrency(exportPayload.estimated_total_cost_usd))}</div></div>
+    <div class="tile"><strong>Reviewed estimate</strong><div>${escapeHtml(formatCurrency(exportPayload.review?.reviewed_total_cost_usd || 0))}</div></div>
+  </div>
+  <div class="card">
+    <h2>Assessment summary</h2>
+    <p>${escapeHtml(exportPayload.summary || "")}</p>
+    <p class="small">${escapeHtml(exportPayload.review?.notes || "No reviewer notes entered.")}</p>
+  </div>
+  <div class="card">
+    <h2>Review signals</h2>
+    ${(flags.length
+      ? flags.map((flag) => `<span class="pill"><strong>${escapeHtml(flag.title)}</strong>: ${escapeHtml(flag.detail)}</span>`).join("")
+      : "<p class=\"small\">No review flags.</p>")}
+  </div>
+  <div class="card">
+    <h2>Claim completeness</h2>
+    ${(checks.length
+      ? checks.map((check) => `<span class="pill"><strong>${escapeHtml(check.title)}</strong>: ${escapeHtml(check.detail)}</span>`).join("")
+      : "<p class=\"small\">No completeness guidance.</p>")}
+  </div>
+  <div class="card">
+    <h2>Reviewed parts</h2>
+    <table>
+      <thead>
+        <tr><th>Part</th><th>Severity</th><th>Reviewed cost</th><th>Reviewer note</th></tr>
+      </thead>
+      <tbody>
+        ${reviewedRegions.map((region) => `
+          <tr>
+            <td>${escapeHtml(`${region.part_id || ""} ${region.panel || ""}`.trim())}</td>
+            <td>${escapeHtml(region.severity || "")}</td>
+            <td>${escapeHtml(formatCurrency(region.estimated_repair_cost_usd || 0))}</td>
+            <td>${escapeHtml(region.review_note || "—")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+  const reportWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=850");
+  if (!reportWindow) {
+    throw new Error("Allow pop-ups to generate the PDF-ready report.");
+  }
+  reportWindow.document.open();
+  reportWindow.document.write(html);
+  reportWindow.document.close();
+  reportWindow.focus();
+  window.setTimeout(() => {
+    reportWindow.print();
+  }, 250);
+};
+
+const updateOpsState = () => {
+  if (!elements.opsState) {
+    return;
+  }
+  if (!savedCases.length) {
+    elements.opsState.textContent = "No saved cases yet";
+    return;
+  }
+  const urgentCount = queueCases.filter((item) => item.queue_bucket === "urgent").length;
+  elements.opsState.textContent =
+    urgentCount > 0
+      ? `${savedCases.length} saved cases · ${urgentCount} urgent`
+      : `${savedCases.length} saved cases · queue active`;
+};
+
+const renderCaseCollection = (target, cases, emptyTitle, emptyDetail, includePriority = false) => {
+  if (!target) {
+    return;
+  }
+  target.innerHTML = "";
+  if (!cases.length) {
+    const empty = document.createElement("article");
+    empty.className = "ops-item empty";
+    empty.innerHTML = `<strong>${emptyTitle}</strong><p>${emptyDetail}</p>`;
+    target.appendChild(empty);
+    return;
+  }
+
+  cases.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = `ops-item${includePriority ? ` ${item.queue_bucket || "routine"}` : ""}`;
+
+    const top = document.createElement("div");
+    top.className = "ops-item-head";
+    top.innerHTML = `<strong>${escapeHtml(item.claim_reference || item.id)}</strong><span>${escapeHtml(item.vehicle_type || "Vehicle unavailable")}</span>`;
+
+    const meta = document.createElement("p");
+    const total = formatCurrency(item.reviewed_total_cost_usd || item.estimated_total_cost_usd || 0);
+    meta.textContent = includePriority
+      ? `${item.queue_bucket || "routine"} priority · score ${item.priority_score || 0} · ${total}`
+      : `${item.final_action || "No final action"} · ${total}`;
+
+    const actions = document.createElement("div");
+    actions.className = "ops-item-actions";
+
+    const loadButton = document.createElement("button");
+    loadButton.type = "button";
+    loadButton.className = "text-action";
+    loadButton.textContent = "Open";
+    loadButton.addEventListener("click", () => loadCase(item.id));
+
+    actions.appendChild(loadButton);
+    card.append(top, meta, actions);
+    target.appendChild(card);
+  });
+};
+
+const renderCases = () => {
+  if (!elements.casesList || !elements.queueListPanel) {
+    return;
+  }
+  renderCaseCollection(
+    elements.casesList,
+    savedCases,
+    "No saved cases",
+    "Saved reviewed assessments will appear here.",
+    false
+  );
+  renderCaseCollection(
+    elements.queueListPanel,
+    queueCases,
+    "No queue items",
+    "Priority-ranked claims will appear here after cases are saved.",
+    true
+  );
+  updateOpsState();
+};
+
+const fetchCases = async () => {
+  if (!casesCollection || !elements.casesList) {
+    return;
+  }
+  const snapshot = await casesCollection.orderBy("updated_at", "desc").limit(25).get();
+  savedCases = snapshot.docs.map((doc) => normalizeCaseSummary(doc.id, doc.data()));
+  renderCases();
+};
+
+const fetchQueue = async () => {
+  if (!casesCollection || !elements.queueListPanel) {
+    return;
+  }
+  const snapshot = await casesCollection
+    .orderBy("queue.priority_score", "desc")
+    .limit(25)
+    .get();
+  queueCases = snapshot.docs.map((doc) => normalizeCaseSummary(doc.id, doc.data()));
+  renderCases();
+};
+
+const loadCase = async (caseId) => {
+  if (!casesCollection) {
+    return;
+  }
+  setStatus(`Loading ${caseId}...`);
+  const snapshot = await casesCollection.doc(caseId).get();
+  if (!snapshot.exists) {
+    throw new Error("Failed to load case.");
+  }
+  const payload = snapshot.data();
+
+  latestAssessment = payload;
+  initializeReviewState(payload);
+  updateSummary(payload);
+  renderRegions(payload.regions || []);
+  renderReviewRegions(payload.reviewed_regions?.length ? payload.reviewed_regions : payload.regions || []);
+  elements.downloadReport?.classList.remove("hidden");
+  elements.downloadHtmlReport?.classList.remove("hidden");
+  elements.saveCase?.classList.remove("hidden");
+  setStatus(`Loaded case ${caseId}.`);
+  window.location.hash = "#review";
+};
+
+const saveCurrentCase = async () => {
+  const exportPayload = getReviewedAssessment();
+  if (!exportPayload || !casesCollection) {
+    return;
+  }
+
+  setStatus("Saving reviewed case...");
+  const claimReference = (exportPayload.review?.claim_reference || reviewState?.claimReference || "").trim();
+  const docId = (claimReference || `case-${Date.now()}`).replace(/[^A-Za-z0-9_-]+/g, "-");
+  const now = window.firebase.firestore.FieldValue.serverTimestamp();
+  const queue = computeQueueMeta(exportPayload);
+  const statusMeta = deriveConsumerStatus(exportPayload);
+  const payload = {
+    ...exportPayload,
+    queue,
+    claim_reference: docId,
+    status: statusMeta.code,
+    status_label: statusMeta.label,
+    report_ready: statusMeta.reportReady,
+    consumer_notifications: buildConsumerNotifications(exportPayload, statusMeta, docId),
+    updated_at: now,
+  };
+  const docRef = casesCollection.doc(docId);
+  const existing = await docRef.get();
+  if (!existing.exists) {
+    payload.created_at = now;
+  }
+  await docRef.set(payload, { merge: true });
+
+  reviewState.claimReference = claimReference || docId;
+  if (elements.claimReference) {
+    elements.claimReference.value = reviewState.claimReference;
+  }
+  await Promise.all([fetchCases(), fetchQueue()]);
+  setStatus(`Saved case ${reviewState.claimReference}.`);
 };
 
 elements.fileInput.addEventListener("change", () => {
@@ -657,6 +1590,15 @@ elements.queueNext.addEventListener("click", () => {
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
+  const evidenceState = updateEvidenceChecklist();
+  const missingRequired = Object.entries(evidenceState)
+    .filter(([key, complete]) => ["photos", "vehicle", "incident"].includes(key) && !complete)
+    .map(([key]) => key);
+  if (missingRequired.length) {
+    setStatus(`Complete the required evidence checklist: ${missingRequired.join(", ")}.`);
+    return;
+  }
+
   if (!apiBaseUrl) {
     setStatus("Set VITE_API_BASE_URL before running the frontend.");
     return;
@@ -683,8 +1625,15 @@ elements.form.addEventListener("submit", async (event) => {
       }
     });
 
+    const requestHeaders = {};
+    const authUser = window.firebase?.auth?.()?.currentUser;
+    if (authUser?.getIdToken) {
+      requestHeaders.Authorization = `Bearer ${await authUser.getIdToken()}`;
+    }
+
     const response = await fetch(`${apiBaseUrl}/api/assess`, {
       method: "POST",
+      headers: requestHeaders,
       body: formData,
     });
     const payload = await response.json();
@@ -694,21 +1643,139 @@ elements.form.addEventListener("submit", async (event) => {
     }
 
     latestAssessment = payload;
+    initializeReviewState(payload);
     updateSummary(payload);
     renderRegions(payload.regions);
+    renderReviewRegions(payload.regions);
     renderThumbs();
     renderQueue();
-    elements.downloadReport.classList.remove("hidden");
+    if (!consumerMode) {
+      elements.downloadReport?.classList.remove("hidden");
+      elements.downloadHtmlReport?.classList.remove("hidden");
+      elements.saveCase?.classList.remove("hidden");
+      setStatus("Assessment complete.");
+    } else {
+      const claimReference = await saveConsumerClaim(payload);
+      if (claimReference) {
+        window.localStorage.removeItem(consumerDraftStorageKey);
+        window.ClaimSightConsumer?.refreshPortal?.();
+        setStatus(`Assessment complete. Claim ${claimReference} submitted.`);
+        window.location.href = `./messages.html?claim=${encodeURIComponent(claimReference)}`;
+      } else {
+        setStatus("Assessment complete.");
+      }
+    }
     renderActiveOverlay();
-    setStatus("Assessment complete.");
   } catch (error) {
     setStatus(error.message || "Something went wrong.");
   }
 });
 
+elements.saveDraft?.addEventListener("click", saveConsumerDraft);
+
+[
+  elements.vehicleMakeInput,
+  elements.vehicleModelInput,
+  elements.vehicleYearInput,
+  elements.incidentDateInput,
+  elements.incidentDescriptionInput,
+  elements.supportingDocumentsInput,
+].forEach((input) => input?.addEventListener("input", updateEvidenceChecklist));
+
+elements.supportingDocumentsInput?.addEventListener("change", updateEvidenceChecklist);
+
 elements.previewImage.addEventListener("load", renderActiveOverlay);
 
-elements.downloadReport.addEventListener("click", downloadAssessmentReport);
+elements.downloadReport?.addEventListener("click", downloadAssessmentReport);
+elements.downloadHtmlReport?.addEventListener("click", downloadHtmlReport);
+elements.saveCase?.addEventListener("click", async () => {
+  try {
+    await saveCurrentCase();
+  } catch (error) {
+    setStatus(error.message || "Failed to save case.");
+  }
+});
+
+elements.claimReference?.addEventListener("input", () => {
+  if (!reviewState) {
+    return;
+  }
+  reviewState.claimReference = elements.claimReference.value.trim();
+});
+
+elements.reviewerName?.addEventListener("input", () => {
+  if (!reviewState) {
+    return;
+  }
+  reviewState.reviewerName = elements.reviewerName.value.trim();
+});
+
+elements.reviewFinalAction?.addEventListener("change", () => {
+  if (!reviewState) {
+    return;
+  }
+  reviewState.finalAction = elements.reviewFinalAction.value;
+  updateReviewSummary();
+});
+
+elements.reviewNotes?.addEventListener("input", () => {
+  if (!reviewState) {
+    return;
+  }
+  reviewState.notes = elements.reviewNotes.value.trim();
+});
+
+elements.refreshCases?.addEventListener("click", async () => {
+  try {
+    await fetchCases();
+    setStatus("Recent cases refreshed.");
+  } catch (error) {
+    setStatus(error.message || "Failed to refresh cases.");
+  }
+});
+
+elements.refreshQueue?.addEventListener("click", async () => {
+  try {
+    await fetchQueue();
+    setStatus("Queue refreshed.");
+  } catch (error) {
+    setStatus(error.message || "Failed to refresh queue.");
+  }
+});
+
+elements.workflowMenuToggle?.addEventListener("click", () => {
+  const expanded = elements.workflowMenuToggle.getAttribute("aria-expanded") === "true";
+  setWorkflowMenuOpen(!expanded);
+});
+
+elements.workflowMenuPanel?.querySelectorAll("a").forEach((link) => {
+  link.addEventListener("click", () => setWorkflowMenuOpen(false));
+});
+
+document.addEventListener("click", (event) => {
+  if (!elements.workflowMenuToggle || !elements.workflowMenuPanel) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  if (
+    !elements.workflowMenuToggle.contains(target)
+    && !elements.workflowMenuPanel.contains(target)
+  ) {
+    setWorkflowMenuOpen(false);
+  }
+});
+
+if (apiBaseUrl) {
+  Promise.allSettled([fetchCases(), fetchQueue()]);
+} else if (firebaseEnabled) {
+  Promise.allSettled([fetchCases(), fetchQueue()]);
+}
+
+restoreConsumerDraft();
+updateEvidenceChecklist();
 
 window.addEventListener("resize", () => {
   if (latestAssessment) {

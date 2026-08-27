@@ -1,7 +1,16 @@
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
 import re
 
-from app.models.schemas import AssessmentMeta, AssessmentResponse, ClaimContext, DamageRegion
+from app.models.schemas import (
+    AssessmentFlag,
+    AssessmentMeta,
+    AssessmentResponse,
+    ClaimContext,
+    CompletenessCheck,
+    DamageRegion,
+)
 from app.services.gemini_client import GeminiClaimNarrator
 
 _YEAR_PREFIX_PATTERN = re.compile(r"^\d{4}\s+")
@@ -70,6 +79,22 @@ class ClaimReportService:
             ratio_total_loss = total_cost >= 5000
         is_total_loss = ai_total_loss or ratio_total_loss
         repairability = "review for total loss" if is_total_loss else "repair"
+        assessment_flags = self._build_assessment_flags(
+            regions=regions,
+            image_count=len(image_paths),
+            claim_context=claim_context,
+            adjusted_vehicle_value=adjusted_vehicle_value,
+            total_cost=total_cost,
+            sources_count=len(sources),
+            comparable_count=len(valuation_comparable_prices),
+            grounding_status=grounding_status,
+            ai_total_loss=ai_total_loss,
+            ratio_total_loss=ratio_total_loss,
+        )
+        completeness_checks = self._build_completeness_checks(
+            image_count=len(image_paths),
+            claim_context=claim_context,
+        )
 
         if claim_context.pre_existing_damage and not is_total_loss:
             recommended_action = "Route to adjuster to separate prior damage from this loss"
@@ -122,12 +147,18 @@ class ClaimReportService:
             search_queries=search_queries,
             claim_context=claim_context,
             pricing_factors=pricing_factors,
+            assessment_flags=assessment_flags,
+            completeness_checks=completeness_checks,
             meta=AssessmentMeta(
                 segmentation_provider=segmentation_provider,
                 report_provider=self._narrator.provider_name,
                 fallback_used=fallback_used,
                 image_count=len(image_paths),
                 grounding_status=grounding_status,
+                generated_at=datetime.now(timezone.utc)
+                .replace(microsecond=0, tzinfo=None)
+                .isoformat()
+                + "Z",
             ),
         )
 
@@ -161,6 +192,205 @@ class ClaimReportService:
             f"Estimated repair exposure is about ${total_cost:,}, with an overall severity of {overall_severity}."
             f"{pricing_sentence}"
         )
+
+    def _build_assessment_flags(
+        self,
+        *,
+        regions: list[DamageRegion],
+        image_count: int,
+        claim_context: ClaimContext,
+        adjusted_vehicle_value: int,
+        total_cost: int,
+        sources_count: int,
+        comparable_count: int,
+        grounding_status: str,
+        ai_total_loss: bool,
+        ratio_total_loss: bool,
+    ) -> list[AssessmentFlag]:
+        flags: list[AssessmentFlag] = []
+        low_confidence_regions = [region for region in regions if region.confidence < 0.65]
+        if low_confidence_regions:
+            weakest_region = min(low_confidence_regions, key=lambda region: region.confidence)
+            flags.append(
+                AssessmentFlag(
+                    code="low_visual_confidence",
+                    level="warning",
+                    title="Low visual confidence",
+                    detail=(
+                        f"At least one detected part scored below 65% confidence. "
+                        f"Weakest region: {weakest_region.panel} at {weakest_region.confidence:.0%}."
+                    ),
+                )
+            )
+
+        if image_count < 3:
+            flags.append(
+                AssessmentFlag(
+                    code="limited_photo_set",
+                    level="warning",
+                    title="Limited photo set",
+                    detail=(
+                        "The assessment used fewer than three photos, so hidden or opposite-side "
+                        "damage may not be represented."
+                    ),
+                )
+            )
+
+        if adjusted_vehicle_value <= 0:
+            flags.append(
+                AssessmentFlag(
+                    code="value_not_grounded",
+                    level="warning",
+                    title="Vehicle value needs review",
+                    detail=(
+                        "The app could not produce a confident vehicle value, which makes repair-versus-"
+                        "total-loss guidance less reliable."
+                    ),
+                )
+            )
+
+        if sources_count == 0 or comparable_count == 0:
+            grounding_detail = (
+                f"Grounding status: {grounding_status}." if grounding_status else
+                "No comparable sources were attached to this assessment."
+            )
+            flags.append(
+                AssessmentFlag(
+                    code="weak_market_grounding",
+                    level="warning",
+                    title="Market evidence is thin",
+                    detail=(
+                        "Vehicle valuation should be reviewed against live market comps. "
+                        f"{grounding_detail}"
+                    ),
+                )
+            )
+
+        if adjusted_vehicle_value > 0:
+            repair_ratio = total_cost / adjusted_vehicle_value
+            if 0.6 <= repair_ratio < 0.75 and not ratio_total_loss:
+                flags.append(
+                    AssessmentFlag(
+                        code="near_total_loss_threshold",
+                        level="warning",
+                        title="Near total-loss threshold",
+                        detail=(
+                            f"Estimated repairs are about {repair_ratio:.0%} of vehicle value, so "
+                            "supplements or hidden damage could change the outcome."
+                        ),
+                    )
+                )
+            elif repair_ratio >= 0.75:
+                flags.append(
+                    AssessmentFlag(
+                        code="repair_ratio_exceeds_threshold",
+                        level="high",
+                        title="Repair ratio exceeds threshold",
+                        detail=(
+                            f"Estimated repairs are about {repair_ratio:.0%} of vehicle value, "
+                            "which supports total-loss review."
+                        ),
+                    )
+                )
+
+        if ai_total_loss:
+            flags.append(
+                AssessmentFlag(
+                    code="ai_total_loss_signal",
+                    level="high",
+                    title="AI flagged possible total loss",
+                    detail=(
+                        "The vision model marked the vehicle as a potential structural or economic "
+                        "total loss. Human review is recommended."
+                    ),
+                )
+            )
+
+        if claim_context.pre_existing_damage:
+            flags.append(
+                AssessmentFlag(
+                    code="prior_damage_reported",
+                    level="info",
+                    title="Pre-existing damage reported",
+                    detail=(
+                        "The claimant reported prior damage, so the current loss should be separated "
+                        "from pre-accident condition during review."
+                    ),
+                )
+            )
+
+        return flags
+
+    def _build_completeness_checks(
+        self,
+        *,
+        image_count: int,
+        claim_context: ClaimContext,
+    ) -> list[CompletenessCheck]:
+        checks: list[CompletenessCheck] = []
+
+        photo_status = "complete" if image_count >= 3 else "partial" if image_count == 2 else "missing"
+        photo_detail = (
+            "Three or more photos were provided, which is enough for a basic multi-angle review."
+            if photo_status == "complete"
+            else "Two photos were provided. Add at least one more angle for better damage coverage."
+            if photo_status == "partial"
+            else "Only one photo was provided. Add front, rear, and side angles before relying on the estimate."
+        )
+        checks.append(
+            CompletenessCheck(
+                code="photo_coverage",
+                status=photo_status,
+                title="Photo coverage",
+                detail=photo_detail,
+            )
+        )
+
+        has_identity = bool(claim_context.make and claim_context.model and claim_context.year)
+        partial_identity = any([claim_context.make, claim_context.model, claim_context.year])
+        identity_status = "complete" if has_identity else "partial" if partial_identity else "missing"
+        checks.append(
+            CompletenessCheck(
+                code="vehicle_identity",
+                status=identity_status,
+                title="Vehicle identity",
+                detail=(
+                    "Make, model, and year were supplied."
+                    if identity_status == "complete"
+                    else "Some vehicle details were supplied, but not enough to fully identify the vehicle."
+                    if identity_status == "partial"
+                    else "Add make, model, and year to improve valuation accuracy."
+                ),
+            )
+        )
+
+        checks.append(
+            CompletenessCheck(
+                code="mileage",
+                status="complete" if claim_context.mileage is not None else "missing",
+                title="Mileage",
+                detail=(
+                    f"Reported mileage: {claim_context.mileage:,} miles."
+                    if claim_context.mileage is not None
+                    else "Mileage is missing. Add odometer mileage to improve pricing adjustments."
+                ),
+            )
+        )
+
+        checks.append(
+            CompletenessCheck(
+                code="prior_damage_history",
+                status="complete" if claim_context.pre_existing_damage else "partial",
+                title="Prior damage history",
+                detail=(
+                    "Prior damage notes were included."
+                    if claim_context.pre_existing_damage
+                    else "No prior damage notes were supplied. Confirm whether any pre-existing damage is known."
+                ),
+            )
+        )
+
+        return checks
 
     def _resolve_vehicle_label(self, detected_label: str, claim_context: ClaimContext) -> str:
         stripped_detected_label = _YEAR_PREFIX_PATTERN.sub("", detected_label.strip(), count=1)

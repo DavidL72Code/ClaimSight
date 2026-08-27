@@ -1,0 +1,123 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isEmployee() {
+      return signedIn() && request.auth.token.role == "employee";
+    }
+
+    function isManager() {
+      return signedIn()
+        && (request.auth.token.role == "manager" || request.auth.token.role == "admin");
+    }
+
+    function employeeEmail() {
+      return request.auth.token.email;
+    }
+
+    function ownsCase() {
+      return signedIn() && resource.data.owner_uid == request.auth.uid;
+    }
+
+    function willOwnCreatedCase() {
+      return signedIn() && request.resource.data.owner_uid == request.auth.uid;
+    }
+
+    function isAssignedEmployee() {
+      return isEmployee()
+        && resource.data.assigned_agent.email == employeeEmail();
+    }
+
+    function isAssignedToCase(caseId) {
+      return isEmployee()
+        && get(/databases/$(database)/documents/cases/$(caseId)).data.assigned_agent.email == employeeEmail();
+    }
+
+    function ownsCaseId(caseId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/cases/$(caseId)).data.owner_uid == request.auth.uid;
+    }
+
+    function validCustomerCreate() {
+      return willOwnCreatedCase()
+        && request.resource.data.status == "submitted"
+        && request.resource.data.status_label == "Submitted"
+        && request.resource.data.report_ready == false
+        && request.resource.data.review.get("reviewer_name", "") == ""
+        && request.resource.data.review.get("final_action", "") == ""
+        && request.resource.data.review.get("reviewed_total_cost_usd", 0) == 0;
+    }
+
+    function validCustomerDecision() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["consumer_decision"])
+        || (
+          resource.data.status == "final_review"
+          && (
+            request.resource.data.consumer_decision.decision == "accepted"
+            || request.resource.data.consumer_decision.decision == "appealed"
+          )
+        );
+    }
+
+    function validCustomerAppeal() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["appeal"])
+        || (
+          resource.data.status == "final_review"
+          && request.resource.data.appeal.explanation is string
+          && request.resource.data.appeal.category is string
+        );
+    }
+
+    function validCustomerUpdate() {
+      return ownsCase()
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "claim_context",
+          "vehicle_type",
+          "supporting_documents",
+          "consumer_decision",
+          "appeal",
+          "updated_at"
+        ])
+        && validCustomerDecision()
+        && validCustomerAppeal();
+    }
+
+    match /cases/{caseId} {
+      allow create: if validCustomerCreate() || isManager();
+      allow read: if ownsCase() || isAssignedEmployee() || isManager();
+      allow update: if validCustomerUpdate()
+        || isManager()
+        || (
+          isAssignedEmployee()
+          && request.resource.data.assigned_agent == resource.data.assigned_agent
+          && request.resource.data.owner_uid == resource.data.owner_uid
+        );
+      allow delete: if isManager();
+    }
+
+    match /case_internal/{caseId} {
+      allow read, write: if isAssignedToCase(caseId) || isManager();
+    }
+
+    match /case_activity/{eventId} {
+      allow read: if ownsCaseId(resource.data.case_id)
+        || isAssignedToCase(resource.data.case_id)
+        || isManager();
+      allow create: if (
+          ownsCaseId(request.resource.data.case_id)
+          && request.resource.data.actor_uid == request.auth.uid
+          && request.resource.data.actor_role == "customer"
+          && request.resource.data.type in ["claim_submitted", "appeal_submitted", "decision_accepted", "evidence_added"]
+        )
+        || isAssignedToCase(request.resource.data.case_id)
+        || isManager();
+      allow update: if false;
+      allow delete: if isManager();
+    }
+  }
+}

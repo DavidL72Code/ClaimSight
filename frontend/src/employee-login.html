@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Employee Login</title>
+    <link rel="stylesheet" href="./styles.css?v=forgot-password-1" />
+  </head>
+  <body data-portal="employee-login" class="employee-login-page">
+    <main class="employee-login-shell">
+      <section class="employee-login-card" aria-label="Employee login">
+        <a class="employee-login-brand" href="./index.html">ClaimSight</a>
+        <form id="employee-login-form" class="employee-login-form">
+          <label>
+            <span>Username</span>
+            <input id="employee-email" type="email" autocomplete="username" placeholder="employee@claimsight.com" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="employee-password" type="password" autocomplete="current-password" placeholder="Password" required />
+          </label>
+          <button id="employee-forgot-password" class="forgot-password-link" type="button">Forgot password?</button>
+          <button type="submit">Log in</button>
+          <p id="employee-login-status" class="status">Employee access only.</p>
+        </form>
+        <a class="employee-login-back" href="./index.html">Back to customer site</a>
+      </section>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./employee-auth.js?v=security-1"></script>
+  </body>
+</html>

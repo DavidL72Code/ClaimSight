@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Edit Claim</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a href="./dashboard.html">Dashboard</a>
+          <a href="./new-claim.html">New Claim</a>
+          <a class="active" href="./edit-claim.html">Edit Claim</a>
+          <a href="./case-review.html">Decision Review</a>
+          <a href="./messages.html">Messages</a>
+          <a href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+        <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page">
+      <section class="workflow-section page-hero-section">
+        <div class="workflow-heading">
+          <span>Edit claim</span>
+          <h1 class="page-title">Update your submitted claim</h1>
+        </div>
+      </section>
+
+      <section class="ops-panel">
+        <div class="panel-heading">
+          <span>Claim submission</span>
+          <strong>Add evidence before final decision review</strong>
+        </div>
+        <div class="ops-grid single-focus-grid">
+          <section class="ops-card">
+            <div class="ops-card-head">
+              <span>Your submissions</span>
+              <button id="refresh-cases" class="text-action" type="button">Refresh</button>
+            </div>
+            <div id="cases-list" class="ops-list">
+              <article class="ops-item empty">
+                <strong>No submitted claim selected</strong>
+                <p>Pick a claim from the dashboard to edit its evidence.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="ops-card consumer-claim-detail-card">
+            <div class="ops-card-head">
+              <span>Selected claim</span>
+              <strong id="consumer-detail-status">Waiting for selection</strong>
+            </div>
+            <div id="consumer-claim-detail-empty" class="consumer-detail-empty">
+              <strong>Select a claim</strong>
+              <p>Use the dashboard action menu to open a specific claim for editing.</p>
+            </div>
+            <div id="consumer-claim-detail" class="consumer-claim-detail hidden">
+              <div class="consumer-detail-header">
+                <strong id="consumer-detail-reference">-</strong>
+                <span id="consumer-detail-vehicle">Vehicle unavailable</span>
+              </div>
+              <div class="consumer-detail-grid">
+                <div>
+                  <span>Status</span>
+                  <strong id="consumer-detail-status-copy">-</strong>
+                </div>
+                <div>
+                  <span>Assigned adjuster</span>
+                  <strong id="consumer-detail-reviewer">-</strong>
+                </div>
+                <div>
+                  <span>AI first pass</span>
+                  <strong id="consumer-detail-ai-action">-</strong>
+                </div>
+                <div>
+                  <span>Current action</span>
+                  <strong id="consumer-detail-final-action">-</strong>
+                </div>
+              </div>
+              <div class="consumer-detail-copy">
+                <span>Claim status</span>
+                <p id="consumer-detail-note">No human review notes yet.</p>
+              </div>
+              <div class="consumer-detail-copy">
+                <span>Initial reasoning</span>
+                <p id="consumer-detail-reasoning">AI reasoning will appear here after submission.</p>
+              </div>
+              <div class="consumer-detail-copy">
+                <span>Supporting documents</span>
+                <div id="consumer-detail-documents" class="supporting-doc-list">No supporting documents added.</div>
+              </div>
+              <div class="vehicle-context edit-claim-form">
+                <div class="vehicle-grid">
+                  <label>
+                    <span>Make</span>
+                    <input id="consumer-vehicle-make" type="text" placeholder="Toyota" />
+                  </label>
+                  <label>
+                    <span>Model</span>
+                    <input id="consumer-vehicle-model" type="text" placeholder="Camry" />
+                  </label>
+                  <label>
+                    <span>Trim</span>
+                    <input id="consumer-vehicle-trim" type="text" placeholder="SE" />
+                  </label>
+                  <label>
+                    <span>Year</span>
+                    <input id="consumer-vehicle-year" type="number" min="1980" max="2027" placeholder="2023" />
+                  </label>
+                  <label>
+                    <span>Mileage</span>
+                    <input id="consumer-vehicle-mileage" type="number" min="0" max="500000" placeholder="24500" />
+                  </label>
+                  <label>
+                    <span>Usage</span>
+                    <select id="consumer-vehicle-usage">
+                      <option value="">Select usage</option>
+                      <option value="Personal">Personal</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Rideshare/delivery">Rideshare/delivery</option>
+                      <option value="Rental/fleet">Rental/fleet</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <section class="evidence-checklist-card claim-form-checklist" aria-label="Evidence checklist">
+                <div class="consumer-panel-head">
+                  <span>Evidence checklist</span>
+                  <strong>Required vs optional</strong>
+                </div>
+                <ul class="evidence-checklist">
+                  <li class="complete">
+                    <span class="check-dot"></span>
+                    <div><strong>Claim submitted</strong><p>Complete · your claim is already in the review queue.</p></div>
+                  </li>
+                  <li class="needed">
+                    <span class="check-dot"></span>
+                    <div><strong>Clear damage photos</strong><p>Required if the adjuster cannot see the damaged area clearly.</p></div>
+                  </li>
+                  <li class="needed">
+                    <span class="check-dot"></span>
+                    <div><strong>Accurate vehicle details</strong><p>Required · confirm make, model, year, mileage, trim, and usage.</p></div>
+                  </li>
+                  <li class="optional">
+                    <span class="check-dot"></span>
+                    <div><strong>Repair estimate or invoice</strong><p>Optional · helpful if a shop already inspected the vehicle.</p></div>
+                  </li>
+                  <li class="optional">
+                    <span class="check-dot"></span>
+                    <div><strong>Police, tow, or storage documents</strong><p>Optional · only needed if they exist for this crash.</p></div>
+                  </li>
+                </ul>
+              </section>
+              <div id="edit-claim-evidence" class="supporting-doc-editor evidence-edit-panel">
+                <label>
+                  <span>Add photos or documents</span>
+                  <input id="consumer-supporting-documents" type="file" accept="image/*,.pdf,.doc,.docx" multiple />
+                </label>
+                <button id="consumer-save-documents" class="secondary-action" type="button">Update claim</button>
+              </div>
+              <p id="consumer-update-status" class="status">Make changes, then press Update claim.</p>
+              <div class="consumer-detail-actions">
+                <a class="workflow-nav-button back" href="./dashboard.html">Back to dashboard</a>
+                <a class="workflow-nav-button" href="./messages.html">Message adjuster</a>
+                <a id="consumer-open-final-report" class="workflow-nav-button hidden" href="./final-report.html">Open final report</a>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Edit Claim</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./consumer-case.js?v=pdf-export-fix-3"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>

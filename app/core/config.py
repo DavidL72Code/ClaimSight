@@ -12,8 +12,10 @@ def _env_bool(name: str, default: bool = False) -> bool:
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
+CASE_DB_PATH = Path(os.getenv("CASE_DB_PATH", str(DATA_DIR / "claimsight.db"))).expanduser()
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+CASE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 DEBUG = _env_bool("DEBUG", False)
@@ -21,10 +23,10 @@ ENABLE_API_DOCS = _env_bool("ENABLE_API_DOCS", APP_ENV != "production")
 API_ACCESS_TOKEN = os.getenv("API_ACCESS_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip()
+CLAIM_ASSISTANT_MODEL = os.getenv("CLAIM_ASSISTANT_MODEL", "gemini-3.1-flash-lite").strip()
 # Free web-search grounding (1000 searches/month free): https://tavily.com
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip()
 SEGMENTATION_PROVIDER = os.getenv("SEGMENTATION_PROVIDER", "gemini").strip().lower()
-SAM2_MODEL_ID = os.getenv("SAM2_MODEL_ID", "facebook/sam2-hiera-tiny").strip()
 # Optional MobileSAM (ONNX, CPU) mask refiner layered on Gemini's boxes.
 ENABLE_SAM2_ONNX = _env_bool("ENABLE_SAM2_ONNX", False)
 MOBILESAM_ONNX_REPO = os.getenv("MOBILESAM_ONNX_REPO", "").strip()
@@ -33,7 +35,10 @@ MOBILESAM_DECODER_FILE = os.getenv("MOBILESAM_DECODER_FILE", "mobile_sam.decoder
 ALLOW_CORS_WILDCARD = _env_bool("ALLOW_CORS_WILDCARD", False)
 _raw_allowed_origins = [
     origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:4173,http://localhost:4173").split(",")
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://127.0.0.1:4173,http://localhost:4173,http://127.0.0.1:5180,http://localhost:5180",
+    ).split(",")
     if origin.strip()
 ]
 ALLOWED_ORIGINS = [

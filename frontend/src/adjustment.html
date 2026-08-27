@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Adjustment</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="employee">
+    <header class="topbar">
+      <a class="brand" href="./employee-assessment.html">ClaimSight</a>
+      <details class="employee-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open employee navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Employee workflow navigation">
+          <a href="./employee-assessment.html">Employee Assessment</a>
+          <a href="./further-reasoning.html">Further Reasoning</a>
+          <a href="./employee-messages.html">Message Center</a>
+        </nav>
+      </details>
+      <a class="employee-notification-bell icon-button" href="./employee-notifications.html" aria-label="Employee notifications">
+        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        <span class="notification-count">3</span>
+      </a>
+      <button class="logout-button" type="button" data-employee-logout>Logout</button>
+    </header>
+
+    <main class="page">
+      <section class="workflow-section page-hero-section">
+        <div class="workflow-heading">
+          <span>Phase 2</span>
+          <h1 class="page-title">Adjustment</h1>
+          <p class="page-lede">
+            This page is dedicated to human overrides. Keep estimate tuning, reviewer decisions, and
+            claim notes separate from the initial AI run so the workflow is easier to scan.
+          </p>
+        </div>
+      </section>
+
+      <section class="review-panel">
+        <div class="panel-heading">
+          <span>Adjuster review</span>
+          <strong>Refine the claim before finalizing</strong>
+        </div>
+        <div class="review-layout">
+          <div class="review-form">
+            <label>
+              <span>Claim reference</span>
+              <input id="adjustment-claim-reference" type="text" placeholder="CLM-10248" />
+            </label>
+            <label>
+              <span>Reviewer name</span>
+              <input id="adjustment-reviewer-name" type="text" placeholder="Alex Morgan" />
+            </label>
+            <label>
+              <span>Final action</span>
+              <select id="adjustment-final-action">
+                <option>Use AI recommendation</option>
+                <option>Send to fast-track repair estimate</option>
+                <option>Escalate to adjuster for detailed review</option>
+                <option>Review for total loss</option>
+                <option>Request more evidence from claimant</option>
+              </select>
+            </label>
+            <label>
+              <span>Reviewed estimate</span>
+              <input id="adjustment-reviewed-estimate-input" type="number" min="0" step="50" placeholder="0" />
+            </label>
+            <label class="review-notes">
+              <span>Adjuster notes</span>
+              <textarea id="adjustment-notes" rows="5" placeholder="Document overrides, claim exceptions, and final reasoning."></textarea>
+            </label>
+          </div>
+          <div class="review-summary">
+            <div class="review-metric">
+              <span>AI estimate</span>
+              <strong id="adjustment-ai-estimate">$0</strong>
+            </div>
+            <div class="review-metric">
+              <span>Reviewed estimate</span>
+              <strong id="adjustment-reviewed-estimate">$0</strong>
+            </div>
+            <div class="review-metric">
+              <span>Final action</span>
+              <strong id="adjustment-summary-action">Pending</strong>
+            </div>
+            <p class="review-guidance">
+              <span id="adjustment-case-summary">Select a claim from Employee Assessment to edit the human correction pass.</span>
+            </p>
+          </div>
+        </div>
+        <section class="employee-submission-panel adjustment-case-panel">
+          <div class="consumer-panel-head">
+            <span>Selected case details</span>
+            <strong id="adjustment-selected-status">No claim selected</strong>
+          </div>
+          <div class="consumer-detail-grid employee-detail-grid">
+            <label class="adjustment-edit-field">
+              <span>Customer</span>
+              <input id="adjustment-customer" type="text" />
+            </label>
+            <label class="adjustment-edit-field">
+              <span>Vehicle</span>
+              <input id="adjustment-vehicle" type="text" />
+            </label>
+            <label class="adjustment-edit-field">
+              <span>Mileage</span>
+              <input id="adjustment-mileage" type="number" min="0" step="1" />
+            </label>
+            <div><span>Date submitted</span><strong id="adjustment-date">—</strong></div>
+          </div>
+          <div class="employee-submission-grid">
+            <label class="adjustment-edit-field">
+              <span>Customer statement</span>
+              <textarea id="adjustment-statement" rows="3"></textarea>
+            </label>
+            <div>
+              <span>Submitted evidence</span>
+              <p id="adjustment-evidence">—</p>
+            </div>
+            <label class="adjustment-edit-field">
+              <span>AI first-pass reasoning</span>
+              <textarea id="adjustment-reasoning" rows="3"></textarea>
+            </label>
+          </div>
+          <div id="adjustment-photo-gallery" class="employee-photo-gallery" aria-label="Submitted claim photos"></div>
+          <div class="supporting-doc-editor evidence-edit-panel employee-evidence-editor">
+            <label>
+              <span>Add reviewer photos/documents</span>
+              <input id="adjustment-reviewer-evidence" type="file" accept="image/*,.pdf,.doc,.docx" multiple />
+            </label>
+            <button id="adjustment-save-reviewer-evidence" class="secondary-action" type="button">Add to claim</button>
+          </div>
+          <div id="adjustment-reviewer-evidence-list" class="supporting-doc-list evidence-source-list">No reviewer evidence added.</div>
+        </section>
+        <section class="employee-submission-panel estimate-workbench">
+          <div class="consumer-panel-head">
+            <span>Line-item estimate</span>
+            <button id="add-estimate-line" class="text-action" type="button">Add line</button>
+          </div>
+          <div class="estimate-table-wrap">
+            <table class="estimate-line-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Unit cost</th>
+                  <th>Total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="estimate-line-items"></tbody>
+            </table>
+          </div>
+          <div class="estimate-total-row">
+            <span>Reviewed line-item total</span>
+            <strong id="estimate-line-total">$0</strong>
+          </div>
+          <div class="consumer-detail-copy">
+            <span>Estimate version history</span>
+            <div id="adjustment-estimate-history" class="audit-log-list">
+              <article>No saved estimate versions yet.</article>
+            </div>
+          </div>
+        </section>
+        <section class="adjustment-ai-pass-panel">
+          <div class="consumer-panel-head">
+            <span>AI second pass</span>
+            <strong>Reviewer challenge</strong>
+          </div>
+          <label class="adjustment-edit-field">
+            <span>What should AI reconsider?</span>
+            <textarea id="adjustment-ai-feedback" rows="4" placeholder="Example: customer says rear hatch will not close, photos show liftgate gap, original AI estimate may have missed hidden alignment damage."></textarea>
+          </label>
+          <button id="run-second-pass" class="workflow-nav-button next" type="button">Run AI second pass</button>
+          <div id="second-pass-result" class="second-pass-result hidden">
+            <span>Second-pass output</span>
+            <p id="second-pass-text">—</p>
+          </div>
+        </section>
+        <section class="adjustment-final-judgement">
+          <div class="consumer-panel-head">
+            <span>Final judgement</span>
+            <strong>Human decision</strong>
+          </div>
+          <div class="consumer-detail-grid employee-detail-grid">
+            <label class="adjustment-edit-field">
+              <span>Final judgement</span>
+              <select id="final-judgement-status">
+                <option>Approve adjusted estimate</option>
+                <option>Override AI and increase estimate</option>
+                <option>Override AI and reduce estimate</option>
+                <option>Request more evidence from customer</option>
+                <option>Escalate to senior adjuster</option>
+              </select>
+            </label>
+            <label class="adjustment-edit-field">
+              <span>Final approved amount</span>
+              <input id="final-approved-amount" type="number" min="0" step="50" />
+            </label>
+          </div>
+          <label class="adjustment-edit-field">
+            <span>Final judgement note</span>
+            <textarea id="final-judgement-note" rows="4" placeholder="Write the final human judgement after reviewing the original AI pass, second AI pass, customer evidence, and adjuster corrections."></textarea>
+          </label>
+        </section>
+        <div class="adjustment-submit-panel">
+          <div>
+            <span class="evidence-label">Submit adjustment</span>
+          </div>
+          <button id="submit-adjustment" class="workflow-nav-button next" type="button">Submit to final review</button>
+          <p id="adjustment-submit-status" class="status"></p>
+        </div>
+      </section>
+
+      <section class="workflow-next">
+        <div class="workflow-next-actions">
+          <a class="workflow-nav-button back" href="./employee-assessment.html">Back</a>
+        </div>
+      </section>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./employee-auth.js?v=security-1"></script>
+    <script src="./adjustment.js?v=workflow-upgrades-1"></script>
+  </body>
+</html>

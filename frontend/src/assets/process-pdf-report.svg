@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 400" width="560" height="400" role="img" aria-label="Generated claim assessment report with valuation and photos">
+  <defs>
+    <linearGradient id="rpBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#181c16"/><stop offset="1" stop-color="#0e120d"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="400" fill="url(#rpBg)"/>
+  <g font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">
+    <!-- back page -->
+    <rect x="150" y="40" width="272" height="300" rx="10" fill="#161b13" stroke="rgba(255,255,255,.08)" transform="rotate(-4 286 190)"/>
+    <!-- front page -->
+    <rect x="132" y="52" width="272" height="300" rx="10" fill="#f4f7f1" stroke="rgba(0,0,0,.3)"/>
+    <!-- header band -->
+    <path d="M132 62 a10 10 0 0 1 10 -10 h252 a10 10 0 0 1 10 10 v34 H132 Z" fill="#101408"/>
+    <circle cx="154" cy="79" r="7" fill="#a7e34a"/>
+    <text x="170" y="84" fill="#e8efe6" font-size="13" font-weight="800">ClaimSight assessment</text>
+    <text x="148" y="118" fill="#5b6657" font-size="10.5" font-weight="700">CLAIM CS-4417 · 2019 HONDA CIVIC LX</text>
+
+    <!-- verdict pill -->
+    <rect x="148" y="130" width="148" height="24" rx="12" fill="rgba(224,92,74,.14)" stroke="#e05c4a" stroke-width="1.2"/>
+    <circle cx="163" cy="142" r="4.5" fill="#e05c4a"/>
+    <text x="174" y="146.5" fill="#a33325" font-size="11" font-weight="800">TOTAL LOSS REVIEW</text>
+
+    <!-- figures -->
+    <g>
+      <text x="148" y="182" fill="#8b968a" font-size="9.5" font-weight="700">EST. REPAIR</text>
+      <text x="148" y="202" fill="#1b2118" font-size="19" font-weight="800">$11,480</text>
+      <text x="272" y="182" fill="#8b968a" font-size="9.5" font-weight="700">VEHICLE ACV</text>
+      <text x="272" y="202" fill="#1b2118" font-size="19" font-weight="800">$14,200</text>
+    </g>
+    <path d="M148 216 H388" stroke="rgba(0,0,0,.1)" stroke-width="1.2"/>
+
+    <!-- ratio bar -->
+    <text x="148" y="236" fill="#8b968a" font-size="9.5" font-weight="700">REPAIR-TO-VALUE  81%</text>
+    <rect x="148" y="244" width="240" height="9" rx="4.5" fill="#dfe6da"/>
+    <rect x="148" y="244" width="194" height="9" rx="4.5" fill="#e05c4a"/>
+    <path d="M328 240 v17" stroke="#1b2118" stroke-width="1.6" stroke-dasharray="3 2"/>
+    <text x="332" y="268" fill="#5b6657" font-size="8.5" font-weight="700">75% threshold</text>
+
+    <!-- evidence thumbs -->
+    <g>
+      <rect x="148" y="282" width="52" height="42" rx="5" fill="#d9e0d4"/>
+      <path d="M154 318 l13 -14 l10 9 l9 -10 l10 15 z" fill="#9fac99"/>
+      <rect x="208" y="282" width="52" height="42" rx="5" fill="#d9e0d4"/>
+      <path d="M214 318 l12 -13 l11 10 l8 -9 l11 12 z" fill="#9fac99"/>
+      <rect x="268" y="282" width="52" height="42" rx="5" fill="#d9e0d4"/>
+      <path d="M274 318 l13 -12 l9 8 l10 -11 l10 15 z" fill="#9fac99"/>
+      <rect x="328" y="282" width="60" height="42" rx="5" fill="#eef2ea" stroke="rgba(0,0,0,.12)"/>
+      <text x="358" y="300" text-anchor="middle" fill="#5b6657" font-size="9" font-weight="800">3 COMPS</text>
+      <text x="358" y="313" text-anchor="middle" fill="#5b6657" font-size="8">cited</text>
+    </g>
+
+    <!-- download badge -->
+    <g>
+      <circle cx="404" cy="330" r="24" fill="#a7e34a"/>
+      <path d="M404 320 v14 M397 328 l7 7 l7 -7" fill="none" stroke="#101408" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M394 342 h20" stroke="#101408" stroke-width="2.6" stroke-linecap="round"/>
+    </g>
+    <text x="40" y="376" fill="#7a8a76" font-size="12.5">Shareable assessment with valuation evidence</text>
+  </g>
+</svg>

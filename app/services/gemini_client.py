@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.core.config import GEMINI_API_KEY, GEMINI_MODEL, TAVILY_API_KEY
+from app.core.config import CLAIM_ASSISTANT_MODEL, GEMINI_API_KEY, GEMINI_MODEL, TAVILY_API_KEY
 from app.models.schemas import BoundingBox, ClaimContext, DamageRegion, Source
 
 logger = logging.getLogger("claimsight.gemini")
@@ -47,6 +47,49 @@ class GeminiClaimNarrator:
     @property
     def provider_name(self) -> str:
         return GEMINI_MODEL if self.enabled else "rules"
+
+    def answer_claim_assistant(
+        self,
+        message: str,
+        claim_context: dict[str, object],
+        history: list[dict[str, str]] | None = None,
+    ) -> str | None:
+        if not self._client:
+            return None
+
+        bounded_history = (history or [])[-8:]
+        prompt = (
+            "You are ClaimSight's customer claim assistant for an auto insurance claim portal.\n"
+            "Your role is to explain claim status, evidence needs, appeal steps, report terms, "
+            "and visible AI/adjuster reasoning in plain language.\n\n"
+            "Hard safety rules:\n"
+            "- Do not promise payment, approval, denial, coverage, settlement amount, or timeline.\n"
+            "- Do not say you changed, approved, finalized, escalated, or submitted anything.\n"
+            "- Do not provide legal advice.\n"
+            "- Do not override the adjuster or final report.\n"
+            "- Use only the claim context provided below. Do not infer or invent other customer data.\n"
+            "- If customer_profile is present, it came from a verified Firebase token; otherwise do not claim to know the customer's name or email.\n"
+            "- If claim amounts, vehicle details, or document counts are missing, say they are not available in the current verified context.\n"
+            "- If the question needs a human adjuster, say to use the message center.\n"
+            "- Keep the answer under 120 words and use calm, direct language.\n\n"
+            f"Current claim context JSON: {json.dumps(claim_context, ensure_ascii=False)}\n"
+            f"Recent chat history JSON: {json.dumps(bounded_history, ensure_ascii=False)}\n"
+            f"Customer question: {message}"
+        )
+
+        try:
+            from google.genai import types
+
+            response = self._client.models.generate_content(
+                model=CLAIM_ASSISTANT_MODEL,
+                contents=[prompt],
+                config=_det_config(types),
+            )
+            text = getattr(response, "text", None)
+            return text.strip() if text else None
+        except Exception as exc:
+            logger.warning("Claim assistant Gemini call failed: %s", exc)
+            return None
 
     def build_summary(
         self,

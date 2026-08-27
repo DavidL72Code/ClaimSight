@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Employee Assessment</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="employee">
+    <header class="topbar">
+      <a class="brand" href="./employee-assessment.html">ClaimSight</a>
+      <details class="employee-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open employee navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Employee workflow navigation">
+          <a class="active" href="./employee-assessment.html">Employee Assessment</a>
+          <a href="./further-reasoning.html">Further Reasoning</a>
+          <a href="./employee-messages.html">Message Center</a>
+        </nav>
+      </details>
+      <a class="employee-notification-bell icon-button" href="./employee-notifications.html" aria-label="Employee notifications">
+        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        <span class="notification-count">3</span>
+      </a>
+      <button class="logout-button" type="button" data-employee-logout>Logout</button>
+    </header>
+
+    <main class="page employee-dashboard-page">
+      <section class="consumer-dashboard-header">
+        <div>
+          <p class="kicker">Employee review workspace</p>
+          <h1>Claim queue</h1>
+        </div>
+      </section>
+
+      <section class="employee-dashboard-layout">
+        <section class="consumer-panel">
+          <div class="consumer-panel-head">
+            <span>Claims awaiting review</span>
+            <button id="employee-refresh-claims" class="text-action" type="button">Refresh</button>
+          </div>
+          <div class="employee-queue-tools">
+            <input id="employee-claim-search" type="search" placeholder="Search claim, customer, vehicle, status..." />
+            <div class="employee-filter-group" aria-label="Claim filters">
+              <button class="queue-filter active" type="button" data-filter="all">All</button>
+              <button class="queue-filter" type="button" data-filter="urgent">Urgent</button>
+              <button class="queue-filter" type="button" data-filter="final_review">Final review</button>
+              <button class="queue-filter" type="button" data-filter="appealed">Appealed</button>
+              <button class="queue-filter" type="button" data-filter="needs_info">Needs evidence</button>
+            </div>
+          </div>
+
+          <table class="claim-table employee-claim-table">
+            <thead>
+              <tr>
+                <th scope="col">Date submitted</th>
+                <th scope="col">Claim number</th>
+                <th scope="col">Vehicle</th>
+                <th scope="col">Priority</th>
+                <th scope="col">Due</th>
+                <th scope="col">Assigned agent</th>
+                <th scope="col">Status</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="employee-claims-table">
+              <tr class="claim-row empty">
+                <td>—</td>
+                <td><strong>Loading claims</strong></td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <aside class="employee-claim-detail" aria-live="polite">
+          <div class="consumer-panel-head">
+            <span>Selected claim</span>
+            <strong id="employee-selected-status">No claim selected</strong>
+          </div>
+
+          <div id="employee-claim-empty" class="consumer-detail-empty">
+            <strong>Select a claim to review.</strong>
+            <p>Use the Review button to inspect the claim number, customer-submitted vehicle info, AI estimate, notes, and next action.</p>
+          </div>
+
+          <article id="employee-claim-review" class="employee-review-card hidden">
+            <div class="employee-review-header">
+              <div>
+                <span>Claim number</span>
+                <strong id="employee-detail-claim">—</strong>
+              </div>
+              <a id="employee-adjustment-link" class="workflow-nav-button next" href="./adjustment.html">Adjustment</a>
+            </div>
+
+            <div class="consumer-detail-grid employee-detail-grid">
+              <div><span>Date submitted</span><strong id="employee-detail-date">—</strong></div>
+              <div><span>Customer</span><strong id="employee-detail-customer">—</strong></div>
+              <div><span>Assigned agent</span><strong id="employee-detail-agent">—</strong></div>
+              <div><span>Vehicle</span><strong id="employee-detail-vehicle">—</strong></div>
+              <div><span>Mileage</span><strong id="employee-detail-mileage">—</strong></div>
+              <div><span>AI estimate</span><strong id="employee-detail-estimate">—</strong></div>
+              <div><span>AI recommendation</span><strong id="employee-detail-action">—</strong></div>
+            </div>
+
+            <section class="employee-submission-panel">
+              <div class="consumer-panel-head">
+                <span>Submitted case package</span>
+              </div>
+              <div class="employee-submission-grid">
+                <div>
+                  <span>Customer statement</span>
+                  <p id="employee-detail-statement">—</p>
+                </div>
+                <div>
+                  <span>Submitted evidence</span>
+                  <p id="employee-detail-evidence">—</p>
+                </div>
+                <div>
+                  <span>AI first-pass reasoning</span>
+                  <p id="employee-detail-reasoning">—</p>
+                </div>
+              </div>
+              <div id="employee-photo-gallery" class="employee-photo-gallery" aria-label="Submitted claim photos"></div>
+            </section>
+
+            <section class="employee-action-panel">
+              <div class="consumer-panel-head">
+                <span>Review actions</span>
+              </div>
+              <div class="employee-evidence-request-fields">
+                <label>
+                  <span>Evidence needed</span>
+                  <input id="employee-request-evidence-items" type="text" placeholder="Left-side photo, repair estimate" />
+                </label>
+                <label>
+                  <span>Customer due date</span>
+                  <input id="employee-request-evidence-due" type="date" />
+                </label>
+              </div>
+              <div class="employee-action-grid">
+                <button id="employee-request-evidence" class="secondary-action" type="button">Request more evidence</button>
+                <button id="employee-finalize-claim" class="workflow-nav-button next" type="button">Finalize after checklist</button>
+              </div>
+              <label class="employee-check-item">
+                <input id="employee-final-checklist" type="checkbox" />
+                <span>I reviewed AI reasoning, customer evidence, estimate, and final notes.</span>
+              </label>
+              <p id="employee-action-status" class="status">Select an action after reviewing the case.</p>
+            </section>
+
+            <section class="employee-submission-panel">
+              <div class="consumer-panel-head">
+                <span>AI vs adjuster comparison</span>
+              </div>
+              <div class="employee-comparison-grid">
+                <div>
+                  <span>AI first pass</span>
+                  <p id="employee-ai-comparison">—</p>
+                </div>
+                <div>
+                  <span>Adjuster judgement</span>
+                  <p id="employee-adjuster-comparison">Pending adjustment.</p>
+                </div>
+              </div>
+            </section>
+
+            <section id="employee-appeal-panel" class="employee-submission-panel hidden">
+              <div class="consumer-panel-head">
+                <span>Customer appeal</span>
+                <strong id="employee-appeal-category">—</strong>
+              </div>
+              <div class="consumer-detail-grid employee-detail-grid">
+                <div><span>Disputed amount</span><strong id="employee-appeal-amount">—</strong></div>
+                <div><span>Supporting files</span><strong id="employee-appeal-files">—</strong></div>
+              </div>
+              <div class="employee-submission-grid">
+                <div>
+                  <span>Customer explanation</span>
+                  <p id="employee-appeal-explanation">—</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="employee-submission-panel">
+              <div class="consumer-panel-head">
+                <span>Internal notes</span>
+              </div>
+              <textarea id="employee-internal-notes" class="employee-internal-notes" placeholder="Private internal note. Not visible to customer."></textarea>
+              <button id="employee-save-internal-note" class="text-action" type="button">Save internal note</button>
+            </section>
+
+            <section class="employee-submission-panel">
+              <div class="consumer-panel-head">
+                <span>Audit log</span>
+              </div>
+              <div id="employee-audit-log" class="audit-log-list">
+                <article>No audit events yet.</article>
+              </div>
+            </section>
+
+          </article>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Employee Assessment</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./employee-auth.js?v=security-1"></script>
+    <script src="./employee-dashboard.js?v=workflow-upgrades-1"></script>
+  </body>
+</html>

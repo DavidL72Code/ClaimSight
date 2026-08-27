@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Messages</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css?v=customer-messages-1" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a href="./dashboard.html">Dashboard</a>
+          <a href="./new-claim.html">New Claim</a>
+          <a href="./edit-claim.html">Edit Claim</a>
+          <a href="./case-review.html">Decision Review</a>
+          <a class="active" href="./messages.html">Messages</a>
+          <a href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+        <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page">
+      <section class="consumer-dashboard-header">
+        <div>
+          <h1>Message center</h1>
+        </div>
+        <a class="workflow-nav-button" href="./dashboard.html">Back to dashboard</a>
+      </section>
+
+      <section class="employee-messenger consumer-messenger" aria-label="Customer case messages">
+        <aside class="employee-thread-sidebar">
+          <div class="employee-thread-head">
+            <span>Your cases</span>
+            <strong id="customer-message-case-count">3 active</strong>
+          </div>
+          <div id="customer-message-threads"></div>
+        </aside>
+
+        <section class="employee-chat-panel">
+          <header class="employee-chat-header">
+            <div>
+              <span>Adjuster conversation</span>
+              <strong id="customer-message-case-id">CLM-1048</strong>
+            </div>
+            <a id="customer-message-case-link" class="text-action" href="./case-review.html">View case</a>
+          </header>
+
+          <div id="customer-chat-history" class="employee-imessage-log" aria-live="polite"></div>
+
+          <form id="customer-message-form" class="employee-imessage-compose">
+            <input id="customer-message-input" type="text" placeholder="Message your adjuster about this claim..." aria-label="Message adjuster" />
+            <label class="message-attach-button" aria-label="Attach files">
+              <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
+              <input id="customer-message-files" type="file" accept="image/*,.pdf,.doc,.docx" multiple />
+            </label>
+            <button type="submit" aria-label="Send message">
+              <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>
+            </button>
+            <div id="customer-message-attachments" class="message-attachment-preview" aria-live="polite"></div>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Customer Messages</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./consumer-case.js?v=pdf-export-fix-3"></script>
+    <script src="./customer-messages.js"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>

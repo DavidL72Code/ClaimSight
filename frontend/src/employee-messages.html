@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Employee Message Center</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="employee">
+    <header class="topbar">
+      <a class="brand" href="./employee-assessment.html">ClaimSight</a>
+      <details class="employee-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open employee navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Employee workflow navigation">
+          <a href="./employee-assessment.html">Employee Assessment</a>
+          <a href="./further-reasoning.html">Further Reasoning</a>
+          <a class="active" href="./employee-messages.html">Message Center</a>
+        </nav>
+      </details>
+      <a class="employee-notification-bell icon-button" href="./employee-notifications.html" aria-label="Employee notifications">
+        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        <span class="notification-count">3</span>
+      </a>
+      <button class="logout-button" type="button" data-employee-logout>Logout</button>
+    </header>
+
+    <main class="page employee-dashboard-page">
+      <section class="consumer-dashboard-header">
+        <div>
+          <p class="kicker">Employee communications</p>
+          <h1>Message center</h1>
+        </div>
+      </section>
+
+      <section class="employee-messenger" aria-label="Employee case messages">
+        <aside class="employee-thread-sidebar">
+          <div class="employee-thread-head">
+            <span>Disputes</span>
+            <strong>2 open</strong>
+          </div>
+          <button class="employee-thread active" type="button" data-thread-id="CLM-1048">
+            <span class="employee-thread-avatar">48</span>
+            <span class="employee-thread-copy">
+              <strong>CLM-1048</strong>
+              <small>Rear hatch dispute</small>
+              <em>The rear hatch will not close and I uploaded another photo.</em>
+            </span>
+            <span class="employee-thread-time">2m</span>
+          </button>
+          <button class="employee-thread" type="button" data-thread-id="CLM-1047">
+            <span class="employee-thread-avatar">47</span>
+            <span class="employee-thread-copy">
+              <strong>CLM-1047</strong>
+              <small>Evidence question</small>
+              <em>Which headlight photos do you still need?</em>
+            </span>
+            <span class="employee-thread-time">18m</span>
+          </button>
+          <button class="employee-thread" type="button" data-thread-id="CLM-1046">
+            <span class="employee-thread-avatar">46</span>
+            <span class="employee-thread-copy">
+              <strong>CLM-1046</strong>
+              <small>Appeal request</small>
+              <em>I want to dispute the estimate before final report.</em>
+            </span>
+            <span class="employee-thread-time">1h</span>
+          </button>
+        </aside>
+
+        <section class="employee-chat-panel">
+          <header class="employee-chat-header">
+            <div>
+              <span>Case conversation</span>
+              <strong id="message-case-id">CLM-1048</strong>
+            </div>
+            <a id="message-case-link" class="text-action" href="./employee-assessment.html?claim=CLM-1048">View case</a>
+          </header>
+
+          <div id="employee-chat-history" class="employee-imessage-log" aria-live="polite"></div>
+
+          <form id="employee-message-form" class="employee-imessage-compose">
+            <input id="employee-message-input" type="text" placeholder="Message customer about this case..." aria-label="Message customer" />
+            <label class="message-attach-button" aria-label="Attach files">
+              <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
+              <input id="employee-message-files" type="file" accept="image/*,.pdf,.doc,.docx" multiple />
+            </label>
+            <button type="submit" aria-label="Send message">
+              <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>
+            </button>
+            <div id="employee-message-attachments" class="message-attachment-preview" aria-live="polite"></div>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./employee-auth.js?v=security-1"></script>
+    <script src="./employee-messages.js"></script>
+  </body>
+</html>

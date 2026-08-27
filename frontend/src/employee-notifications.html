@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Employee Notifications</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="employee">
+    <header class="topbar">
+      <a class="brand" href="./employee-assessment.html">ClaimSight</a>
+      <details class="employee-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open employee navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Employee workflow navigation">
+          <a href="./employee-assessment.html">Employee Assessment</a>
+          <a href="./further-reasoning.html">Further Reasoning</a>
+          <a href="./employee-messages.html">Message Center</a>
+        </nav>
+      </details>
+      <a class="employee-notification-bell icon-button active" href="./employee-notifications.html" aria-label="Employee notifications">
+        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        <span class="notification-count">3</span>
+      </a>
+      <button class="logout-button" type="button" data-employee-logout>Logout</button>
+    </header>
+
+    <main class="page employee-dashboard-page">
+      <section class="consumer-dashboard-header">
+        <div>
+          <p class="kicker">Claimsight employee alerts</p>
+          <h1>Notification center</h1>
+        </div>
+      </section>
+
+      <section class="consumer-panel">
+        <div class="consumer-panel-head">
+          <span>Claim alerts</span>
+        </div>
+        <div class="employee-notification-list">
+          <article>
+            <strong>Dispute received</strong>
+            <p>CLM-1048 needs employee response before final report is released.</p>
+            <span>2 minutes ago</span>
+          </article>
+          <article>
+            <strong>Adjustment submitted</strong>
+            <p>CLM-1047 was sent to further reasoning for final review.</p>
+            <span>18 minutes ago</span>
+          </article>
+          <article>
+            <strong>Missing evidence</strong>
+            <p>CLM-1046 is waiting on additional passenger-side photos.</p>
+            <span>Today</span>
+          </article>
+        </div>
+      </section>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./employee-auth.js?v=security-1"></script>
+  </body>
+</html>

@@ -106,3 +106,45 @@ def test_build_assessment_does_not_duplicate_year_in_vehicle_label() -> None:
     )
 
     assert response.vehicle_type == "2020 McLaren 720S"
+
+
+def test_build_assessment_emits_flags_and_completeness_guidance() -> None:
+    service = ClaimReportService()
+    regions = [
+        DamageRegion(
+            part_id="P1",
+            panel="rear quarter panel",
+            damage_type="crumple",
+            severity="high",
+            confidence=0.42,
+            bounding_box=BoundingBox(x=10, y=20, width=120, height=80),
+            estimated_repair_cost_usd=9500,
+            source="mock",
+            vehicle_value_usd=12000,
+            vehicle_label="Honda Civic",
+            vehicle_total_loss=True,
+        )
+    ]
+
+    response = service.build_assessment(
+        filenames=["claim.jpg"],
+        image_paths=[object()],
+        regions=regions,
+        segmentation_provider="mock",
+        claim_context=ClaimContext(
+            make="Honda",
+            model="Civic",
+        ),
+    )
+
+    flag_codes = {flag.code for flag in response.assessment_flags}
+    check_codes = {check.code for check in response.completeness_checks}
+
+    assert "low_visual_confidence" in flag_codes
+    assert "limited_photo_set" in flag_codes
+    assert "repair_ratio_exceeds_threshold" in flag_codes
+    assert "ai_total_loss_signal" in flag_codes
+    assert "photo_coverage" in check_codes
+    assert "vehicle_identity" in check_codes
+    assert any(check.code == "mileage" and check.status == "missing" for check in response.completeness_checks)
+    assert response.meta.generated_at.endswith("Z")

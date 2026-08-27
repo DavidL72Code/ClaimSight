@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Customer Dashboard</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a class="active" href="./dashboard.html">Dashboard</a>
+          <a href="./new-claim.html">New Claim</a>
+          <a href="./edit-claim.html">Edit Claim</a>
+          <a href="./case-review.html">Decision Review</a>
+          <a href="./messages.html">Messages</a>
+          <a href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+      <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page">
+      <section class="consumer-dashboard-shell">
+        <div class="consumer-dashboard-header">
+          <div>
+            <p class="kicker">Customer portal</p>
+            <h1>Dashboard</h1>
+          </div>
+          <a class="new-claim-button" href="./new-claim.html" aria-label="Start new claim">
+            <span aria-hidden="true">+</span>
+            New claim
+          </a>
+        </div>
+
+        <section class="customer-claim-overview">
+          <article class="claim-summary-card">
+            <span>Active claim</span>
+            <strong id="customer-summary-claim">CLM-1048</strong>
+            <p id="customer-summary-meta">2023 Toyota Camry · In review · Assigned to Alex Morgan</p>
+          </article>
+          <article id="customer-missing-info-alert" class="claim-alert-card hidden">
+            <span class="material-symbols-outlined" aria-hidden="true">error</span>
+            <div>
+              <strong>More information may help</strong>
+              <p id="customer-missing-info-copy">Add clearer photos, repair estimates, or documents before final review.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="claim-timeline-card" aria-label="Claim progress timeline">
+          <div class="consumer-panel-head">
+            <span>Claim progress</span>
+            <strong id="customer-timeline-status">In review</strong>
+          </div>
+          <ol id="customer-claim-timeline" class="claim-timeline">
+            <li class="done"><span>Submitted</span></li>
+            <li class="done"><span>Assigned</span></li>
+            <li class="active"><span>In review</span></li>
+            <li><span>Decision ready</span></li>
+            <li><span>Finalized</span></li>
+            <li class="timeline-next-card" aria-label="What happens next">
+              <div class="timeline-action-head">
+                <strong id="customer-next-step-label">No action needed</strong>
+                <span id="customer-next-step-due" class="hidden"></span>
+              </div>
+              <p id="customer-next-step-copy">Alex Morgan is reviewing the AI first pass, photos, and supporting documents before sending a decision.</p>
+              <a id="customer-next-step-action" class="timeline-action-button" href="./messages.html">Message adjuster</a>
+            </li>
+          </ol>
+        </section>
+
+        <section class="consumer-panel">
+          <div class="consumer-panel-head">
+            <span>Claims</span>
+            <button id="refresh-cases" class="text-action" type="button">Refresh</button>
+          </div>
+          <table class="claim-table">
+            <thead>
+              <tr>
+                <th scope="col">Date submitted</th>
+                <th scope="col">Claim ID</th>
+                <th scope="col">Status</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="consumer-dashboard-claims">
+              <tr class="claim-row empty">
+                <td>—</td>
+                <td><strong>No claims yet</strong></td>
+                <td>Start a new claim</td>
+                <td><a class="text-action" href="./new-claim.html">New claim</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Customer Dashboard</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./consumer-case.js?v=pdf-export-fix-3"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaimSight | Decision Review</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-portal="consumer">
+    <header class="topbar">
+      <a class="brand" href="./dashboard.html">ClaimSight</a>
+      <details class="employee-nav-menu consumer-nav-menu">
+        <summary class="employee-menu-button" aria-label="Open customer navigation">
+          <span class="hamburger-lines" aria-hidden="true"></span>
+          <span>Menu</span>
+        </summary>
+        <nav class="employee-menu-list" aria-label="Customer navigation">
+          <a href="./dashboard.html">Dashboard</a>
+          <a href="./new-claim.html">New Claim</a>
+          <a href="./edit-claim.html">Edit Claim</a>
+          <a class="active" href="./case-review.html">Decision Review</a>
+          <a href="./messages.html">Messages</a>
+          <a href="./final-report.html">Final Report</a>
+        </nav>
+      </details>
+      <div class="topbar-actions">
+        <div class="notification-menu">
+          <button id="notification-toggle" class="icon-button" type="button" aria-label="Notifications" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+            <span id="notification-count" class="notification-count hidden">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown hidden">
+            <div class="notification-dropdown-head">
+              <strong>Notifications</strong>
+              <a class="text-action" href="./notifications.html">View all</a>
+            </div>
+            <div id="notification-dropdown-list" class="notification-list">
+              <article class="notification-item empty">No notifications yet.</article>
+            </div>
+          </div>
+        </div>
+      <button id="customer-logout" class="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="page consumer-page claim-review-page">
+      <section class="claim-review-shell">
+        <header class="claim-review-summary">
+          <a class="claim-review-back" href="./dashboard.html" aria-label="Back to dashboard">
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+          </a>
+          <div class="claim-review-identity">
+            <span>Decision review</span>
+            <h1 id="consumer-detail-reference">—</h1>
+            <p id="consumer-detail-vehicle">Vehicle unavailable</p>
+          </div>
+          <strong id="consumer-detail-status" class="claim-review-status">Waiting for selection</strong>
+        </header>
+
+        <div id="consumer-claim-detail-empty" class="consumer-detail-empty claim-review-empty">
+          <strong>No decision is ready yet</strong>
+          <p>This page unlocks after an adjuster completes the human review.</p>
+        </div>
+
+        <div id="consumer-claim-detail" class="consumer-claim-detail claim-review-workspace hidden">
+          <section class="decision-hero" aria-label="Final reviewed decision">
+            <div class="decision-amount-block">
+              <span>Final reviewed amount</span>
+              <strong id="consumer-adjusted-estimate">—</strong>
+              <p id="consumer-detail-final-action">Waiting for adjuster review</p>
+            </div>
+            <div class="decision-reviewer-block">
+              <span>Reviewed by</span>
+              <strong id="consumer-detail-reviewer">—</strong>
+              <p id="consumer-detail-note">No human review notes yet.</p>
+            </div>
+          </section>
+
+          <nav class="claim-review-tabs" role="tablist" aria-label="Claim review sections">
+            <button class="claim-review-tab active" type="button" role="tab" aria-selected="true" data-review-tab="decision">Decision</button>
+            <button class="claim-review-tab" type="button" role="tab" aria-selected="false" data-review-tab="evidence">Evidence</button>
+            <button class="claim-review-tab" type="button" role="tab" aria-selected="false" data-review-tab="activity">Activity</button>
+          </nav>
+
+          <section class="claim-review-panel" role="tabpanel" data-review-panel="decision">
+            <div class="decision-comparison-metrics decision-support-metrics">
+              <div><span>AI first pass</span><strong id="consumer-ai-estimate">—</strong></div>
+              <div><span>Human adjustment</span><strong id="consumer-estimate-delta">—</strong></div>
+              <div><span>Report version</span><strong id="consumer-estimate-version">Current version</strong></div>
+            </div>
+
+            <div class="decision-reasoning-grid">
+              <article class="decision-reasoning-card">
+                <span>AI first pass</span>
+                <strong id="consumer-detail-ai-action">—</strong>
+              </article>
+              <article class="decision-reasoning-card emphasized">
+                <span>What changed and why</span>
+                <p id="consumer-detail-reasoning">Case reasoning will appear here after review.</p>
+              </article>
+            </div>
+
+            <details class="estimate-disclosure">
+              <summary>
+                <span>View itemized estimate</span>
+                <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+              </summary>
+              <div class="estimate-table-wrap">
+                <table class="estimate-line-table customer-estimate-table">
+                  <thead><tr><th>Item</th><th>Qty</th><th>Unit cost</th><th>Total</th></tr></thead>
+                  <tbody id="consumer-estimate-lines">
+                    <tr><td colspan="4">No adjusted line items yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div id="consumer-estimate-history" class="audit-log-list estimate-version-list"></div>
+            </details>
+          </section>
+
+          <section class="claim-review-panel hidden" role="tabpanel" data-review-panel="evidence">
+            <div class="review-panel-heading">
+              <div>
+                <span>Evidence package</span>
+                <strong>Files considered in this decision</strong>
+              </div>
+            </div>
+            <div id="consumer-detail-documents" class="supporting-doc-list claim-evidence-grid">No supporting documents added.</div>
+          </section>
+
+          <section class="claim-review-panel hidden" role="tabpanel" data-review-panel="activity">
+            <div class="review-panel-heading">
+              <div>
+                <span>Claim history</span>
+                <strong>Every important case event</strong>
+              </div>
+            </div>
+            <div id="consumer-activity-list" class="audit-log-list claim-activity-timeline">
+              <article>No activity recorded yet.</article>
+            </div>
+          </section>
+
+          <section id="consumer-appeal-builder" class="appeal-builder hidden" aria-label="Appeal this decision">
+            <div class="consumer-panel-head">
+              <span>Appeal this decision</span>
+              <button id="consumer-close-appeal" class="text-action" type="button">Close</button>
+            </div>
+            <div class="appeal-builder-grid">
+              <label>
+                <span>What do you disagree with?</span>
+                <select id="consumer-appeal-category">
+                  <option value="missing_damage">Damage or repair item is missing</option>
+                  <option value="amount_too_low">Approved amount is too low</option>
+                  <option value="vehicle_details">Vehicle details are incorrect</option>
+                  <option value="evidence_not_considered">Evidence was not considered</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>
+                <span>Amount you dispute (optional)</span>
+                <input id="consumer-appeal-amount" type="number" min="0" step="1" />
+              </label>
+            </div>
+            <label>
+              <span>Explain what should be reconsidered</span>
+              <textarea id="consumer-appeal-explanation" rows="4" maxlength="2000" placeholder="Be specific about the damage, estimate line, or evidence you believe should be reconsidered."></textarea>
+            </label>
+            <label>
+              <span>Supporting appeal files</span>
+              <input id="consumer-appeal-files" type="file" accept="image/*,.pdf,.doc,.docx" multiple />
+            </label>
+            <div class="appeal-builder-actions">
+              <button id="consumer-submit-appeal" class="workflow-nav-button next" type="button">Submit appeal</button>
+              <p id="consumer-appeal-status" class="status"></p>
+            </div>
+          </section>
+
+          <div class="consumer-detail-actions claim-review-action-bar">
+            <a class="claim-secondary-action" href="./edit-claim.html">Edit evidence</a>
+            <button id="consumer-appeal-decision" class="claim-secondary-action hidden" type="button">Appeal decision</button>
+            <button id="consumer-accept-decision" class="workflow-nav-button next hidden" type="button">Accept decision</button>
+            <a id="consumer-open-final-report" class="workflow-nav-button next hidden" href="./final-report.html">Open final report</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">ClaimSight — Consumer Decision Review</footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script src="./config.js"></script>
+    <script src="./firebase-config.js"></script>
+    <script src="./customer-auth.js"></script>
+    <script src="./consumer-case.js?v=claim-review-redesign-2"></script>
+    <script src="./claim-assistant.js?v=security-3"></script>
+  </body>
+</html>
