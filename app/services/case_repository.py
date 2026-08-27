@@ -175,9 +175,11 @@ class CaseRepository:
         completed_at = str(review.get("completed_at", "") or "").strip()
         timestamp = completed_at or ""
         if not timestamp:
-            from datetime import datetime
+            from datetime import datetime, timezone
 
-            timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+            timestamp = (
+                datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat() + "Z"
+            )
         return {"created_at": timestamp, "updated_at": timestamp}
 
     def _triage(self, assessment: dict[str, Any]) -> tuple[str, int]:
@@ -199,6 +201,23 @@ class CaseRepository:
             priority_score += 2
         if severity == "high":
             priority_score += 2
+
+        # A weakly-graded assessment needs a human sooner, so the evaluator's
+        # verdict is an independent input to triage. Guarded so cases saved
+        # before evaluation existed keep their original ranking.
+        evaluation = assessment.get("evaluation") or {}
+        if isinstance(evaluation, dict) and evaluation:
+            verdict = str(evaluation.get("verdict", "")).lower()
+            if verdict == "reject":
+                priority_score += 4
+            elif verdict == "needs_review":
+                priority_score += 2
+            try:
+                overall = int(evaluation.get("overall_score") or 0)
+            except (TypeError, ValueError):
+                overall = 0
+            if 0 < overall < 50:
+                priority_score += 2
 
         if priority_score >= 8:
             return "urgent", priority_score

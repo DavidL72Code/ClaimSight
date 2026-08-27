@@ -265,7 +265,7 @@ const uploadReviewerEvidence = async () => {
   }));
 };
 
-const buildSecondPassText = () => {
+const buildOfflineSecondPassText = () => {
   const reviewedEstimate = Number(elements.reviewedEstimateInput?.value) || 0;
   const aiEstimateText = elements.aiEstimate?.textContent || "Pending";
   const reviewerFeedback = elements.aiFeedback?.value?.trim() || "No specific reviewer challenge entered.";
@@ -273,6 +273,7 @@ const buildSecondPassText = () => {
   const finalAction = elements.finalAction?.value || "Use AI recommendation";
 
   return [
+    "Model review unavailable - rules-based summary, not an AI second pass.",
     `Second pass reviewed ${vehicle} using the adjuster's challenge: ${reviewerFeedback}`,
     `Original AI estimate was ${aiEstimateText}; reviewed estimate is ${formatCurrency(reviewedEstimate)}.`,
     `Recommended next step: ${finalAction}. Re-check visible damage, customer statement, photo evidence, and any hidden-damage risk before final judgement.`,
@@ -528,12 +529,80 @@ elements.submitAdjustment?.addEventListener("click", () => {
   });
 });
 
-elements.runSecondPass?.addEventListener("click", () => {
-  const secondPass = buildSecondPassText();
-  setText(elements.secondPassText, secondPass);
+const apiBaseUrl = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
+
+const parseCurrency = (value) => Number(String(value ?? "").replace(/[^0-9.-]/g, "")) || 0;
+
+const requestSecondPass = async () => {
+  const body = {
+    claim_reference: activeClaim?.id || claimId || "",
+    vehicle: elements.vehicle?.textContent?.trim() || "",
+    adjuster_challenge: elements.aiFeedback?.value?.trim() || "",
+    ai_estimate_usd: parseCurrency(elements.aiEstimate?.textContent),
+    reviewed_estimate_usd: Number(elements.reviewedEstimateInput?.value) || 0,
+    ai_recommended_action: activeClaim?.ai_recommended_action || "",
+    proposed_final_action: elements.finalAction?.value || "",
+    ai_reasoning: (elements.reasoning?.textContent || "").slice(0, 4000),
+  };
+
+  const headers = { "Content-Type": "application/json" };
+  const authUser = window.firebase?.auth?.()?.currentUser;
+  if (authUser?.getIdToken) {
+    headers.Authorization = `Bearer ${await authUser.getIdToken()}`;
+  }
+
+  const response = await fetch(`${apiBaseUrl}/api/second-pass`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.detail || `Second pass failed (${response.status}).`);
+  }
+  return payload;
+};
+
+elements.runSecondPass?.addEventListener("click", async () => {
+  const button = elements.runSecondPass;
   elements.secondPassResult?.classList.remove("hidden");
-  if (!elements.finalJudgementNote?.value) {
-    setValue(elements.finalJudgementNote, secondPass);
+
+  if (!apiBaseUrl) {
+    // No backend configured: show the offline summary, which labels itself.
+    const offline = buildOfflineSecondPassText();
+    setText(elements.secondPassText, offline);
+    if (!elements.finalJudgementNote?.value) setValue(elements.finalJudgementNote, offline);
+    return;
+  }
+
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = "Running AI second pass...";
+  setText(elements.secondPassText, "Re-reasoning over this claim with your challenge...");
+
+  try {
+    const result = await requestSecondPass();
+    const verdict = result.agrees_with_adjuster
+      ? "Agrees with the adjuster's challenge."
+      : "Does not agree the challenge should change the outcome.";
+    const action = result.recommended_action
+      ? ` Recommended action: ${result.recommended_action}.`
+      : "";
+    const label = result.fallback_used ? "" : `[${result.model}] `;
+    const text = `${label}${result.reasoning}\n\n${verdict}${action}`;
+
+    setText(elements.secondPassText, text);
+    if (!elements.finalJudgementNote?.value) setValue(elements.finalJudgementNote, text);
+  } catch (error) {
+    // Never silently fall back to the template as if it were AI output.
+    setText(
+      elements.secondPassText,
+      `AI second pass failed: ${error.message} Falling back to a rules-based summary.\n\n${buildOfflineSecondPassText()}`
+    );
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
   }
 });
 

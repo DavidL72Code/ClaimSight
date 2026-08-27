@@ -30,6 +30,7 @@ ClaimSight turns vehicle photos and intake details into an adjuster-facing asses
 - Blend claimant-provided information such as year, mileage, trim, and prior damage with AI-detected vehicle identity
 - Ground vehicle valuation against comparable market listings instead of relying on a freeform guess
 - Produce a structured claim summary with valuation evidence, pricing factors, and total-loss reasoning
+- Grade every assessment with an LLM-as-judge evaluator and re-run weak stages once to try to fix them
 - Display the assessment in a simple web UI for quick review
 
 ## Technology Used
@@ -43,6 +44,45 @@ ClaimSight turns vehicle photos and intake details into an adjuster-facing asses
 - Optional MobileSAM (ONNX, CPU) mask refiner, off by default (`ENABLE_SAM2_ONNX`)
 - Gemini for multimodal damage understanding and narrative report generation
 - Tavily / Google Search grounding for comparable market research and vehicle valuation support
+
+## Assessment Quality: Evaluator and Self-Correction Loop
+
+Every assessment is graded, and a weak one gets one chance to correct itself
+before an adjuster sees it.
+
+**Rules-based flags.** `_build_assessment_flags` inspects the finished
+assessment for low visual confidence, thin photo coverage, ungrounded vehicle
+value, missing market comparables, and repair-to-value ratios near or over the
+total-loss threshold. It also holds two independent total-loss signals — the
+vision model's holistic verdict and the arithmetic cost-to-value ratio — so a
+disagreement between them surfaces instead of being silently resolved.
+
+**Self-correction loop.** `AssessmentPipeline` re-runs *only* the stage that was
+judged weak: a thin valuation re-runs market grounding alone (one call) rather
+than paying for a full re-detection. Bounded by `MAX_ASSESSMENT_RETRIES`
+(default 1). A retry is kept only if it actually clears the flag that triggered
+it; otherwise the original result is restored, since a second model call is not
+automatically a better one. Flags nothing can fix — `limited_photo_set` cannot
+conjure a photo the claimant never uploaded — are never retried. Every attempt
+is recorded in `retry_attempts` on the response.
+
+**LLM-as-judge evaluator.** `AssessmentEvaluator` scores each assessment 0-100
+against a fixed rubric (evidence grounding, severity justification, valuation
+support, internal consistency, completeness) and returns a verdict of `accept`,
+`needs_review`, or `reject`. It audits the *reasoning*, not ground truth, which
+isn't available at request time. The verdict feeds adjuster queue priority, so
+weakly-graded claims reach a human sooner. When Gemini is unconfigured, a
+deterministic fallback derives the score from the flags, so the queue always has
+something to rank on.
+
+**Adjuster second pass.** `POST /api/second-pass` (adjuster-only) re-reasons over
+a claim given the adjuster's written challenge and revised estimate, and reports
+whether it agrees. When the model is unavailable the response is explicitly
+labelled as rules-based rather than presented as AI output.
+
+Cost note: the evaluator adds one model call per assessment and each retry adds
+one more, so the worst case is three extra calls. Set
+`ENABLE_ASSESSMENT_EVALUATOR=false` or `ENABLE_ASSESSMENT_RETRY=false` to opt out.
 
 ## Security
 

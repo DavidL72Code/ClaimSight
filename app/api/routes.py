@@ -18,13 +18,17 @@ from app.core.config import (
     MAX_UPLOAD_BYTES,
     RATE_LIMIT_MAX_REQUESTS,
     RATE_LIMIT_WINDOW_SECONDS,
+    SECOND_PASS_MODEL,
     SEGMENTATION_PROVIDER,
     UPLOAD_DIR,
     CLAIM_ASSISTANT_MODEL,
 )
 from app.models.schemas import AssessmentResponse, CaseSavePayload, ClaimContext
 from app.models.schemas import ClaimAssistantRequest, ClaimAssistantResponse
+from app.models.schemas import SecondPassRequest, SecondPassResponse
+from app.services.assessment_pipeline import AssessmentPipeline
 from app.services.case_repository import CaseRepository
+from app.services.evaluation import AssessmentEvaluator
 from app.services.firebase_claims import FirebaseClaimLookup
 from app.services.gemini_client import GeminiClaimNarrator
 from app.services.report_generation import ClaimReportService
@@ -37,6 +41,12 @@ report_service = ClaimReportService()
 case_repository = CaseRepository()
 claim_assistant = GeminiClaimNarrator()
 firebase_claim_lookup = FirebaseClaimLookup()
+assessment_evaluator = AssessmentEvaluator(
+    narrator=getattr(segmentation_service, "narrator", None) or claim_assistant
+)
+assessment_pipeline = AssessmentPipeline(
+    segmentation_service, report_service, assessment_evaluator
+)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -137,17 +147,7 @@ async def assess_damage(
     # No caching: every request runs the model fresh (so output reflects the model,
     # not stored memory) and no user's assessment is held in shared server state.
     try:
-        regions = segmentation_service.analyze_images(destinations, filenames, claim_context)
-        segmentation_provider = (
-            regions[0].source if regions else segmentation_service.provider_name
-        )
-        return report_service.build_assessment(
-            filenames,
-            destinations,
-            regions,
-            segmentation_provider,
-            claim_context,
-        )
+        return assessment_pipeline.run(filenames, destinations, claim_context)
     finally:
         # Don't retain claim photos on the server after the assessment is built.
         for path in destinations:
@@ -221,6 +221,63 @@ def ask_claim_assistant(request: Request, payload: ClaimAssistantRequest) -> Cla
         answer=answer,
         model=CLAIM_ASSISTANT_MODEL,
         fallback_used=False,
+    )
+
+
+@router.post("/api/second-pass", response_model=SecondPassResponse)
+def second_pass_review(request: Request, payload: SecondPassRequest) -> SecondPassResponse:
+    """Re-reason over an assessment after a human adjuster challenges it.
+
+    Adjuster-only: this returns internal reasoning about whether the claim
+    handler's revised estimate should displace the AI's.
+    """
+    _enforce_origin_allowlist(request)
+    _enforce_optional_api_token(request)
+
+    decoded_token = _require_employee(request)
+    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
+
+    result = claim_assistant.second_pass_review(payload.model_dump())
+
+    if not result or not str(result.get("reasoning") or "").strip():
+        return SecondPassResponse(
+            reasoning=_second_pass_fallback(payload),
+            agrees_with_adjuster=False,
+            recommended_action=payload.proposed_final_action or "Adjuster review required",
+            model="rules",
+            fallback_used=True,
+        )
+
+    return SecondPassResponse(
+        reasoning=str(result.get("reasoning"))[:2000],
+        agrees_with_adjuster=bool(result.get("agrees_with_adjuster")),
+        recommended_action=str(result.get("recommended_action") or "")[:200],
+        model=SECOND_PASS_MODEL,
+        fallback_used=False,
+    )
+
+
+def _second_pass_fallback(payload: SecondPassRequest) -> str:
+    """Deterministic summary used when the model is unavailable.
+
+    Explicitly labelled as not-AI so the UI never implies a model reviewed the
+    challenge when none did.
+    """
+    vehicle = payload.vehicle or "the submitted vehicle"
+    challenge = payload.adjuster_challenge or "no specific challenge was entered"
+    delta = payload.reviewed_estimate_usd - payload.ai_estimate_usd
+    direction = (
+        f"raises the estimate by ${delta:,}" if delta > 0
+        else f"lowers the estimate by ${abs(delta):,}" if delta < 0
+        else "leaves the estimate unchanged"
+    )
+    return (
+        f"Automated model review is unavailable, so this is a rules-based summary, not an AI second pass. "
+        f"For {vehicle}, the adjuster's challenge was: {challenge}. "
+        f"The reviewed estimate of ${payload.reviewed_estimate_usd:,} {direction} "
+        f"versus the AI estimate of ${payload.ai_estimate_usd:,}. "
+        "Re-check visible damage, the customer statement, photo evidence, and hidden-damage risk "
+        "before recording a final judgement."
     )
 
 

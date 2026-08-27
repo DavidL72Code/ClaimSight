@@ -224,6 +224,14 @@ class GeminiSegmentationService(SegmentationService):
                 self._refiner = None
 
     @property
+    def narrator(self):
+        """Underlying Gemini client, or None when it isn't configured.
+
+        The self-correction loop uses this to re-run a single stage.
+        """
+        return self._narrator if self._narrator.enabled else None
+
+    @property
     def provider_name(self) -> str:
         if not self._narrator.enabled:
             return self._fallback.provider_name

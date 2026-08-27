@@ -26,6 +26,16 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip()
 CLAIM_ASSISTANT_MODEL = os.getenv("CLAIM_ASSISTANT_MODEL", "gemini-3.1-flash-lite").strip()
 # Free web-search grounding (1000 searches/month free): https://tavily.com
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip()
+# Assessment quality controls.
+# The evaluator adds one model call per assessment; each retry adds one more.
+# Both are on by default but can be disabled to cut latency and cost.
+ENABLE_ASSESSMENT_EVALUATOR = _env_bool("ENABLE_ASSESSMENT_EVALUATOR", True)
+ENABLE_ASSESSMENT_RETRY = _env_bool("ENABLE_ASSESSMENT_RETRY", True)
+MAX_ASSESSMENT_RETRIES = max(0, int(os.getenv("MAX_ASSESSMENT_RETRIES", "1")))
+# Judging and second-pass review are text-only, so a cheaper model is fine.
+EVALUATOR_MODEL = os.getenv("EVALUATOR_MODEL", "").strip() or CLAIM_ASSISTANT_MODEL
+SECOND_PASS_MODEL = os.getenv("SECOND_PASS_MODEL", "").strip() or CLAIM_ASSISTANT_MODEL
+
 SEGMENTATION_PROVIDER = os.getenv("SEGMENTATION_PROVIDER", "gemini").strip().lower()
 # Optional MobileSAM (ONNX, CPU) mask refiner layered on Gemini's boxes.
 ENABLE_SAM2_ONNX = _env_bool("ENABLE_SAM2_ONNX", False)

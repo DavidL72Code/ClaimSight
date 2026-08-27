@@ -31,6 +31,58 @@ class CompletenessCheck(BaseModel):
     detail: str
 
 
+class RubricScore(BaseModel):
+    """One scored dimension from the assessment evaluator."""
+
+    dimension: str
+    score: int = 0  # 0-5
+    rationale: str = ""
+
+
+class EvaluationResult(BaseModel):
+    """Quality grade for a completed assessment.
+
+    Produced by an LLM judge when Gemini is configured, and by a deterministic
+    fallback derived from the rules-based flags when it is not, so the adjuster
+    queue always has a score to rank on.
+    """
+
+    overall_score: int = 0  # 0-100
+    verdict: str = "needs_review"  # accept | needs_review | reject
+    rubric: list[RubricScore] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    evaluator_model: str = ""
+    fallback_used: bool = False
+
+
+class RetryAttempt(BaseModel):
+    """Record of one self-correction pass, so retries stay auditable."""
+
+    stage: str
+    trigger_flag: str
+    resolved: bool = False
+    detail: str = ""
+
+
+class SecondPassRequest(BaseModel):
+    claim_reference: str = Field(default="", max_length=120)
+    vehicle: str = Field(default="", max_length=200)
+    adjuster_challenge: str = Field(default="", max_length=2000)
+    ai_estimate_usd: int = 0
+    reviewed_estimate_usd: int = 0
+    ai_recommended_action: str = Field(default="", max_length=200)
+    proposed_final_action: str = Field(default="", max_length=200)
+    ai_reasoning: str = Field(default="", max_length=4000)
+
+
+class SecondPassResponse(BaseModel):
+    reasoning: str
+    agrees_with_adjuster: bool = False
+    recommended_action: str = ""
+    model: str = ""
+    fallback_used: bool = False
+
+
 class ReviewPayload(BaseModel):
     claim_reference: str = ""
     reviewer_name: str = ""
@@ -108,6 +160,8 @@ class AssessmentResponse(BaseModel):
     pricing_factors: list[str] = Field(default_factory=list)
     assessment_flags: list[AssessmentFlag] = Field(default_factory=list)
     completeness_checks: list[CompletenessCheck] = Field(default_factory=list)
+    evaluation: Optional[EvaluationResult] = None
+    retry_attempts: list[RetryAttempt] = Field(default_factory=list)
     meta: AssessmentMeta
 
 
