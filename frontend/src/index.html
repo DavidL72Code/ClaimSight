@@ -4,48 +4,61 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaimSight | Auto Claim Portal</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
-    <link rel="stylesheet" href="./styles.css?v=forgot-password-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght@400&display=swap" />
+    <link rel="stylesheet" href="./styles.css?v=ui-2" />
   </head>
   <body data-portal="consumer-home">
     <main class="landing-shell">
       <section class="claim-home-sticky-zone">
         <div class="claim-home-card" aria-label="ClaimSight auto insurance homepage">
           <header class="claim-home-nav">
-            <a class="claim-home-brand" href="./index.html">(CLAIMSIGHT)</a>
+            <a class="claim-home-brand" href="./index.html">ClaimSight</a>
+            <nav class="claim-home-links" aria-label="Page sections">
+              <a href="#how-it-works">How it works</a>
+              <a href="#what-it-does">What it does</a>
+            </nav>
             <div class="claim-home-nav-actions">
-              <button id="home-login-open" class="claim-home-login-button" type="button">LOG IN</button>
+              <button id="home-login-open" class="claim-home-login-button" type="button">Log in</button>
+              <a class="claim-home-nav-cta" href="./new-claim.html">Start a claim</a>
             </div>
           </header>
 
-          <div class="claim-home-stage">
-          <figure class="claim-home-photo claim-home-photo-left">
-              <img src="assets/damage-hero-left.jpg" alt="Car with a crushed front end and shattered windscreen after a collision" />
-            </figure>
-            <figure class="claim-home-photo claim-home-photo-center">
-              <img src="assets/damage-hero-center.jpg" alt="Dented door and side panel of a vehicle with a taped-over window" />
-            </figure>
-            <figure class="claim-home-photo claim-home-photo-right">
-              <img src="assets/damage-hero-right.jpg" alt="Severe front-end collision damage on a vehicle awaiting assessment" />
-            </figure>
-
-            <div class="claim-home-title">
-              <h1 data-text="AUTO CRASH CLAIMS">AUTO CRASH CLAIMS</h1>
+          <div class="claim-home-hero">
+            <div class="claim-home-copy">
+              <span class="claim-home-eyebrow">Auto damage claims</span>
+              <h1>Turn crash photos into a reviewed claim decision.</h1>
+              <p class="claim-home-sub">
+                Upload vehicle damage photos, track human review, and receive a finalized
+                claim report once your adjuster completes the decision.
+              </p>
+              <div class="claim-home-actions">
+                <a class="claim-home-cta" href="./new-claim.html">Start a claim</a>
+                <a class="claim-home-ghost" href="#how-it-works">See how it works</a>
+              </div>
+              <ul class="claim-home-trust">
+                <li>AI first pass, always reviewed by a human adjuster</li>
+                <li>Vehicle valuation grounded in market comparables</li>
+              </ul>
             </div>
-          </div>
 
-          <div class="claim-home-bottom">
-            <p>
-              Upload vehicle damage photos, track human review, and receive a finalized claim report
-              once your adjuster completes the decision.
-            </p>
-
-            <a class="claim-home-cta" href="./new-claim.html">START NEW CLAIM</a>
+            <div class="claim-home-stage">
+              <figure class="claim-home-photo claim-home-photo-left">
+                <img src="assets/damage-hero-left.jpg" alt="Car with a crushed front end and shattered windscreen after a collision" />
+              </figure>
+              <figure class="claim-home-photo claim-home-photo-center">
+                <img src="assets/damage-hero-center.jpg" alt="Dented door and side panel of a vehicle with a taped-over window" />
+              </figure>
+              <figure class="claim-home-photo claim-home-photo-right">
+                <img src="assets/damage-hero-right.jpg" alt="Severe front-end collision damage on a vehicle awaiting assessment" />
+              </figure>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="claim-home-scroll-panels" aria-label="Claim flow">
+      <section class="claim-home-scroll-panels" id="how-it-works" aria-label="Claim flow">
         <article>
           <span>(1)</span>
           <strong>Upload the crash</strong>
@@ -63,7 +76,7 @@
         </article>
       </section>
 
-      <section class="claim-proof-section" aria-label="What ClaimSight does">
+      <section class="claim-proof-section" id="what-it-does" aria-label="What ClaimSight does">
         <div class="claim-proof-copy">
           <span>How it helps</span>
           <h2>From crash photos to a reviewed claim decision.</h2>
