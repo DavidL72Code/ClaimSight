@@ -1,3 +1,4 @@
+(() => {
 const customerMessageStorageKey = "claimsight.customer-message-threads";
 const currentClaimStorageKey = "claimsight.consumer-current-claim";
 const messageFirebaseConfig = window.FIREBASE_CONFIG || {};
@@ -225,3 +226,4 @@ messageForm?.addEventListener("submit", async (event) => {
 
 messageFiles?.addEventListener("change", renderAttachmentPreview);
 renderThread(selectedThreadId);
+})();

@@ -1,3 +1,4 @@
+(() => {
 const assistantStorageKey = "claimsight.claim-assistant-threads";
 const currentClaimStorageKey = "claimsight.consumer-current-claim";
 const assistantApiBaseUrl = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
@@ -232,3 +233,4 @@ const mountClaimAssistant = () => {
 if (document.body.dataset.portal === "consumer") {
   mountClaimAssistant();
 }
+})();

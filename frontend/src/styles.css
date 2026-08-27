@@ -1,39 +1,54 @@
 /* ── tokens ──────────────────────────────────────────────────── */
 :root {
-  /* surfaces: light page, white cards, tinted insets */
-  --bg:         #f6f8fb;
+  /* surfaces: cool-white canvas, white cards, tinted insets */
+  --bg:         #f4f5fb;
   --surface:    #ffffff;
-  --surface-2:  #f1f4f9;
+  --surface-2:  #f0f1f9;
+  --surface-3:  #e7e8f5;
 
-  /* text */
-  --ink:        #0f172a;
-  --ink-soft:   #475569;
-  --muted:      #64748b;
+  /* text: warm-black ink, violet cast in the softer tiers */
+  --ink:        #0d0d18;
+  --ink-soft:   #464663;
+  --muted:      #6b6b8a;
 
   /* hairlines */
-  --line:       #e3e8ef;
-  --line-strong:#cbd5e1;
+  --line:       #e5e6f2;
+  --line-strong:#cccee4;
 
-  /* brand + state */
-  --accent:     #1d4ed8;
-  --accent-hover:#1a43bf;
-  --accent-dim: rgba(29,78,216,.08);
-  --on-accent:  #ffffff;
-  --positive:   #047857;
-  --danger:     #b91c1c;
-  --warning:    #b45309;
+  /* brand: indigo core, violet lift, cyan spark */
+  --accent:      #4f39f6;
+  --accent-hover:#3f27e3;
+  --accent-2:    #8b5cf6;
+  --accent-3:    #06b6d4;
+  --accent-dim:  rgba(79,57,246,.09);
+  --accent-line: rgba(79,57,246,.24);
+  --on-accent:   #ffffff;
+  --positive:    #0d9f6e;
+  --danger:      #dc2626;
+  --warning:     #d97706;
 
-  /* elevation — layered and soft, not a single heavy drop */
-  --shadow-sm:  0 1px 2px rgba(15,23,42,.06);
-  --shadow:     0 1px 3px rgba(15,23,42,.08), 0 8px 24px -12px rgba(15,23,42,.10);
-  --shadow-lg:  0 2px 6px rgba(15,23,42,.06), 0 24px 48px -20px rgba(15,23,42,.18);
+  /* gradients carry most of the "modern" read */
+  --grad-accent:      linear-gradient(135deg, #4f39f6 0%, #7546ff 45%, #a855f7 100%);
+  --grad-accent-soft: linear-gradient(135deg, rgba(79,57,246,.13), rgba(168,85,247,.09));
+  --grad-ink:         linear-gradient(115deg, #0d0d18 0%, #241c56 58%, #4f39f6 100%);
+  --grad-hairline:    linear-gradient(90deg, transparent, var(--accent-line) 28%, rgba(6,182,212,.30) 72%, transparent);
 
-  /* geometry */
-  --radius-sm:  6px;
-  --radius:     10px;
-  --radius-lg:  14px;
+  /* elevation — violet-tinted so shadows stay inside the palette */
+  --shadow-sm:   0 1px 2px rgba(20,16,54,.06);
+  --shadow:      0 1px 3px rgba(20,16,54,.07), 0 10px 30px -14px rgba(20,16,54,.15);
+  --shadow-lg:   0 2px 6px rgba(20,16,54,.06), 0 30px 60px -24px rgba(20,16,54,.26);
+  --glow:        0 10px 26px -10px rgba(79,57,246,.55);
+  --glow-strong: 0 16px 40px -12px rgba(79,57,246,.60);
+
+  /* geometry — roomier corners */
+  --radius-sm:  10px;
+  --radius:     16px;
+  --radius-lg:  22px;
 
   --sidebar-w:  248px;
+
+  --ease-out:    cubic-bezier(.22,.8,.3,1);
+  --ease-spring: cubic-bezier(.34,1.32,.5,1);
 
   --font-sans:  "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }

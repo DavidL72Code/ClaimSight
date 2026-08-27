@@ -1579,10 +1579,54 @@ if (firebaseEnabled) {
     exportReport: downloadReport,
   };
 
+  // Live claim updates. Same query as refreshPortal, but pushed: when an
+  // adjuster changes a claim, the customer sees it without reloading.
+  // Previously there were no onSnapshot listeners anywhere and no polling, so
+  // an employee action stayed invisible until a manual refresh.
+  let unsubscribeClaims = null;
+
+  const renderPortalFromClaims = () => {
+    renderCounts();
+    renderDashboardClaims();
+    renderCustomerOverview();
+    renderNotifications();
+    renderCaseList();
+    renderSelectedClaim();
+  };
+
+  const subscribeToClaims = (user) => {
+    unsubscribeClaims?.();
+    unsubscribeClaims = null;
+    if (!user) return;
+    try {
+      unsubscribeClaims = casesCollection
+        .where("owner_uid", "==", user.uid)
+        .orderBy("updated_at", "desc")
+        .limit(50)
+        .onSnapshot(
+          (snapshot) => {
+            ownClaims = sortClaims(
+              snapshot.docs.map((doc) => normalize(doc.id, doc.data()))
+            );
+            renderPortalFromClaims();
+          },
+          () => {
+            // Listener failed (rules, offline). Manual Refresh and the next
+            // page load still work, so fail quietly rather than alarm the user.
+          }
+        );
+    } catch {
+      unsubscribeClaims = null;
+    }
+  };
+
+  window.addEventListener("beforeunload", () => unsubscribeClaims?.());
+
   if (auth) {
     auth.onAuthStateChanged((user) => {
       currentCustomer = user;
       refreshPortal();
+      subscribeToClaims(user);
     });
   } else {
     refreshPortal();
@@ -1917,7 +1961,7 @@ if (firebaseEnabled) {
           name: "rear-damage-photo-1.jpg",
           type: "image/jpeg",
           size: 1420000,
-          preview_url: "https://images.unsplash.com/photo-1603386329225-868f9b1ee6c9?auto=format&fit=crop&w=1200&q=80",
+          preview_url: "assets/damage-hero-center.jpg",
           source: "customer_submitted",
         },
         {

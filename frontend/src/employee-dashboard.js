@@ -660,5 +660,65 @@ elements.saveInternalNote?.addEventListener("click", async () => {
   if (elements.actionStatus) elements.actionStatus.textContent = "Internal note saved privately.";
 });
 
-loadClaims();
+// Firebase restores the session asynchronously. Calling loadClaims() straight
+// away meant getCurrentEmployeeEmail() had no currentUser yet, fell back to a
+// hardcoded address, and the assigned-claims query matched nothing -- the
+// adjuster saw "No assigned claims" until they clicked Refresh. Load once the
+// auth state is actually known, the way the consumer side already does.
+const bootstrapClaims = () => {
+  if (!firebaseEnabled || typeof window.firebase?.auth !== "function") {
+    loadClaims();
+    return;
+  }
+  try {
+    const app = window.firebase.apps?.length
+      ? window.firebase.app()
+      : window.firebase.initializeApp(firebaseConfig);
+    const auth = window.firebase.auth(app);
+    const db = window.firebase.firestore(app);
+    let loadedFor;
+    let unsubscribe = null;
+
+    // Live queue. The adjuster's queue previously only changed on Refresh, so
+    // a newly assigned or customer-updated claim was invisible until clicked.
+    const subscribe = (email) => {
+      unsubscribe?.();
+      unsubscribe = null;
+      if (!email) return;
+      try {
+        unsubscribe = db.collection("cases")
+          .where("assigned_agent.email", "==", email)
+          .orderBy("updated_at", "desc")
+          .limit(25)
+          .onSnapshot(
+            (snapshot) => {
+              claims = snapshot.docs.map((doc) => normalizeCase(doc.id, doc.data()));
+              renderTable();
+              const saved = readStorageValue(selectedEmployeeClaimKey);
+              selectClaim(saved || claims[0]?.id);
+            },
+            () => {
+              // Listener failed; Refresh and the next load still work.
+            }
+          );
+      } catch {
+        unsubscribe = null;
+      }
+    };
+
+    window.addEventListener("beforeunload", () => unsubscribe?.());
+
+    auth.onAuthStateChanged((user) => {
+      const identity = user?.email || null;
+      if (identity === loadedFor) return;  // ignore repeat notifications
+      loadedFor = identity;
+      loadClaims();
+      subscribe(identity);
+    });
+  } catch {
+    loadClaims();
+  }
+};
+
+bootstrapClaims();
 })();
