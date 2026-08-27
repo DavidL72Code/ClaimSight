@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import statistics
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -36,6 +38,60 @@ def _det_config(types, **kwargs):
         return types.GenerateContentConfig(**base)
 
 
+# Grounded search has its own quota, separate from generation. Once it is
+# exhausted, further calls are pure waste, so trip a breaker for a while.
+# The cooldown matters because some 429s are per-minute rather than daily:
+# a permanent trip would disable grounding for the life of the process.
+_GROUNDING_COOLDOWN_SECONDS = 900
+
+_grounding_blocked_until = 0.0
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """True for 429 / RESOURCE_EXHAUSTED.
+
+    A quota error means the tool was accepted and we are simply out of budget,
+    so retrying the same call with a different tool *shape* cannot help -- it
+    just spends another unit of the quota that already ran out.
+    """
+    text = str(exc)
+    return "429" in text or "RESOURCE_EXHAUSTED" in text
+
+
+def _grounding_available() -> bool:
+    return time.monotonic() >= _grounding_blocked_until
+
+
+def _block_grounding() -> None:
+    global _grounding_blocked_until
+    _grounding_blocked_until = time.monotonic() + _GROUNDING_COOLDOWN_SECONDS
+
+
+def _search_tools(types):
+    """Tool shapes to try, best guess for this model generation first.
+
+    google_search is the 2.x/3.x shape; google_search_retrieval is 1.5-only.
+    Previously both were tried unconditionally, so every grounding attempt on a
+    3.x model made a second call that could never succeed.
+    """
+    legacy = bool(re.search(r"gemini-1\.5|gemini-1-", GEMINI_MODEL))
+    shapes = []
+
+    def add(builder):
+        try:
+            shapes.append(builder())
+        except Exception:
+            pass
+
+    if legacy:
+        add(lambda: types.Tool(google_search_retrieval=types.GoogleSearchRetrieval()))
+        add(lambda: types.Tool(google_search=types.GoogleSearch()))
+    else:
+        add(lambda: types.Tool(google_search=types.GoogleSearch()))
+        add(lambda: types.Tool(google_search_retrieval=types.GoogleSearchRetrieval()))
+    return shapes
+
+
 class GeminiClaimNarrator:
     def __init__(self) -> None:
         self._client = None
@@ -54,6 +110,15 @@ class GeminiClaimNarrator:
     @property
     def provider_name(self) -> str:
         return GEMINI_MODEL if self.enabled else "rules"
+
+    @property
+    def grounding_available(self) -> bool:
+        """False while the grounded-search breaker is tripped.
+
+        The retry loop uses this so it does not spend its one retry on a stage
+        that is known to be out of quota.
+        """
+        return _grounding_available()
 
     def answer_claim_assistant(
         self,
@@ -644,6 +709,11 @@ class GeminiClaimNarrator:
                 region.grounding_status = status
 
         set_status("not attempted")
+
+        # Skip entirely while the breaker is tripped: no call, no quota spent.
+        if not _grounding_available():
+            set_status("grounded search quota exhausted (cooling down)")
+            return
         damaged = ", ".join(sorted({r.panel for r in regions})) or "visible body damage"
 
         # Prefer free web-search grounding (Tavily) — uses normal Gemini quota for
@@ -680,25 +750,9 @@ class GeminiClaimNarrator:
             ]
             contents.append(prompt)
 
-            # The search-grounding tool differs by model generation:
-            #   google_search           -> Gemini 2.x / 3.x
-            #   google_search_retrieval -> Gemini 1.5
-            # Try each in turn so grounding works regardless of GEMINI_MODEL.
             response = None
-            tool_variants = []
-            try:
-                tool_variants.append(types.Tool(google_search=types.GoogleSearch()))
-            except Exception:
-                pass
-            try:
-                tool_variants.append(
-                    types.Tool(google_search_retrieval=types.GoogleSearchRetrieval())
-                )
-            except Exception:
-                pass
-
             last_error = None
-            for tool in tool_variants:
+            for tool in _search_tools(types):
                 try:
                     response = self._client.models.generate_content(
                         model=GEMINI_MODEL,
@@ -708,15 +762,21 @@ class GeminiClaimNarrator:
                     break
                 except Exception as exc:
                     last_error = exc
+                    if _is_quota_error(exc):
+                        # Out of grounding budget, not a bad tool shape. Stop
+                        # here and stop trying for a while.
+                        _block_grounding()
+                        logger.warning("Grounded search quota exhausted: %s", exc)
+                        break
                     logger.warning("Grounding tool %r rejected: %s", type(tool), exc)
                     response = None
 
             if response is None:
-                set_status(f"search tool not accepted: {str(last_error)[:160]}")
-                logger.warning(
-                    "Gemini grounded valuation unavailable (no search tool accepted): %s",
-                    last_error,
-                )
+                if last_error is not None and _is_quota_error(last_error):
+                    set_status("grounded search quota exhausted")
+                else:
+                    set_status(f"search tool not accepted: {str(last_error)[:160]}")
+                logger.warning("Gemini grounded valuation unavailable: %s", last_error)
                 return
 
             text = getattr(response, "text", None)

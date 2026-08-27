@@ -147,6 +147,23 @@ class AssessmentPipeline:
             filenames, image_paths, regions, provider, claim_context
         )
 
+    def _stage_usable(self, stage: str) -> bool:
+        """Whether a stage can plausibly succeed right now.
+
+        Grounded search has its own quota. When it is exhausted, a valuation
+        retry cannot win, and with MAX_ASSESSMENT_RETRIES=1 it would consume
+        the only retry available -- starving the detection stage, which does
+        not depend on that quota and has been observed to fix real defects.
+        """
+        if stage != "valuation":
+            return True
+        narrator = self._narrator()
+        if narrator is None:
+            # No provider at all is a different problem. Let the attempt run so
+            # it gets recorded as skipped, rather than vanishing silently.
+            return True
+        return bool(getattr(narrator, "grounding_available", True))
+
     def _next_target(self, assessment, evaluation, attempts):
         """Pick what to retry: (trigger_label, stage, hint) or None."""
         tried = {a.trigger_flag for a in attempts}
@@ -156,6 +173,8 @@ class AssessmentPipeline:
         for code in _FLAG_PRIORITY:
             if code in present and code not in tried:
                 stage, hint = RETRYABLE_FLAGS[code]
+                if not self._stage_usable(stage):
+                    continue  # let a usable stage have the retry instead
                 return code, stage, hint
 
         # 2. the judge, but only when a real model produced the verdict
@@ -171,6 +190,8 @@ class AssessmentPipeline:
             label = f"judge:{r.dimension}"
             if label not in tried:
                 stage, hint = RUBRIC_STAGES[r.dimension]
+                if not self._stage_usable(stage):
+                    continue
                 return label, stage, hint
 
         # A reject verdict with no single weak dimension still warrants one
