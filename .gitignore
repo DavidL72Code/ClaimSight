@@ -11,3 +11,4 @@ data/uploads/
 data/*.db
 frontend/dist/
 node_modules/
+tools/eval_results.jsonl

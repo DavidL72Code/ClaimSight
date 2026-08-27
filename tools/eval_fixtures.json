@@ -1,0 +1,44 @@
+{
+  "_note": "Hand-annotated expectations for offline evaluation. Ground truth is what a competent adjuster would conclude from the photo, not what any model said. Keep assertions to things the image clearly supports.",
+  "cases": [
+    {
+      "id": "megane-frontal",
+      "image": "frontend/src/assets/damage-hero-left.jpg",
+      "claim": { "make": "Renault", "model": "Megane", "year": 2001, "mileage": 145000 },
+      "notes": "Renault Megane Mk1 hit a tree head-on. Bumper detached, hood folded, windshield shattered, door aperture sprung -- structural.",
+      "expect": {
+        "total_loss": true,
+        "min_regions": 3,
+        "severity_in": ["high"],
+        "panels_any": ["hood", "bumper", "windshield"],
+        "structural_expected": true
+      }
+    },
+    {
+      "id": "estate-side",
+      "image": "frontend/src/assets/damage-hero-center.jpg",
+      "claim": { "make": "Ford", "model": "Escort", "year": 1999, "mileage": 120000 },
+      "notes": "Side impact: front door skin and fender creased, window taped over. Panel damage only, no visible structural deformation. Repairable in principle, though value is low.",
+      "expect": {
+        "total_loss": null,
+        "min_regions": 2,
+        "severity_in": ["low", "moderate", "high"],
+        "panels_any": ["door", "fender", "window", "quarter"],
+        "structural_expected": false
+      }
+    },
+    {
+      "id": "pickup-frontal",
+      "image": "frontend/src/assets/damage-hero-right.jpg",
+      "claim": { "make": "Chevrolet", "model": "El Camino", "year": 1985, "mileage": 190000 },
+      "notes": "Severe frontal collision, front clip destroyed, wheel displaced, glass shattered. Clear total loss on an old vehicle.",
+      "expect": {
+        "total_loss": true,
+        "min_regions": 3,
+        "severity_in": ["high"],
+        "panels_any": ["bumper", "hood", "fender", "headlight", "windshield"],
+        "structural_expected": true
+      }
+    }
+  ]
+}
