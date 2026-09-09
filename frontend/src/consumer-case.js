@@ -937,7 +937,7 @@ if (dataEnabled) {
 
   let ownClaims = [];
   let selectedClaimId = getCurrentClaimId();
-  let currentCustomer = auth?.currentUser || null;
+  let currentCustomer = window.sbAuth.currentUser();
 
   const sortClaims = (items) =>
     items.sort((left, right) => {
