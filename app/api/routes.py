@@ -66,6 +66,10 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGES_PER_REQUEST = 8
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 _request_log: dict[str, list[float]] = {}
+# Cheapest useful keepalive cadence: an uptime monitor on a 5 minute
+# schedule then reaches Supabase once per poll and no more.
+KEEPALIVE_MIN_INTERVAL_SECONDS = 240
+_keepalive_cache: dict[str, object] = {}
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
 _EMPTY_DAMAGE_VALUES = {"", "n/a", "na", "none", "no", "none reported", "no prior damage"}
 
@@ -299,6 +303,47 @@ def _demo_error(exc: DemoReviewerError) -> HTTPException:
     if "not found" in lowered:
         return HTTPException(status_code=404, detail=message)
     return HTTPException(status_code=409, detail=message)
+
+
+@router.get("/api/keepalive")
+def keepalive(request: Request) -> dict[str, object]:
+    """Reach through to Supabase so an uptime monitor keeps it from pausing.
+
+    Supabase pauses free projects after roughly a week of inactivity and
+    restoring one is a manual click in their dashboard, so a monitor has to
+    touch the project rather than just this app. /api/health deliberately
+    does not make any outbound calls, which is why this is a separate route:
+    pinging health would keep the Space warm but let Supabase pause anyway.
+
+    Unauthenticated, because an uptime monitor cannot hold a Firebase token.
+    That makes it a small outbound-request amplifier, so the result is cached
+    and Supabase is touched at most once per KEEPALIVE_MIN_INTERVAL_SECONDS
+    no matter how often this is called.
+    """
+    _enforce_rate_limit(request)
+
+    now = monotonic()
+    cached = _keepalive_cache.get("checked_at")
+    if cached is not None and (now - cached) < KEEPALIVE_MIN_INTERVAL_SECONDS:
+        reached = bool(_keepalive_cache.get("reached"))
+        detail = str(_keepalive_cache.get("detail") or "")
+        cache_state = "hit"
+    else:
+        reached, detail = attachment_storage.ping()
+        _keepalive_cache.update({"checked_at": now, "reached": reached, "detail": detail})
+        cache_state = "miss"
+
+    payload: dict[str, object] = {
+        "status": "ok" if (reached or detail == "not_configured") else "degraded",
+        "supabase": detail,
+        "cache": cache_state,
+    }
+
+    # Only alert once storage is actually configured: an unconfigured
+    # deployment is a deliberate state, not an outage to page someone about.
+    if not reached and detail != "not_configured":
+        raise HTTPException(status_code=503, detail=f"Supabase {detail}.")
+    return payload
 
 
 @router.post("/api/attachments")

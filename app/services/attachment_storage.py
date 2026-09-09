@@ -131,6 +131,35 @@ class SupabaseAttachmentStorage:
 
         return {"path": path, "download_url": self.signed_url(path)}
 
+    def ping(self) -> tuple[bool, str]:
+        """Make the cheapest possible round-trip to Supabase.
+
+        Used by /api/keepalive. Supabase pauses free projects after about a
+        week of inactivity and restoring one is a manual click, so something
+        has to reach the project on a schedule. Listing buckets is the
+        lightest call that proves the project is awake and the key still
+        works.
+        """
+        if not self.ready:
+            return False, "not_configured"
+
+        import requests
+
+        try:
+            response = requests.get(
+                f"{self._url}/storage/v1/bucket",
+                headers=self._headers(),
+                timeout=15,
+            )
+        except Exception as exc:
+            logger.warning("Supabase keepalive ping failed: %s", exc)
+            return False, "unreachable"
+
+        if response.status_code >= 400:
+            logger.warning("Supabase keepalive ping got %s", response.status_code)
+            return False, f"http_{response.status_code}"
+        return True, "reachable"
+
     def signed_url(self, path: str) -> str:
         """Mint a time-limited download URL for a private-bucket object."""
         if not self.ready:
