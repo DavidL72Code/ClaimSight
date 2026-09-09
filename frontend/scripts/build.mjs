@@ -28,6 +28,8 @@ for (const file of [
   "styles.css",
   "app.js",
   "attachments.js",
+  "supabase-client.js",
+  "data.js",
   "home.js",
   "customer-auth.js",
   "claim-assistant.js",
@@ -58,9 +60,8 @@ const strictEnv =
 // that would have worked.
 const requiredEnv = [
   "VITE_API_BASE_URL",
-  "VITE_FIREBASE_API_KEY",
-  "VITE_FIREBASE_AUTH_DOMAIN",
-  "VITE_FIREBASE_PROJECT_ID",
+  "VITE_SUPABASE_URL",
+  "VITE_SUPABASE_ANON_KEY",
 ];
 
 if (strictEnv) {
@@ -77,16 +78,14 @@ const apiBaseUrl = process.env.VITE_API_BASE_URL || "";
 const configSource = `window.APP_CONFIG = { API_BASE_URL: ${JSON.stringify(apiBaseUrl)} };`;
 await fs.writeFile(path.join(distDir, "config.js"), configSource);
 
-const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: process.env.VITE_FIREBASE_APP_ID || "",
+// Compiled into the bundle and therefore public. It identifies the project;
+// the RLS policies decide what any request may see.
+const supabaseConfig = {
+  url: process.env.VITE_SUPABASE_URL || "",
+  anonKey: process.env.VITE_SUPABASE_ANON_KEY || "",
 };
-const firebaseConfigSource = `window.FIREBASE_CONFIG = ${JSON.stringify(firebaseConfig)};`;
-await fs.writeFile(path.join(distDir, "firebase-config.js"), firebaseConfigSource);
+const supabaseConfigSource = `window.SUPABASE_CONFIG = ${JSON.stringify(supabaseConfig)};`;
+await fs.writeFile(path.join(distDir, "supabase-config.js"), supabaseConfigSource);
 
 try {
   await fs.cp(assetsDir, path.join(distDir, "assets"), { recursive: true });

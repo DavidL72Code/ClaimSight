@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "claimsight-frontend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev.mjs"],
+      "cwd": "frontend",
+      "port": 4173,
+      "autoPort": true
+    }
+  ]
+}
