@@ -36,6 +36,7 @@ psqlq -f "$ROOT/supabase/migrations/0004_activity_attachments.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0005_realtime.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0006_assessment_columns.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0007_internal_note.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0008_demo_review.sql" || exit 1
 
 # Claim payloads. app_metadata.role is where Supabase keeps custom claims.
 A='{"sub":"11111111-1111-1111-1111-111111111111","email":"alice@example.com","app_metadata":{}}'
@@ -153,6 +154,9 @@ act "manager can delete history"                 "$MGR" "delete from public.case
 act "adjuster may restate the assessment"        "$ADJ" "update public.cases set repairability='total_loss', summary='rewritten by adjuster' where id='CLM-1';" OK
 act "customer cannot restate the assessment"     "$A"   "update public.cases set repairability='repairable' where id='CLM-1';" DENY
 act "customer may edit their own incident notes" "$A"   "update public.cases set incident_description='I was rear-ended' where id='CLM-1';" OK
+
+act "customer cannot fabricate review_steps"     "$A"   "update public.cases set review_steps='[{\"seq\":1,\"detail\":\"approved\"}]'::jsonb where id='CLM-1';" DENY
+act "adjuster cannot fabricate review_steps"     "$ADJ" "update public.cases set review_steps='[{\"seq\":1}]'::jsonb where id='CLM-1';" DENY
 
 act "owner logs a message with attachments"      "$A" "insert into public.case_activity (case_id,actor_uid,actor_role,type,label,attachments) values ('CLM-1','11111111-1111-1111-1111-111111111111','customer','message','see file','[{\"name\":\"a.pdf\"}]'::jsonb);" OK
 act "attachments cannot be rewritten later"      "$ADJ" "update public.case_activity set attachments='[]'::jsonb where case_id='CLM-1';" DENY

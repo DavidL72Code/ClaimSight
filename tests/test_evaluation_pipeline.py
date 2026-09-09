@@ -259,29 +259,29 @@ def _second_pass_body() -> dict:
 
 
 def test_second_pass_requires_authentication() -> None:
-    original = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: None
+    original = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: None
     try:
         assert client.post("/api/second-pass", json=_second_pass_body()).status_code == 401
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original
+        routes.supabase_auth.verify_bearer_token = original
 
 
 def test_second_pass_rejects_customer_role() -> None:
-    original = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {
+    original = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {
         "uid": "c1", "role": "customer"
     }
     try:
         assert client.post("/api/second-pass", json=_second_pass_body()).status_code == 403
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original
+        routes.supabase_auth.verify_bearer_token = original
 
 
 def test_second_pass_returns_model_result_for_employee() -> None:
-    original = routes.firebase_claim_lookup.verify_bearer_token
+    original = routes.supabase_auth.verify_bearer_token
     original_review = routes.claim_assistant.second_pass_review
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {
         "uid": "e1", "role": "employee"
     }
     routes.claim_assistant.second_pass_review = lambda payload: {
@@ -297,14 +297,14 @@ def test_second_pass_returns_model_result_for_employee() -> None:
         assert body["fallback_used"] is False
         assert "not repairable" in body["reasoning"]
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original
+        routes.supabase_auth.verify_bearer_token = original
         routes.claim_assistant.second_pass_review = original_review
 
 
 def test_second_pass_fallback_is_labelled_as_not_ai() -> None:
-    original = routes.firebase_claim_lookup.verify_bearer_token
+    original = routes.supabase_auth.verify_bearer_token
     original_review = routes.claim_assistant.second_pass_review
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {
         "uid": "e1", "role": "employee"
     }
     routes.claim_assistant.second_pass_review = lambda payload: None
@@ -316,7 +316,7 @@ def test_second_pass_fallback_is_labelled_as_not_ai() -> None:
         assert "not an AI second pass" in body["reasoning"]
         assert "$2,400" in body["reasoning"]
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original
+        routes.supabase_auth.verify_bearer_token = original
         routes.claim_assistant.second_pass_review = original_review
 
 

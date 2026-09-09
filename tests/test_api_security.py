@@ -16,27 +16,30 @@ def _assistant_payload() -> dict:
 
 
 def test_claim_assistant_requires_authentication() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: None
+    original_verify = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: None
     try:
         response = client.post("/api/claim-assistant", json=_assistant_payload())
         assert response.status_code == 401
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify
 
 
 def test_claim_assistant_hides_unowned_claims() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    original_lookup = routes.firebase_claim_lookup.get_owned_claim_context
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {
+    original_verify = routes.supabase_auth.verify_bearer_token
+    original_lookup = routes.supabase_data.get_owned_claim_context
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {
         "uid": "customer-1",
         "email": "customer@example.com",
         "role": "customer",
     }
-    routes.firebase_claim_lookup.get_owned_claim_context = lambda uid, claim_reference: None
+    # RLS decides ownership now, so "not yours" arrives as an empty result --
+    # which the endpoint must still turn into 404 rather than leaking that the
+    # claim exists.
+    routes.supabase_data.get_owned_claim_context = lambda access_token, claim_reference: None
     try:
         response = client.post("/api/claim-assistant", json=_assistant_payload())
         assert response.status_code == 404
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
-        routes.firebase_claim_lookup.get_owned_claim_context = original_lookup
+        routes.supabase_auth.verify_bearer_token = original_verify
+        routes.supabase_data.get_owned_claim_context = original_lookup

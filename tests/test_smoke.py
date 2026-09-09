@@ -19,8 +19,8 @@ def test_health_endpoint() -> None:
 
 
 def test_assess_damage_rejects_invalid_file_type() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {"uid": "customer-1", "role": "customer"}
+    original_verify = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {"uid": "customer-1", "role": "customer"}
     try:
         response = client.post(
             "/api/assess",
@@ -28,12 +28,12 @@ def test_assess_damage_rejects_invalid_file_type() -> None:
         )
         assert response.status_code == 400
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify
 
 
 def test_assess_damage_rejects_spoofed_image_content() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {"uid": "customer-1", "role": "customer"}
+    original_verify = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {"uid": "customer-1", "role": "customer"}
     try:
         response = client.post(
             "/api/assess",
@@ -41,12 +41,12 @@ def test_assess_damage_rejects_spoofed_image_content() -> None:
         )
         assert response.status_code == 400
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify
 
 
-def test_assess_damage_requires_firebase_authentication() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: None
+def test_assess_damage_requires_authentication() -> None:
+    original_verify = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: None
     try:
         response = client.post(
             "/api/assess",
@@ -54,4 +54,4 @@ def test_assess_damage_requires_firebase_authentication() -> None:
         )
         assert response.status_code == 401
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify

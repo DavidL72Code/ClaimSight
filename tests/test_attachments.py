@@ -23,8 +23,8 @@ CASES = {
 }
 
 
-class FakeLookup:
-    """Stands in for FirebaseClaimLookup with a fixed token and case table."""
+class FakeAuth:
+    """Stands in for SupabaseAuth with a fixed set of claims."""
 
     ready = True
 
@@ -36,24 +36,39 @@ class FakeLookup:
             return None
         return self._token
 
-    def describe_case_access(self, *, case_id, uid, email, role):
+
+
+class FakeData:
+    """Stands in for SupabaseData.
+
+    describe_case_access models what RLS does: a case the caller may not see
+    simply does not come back, so `visible` is False for both "absent" and
+    "not yours". The endpoint turns either into a 404, which is what stops it
+    being used to probe which claim ids exist.
+    """
+
+    ready = True
+
+    def __init__(self, claims):
+        self._claims = claims
+
+    def describe_case_access(self, *, access_token, case_id, uid, email, role):
         payload = CASES.get(case_id)
-        result = {
-            "exists": payload is not None,
-            "is_owner": False,
-            "is_assigned_employee": False,
-            "is_manager": role in {"manager", "admin"},
-            "allowed": False,
-        }
+        is_manager = role in {"manager", "admin"}
         if payload is None:
-            return result
+            return {"visible": False, "is_owner": False,
+                    "is_assigned_employee": False, "is_manager": is_manager}
+
         assigned = (payload.get("assigned_agent") or {}).get("email", "").lower()
-        result["is_owner"] = payload.get("owner_uid") == uid
-        result["is_assigned_employee"] = role == "employee" and email.lower() == assigned
-        result["allowed"] = (
-            result["is_owner"] or result["is_assigned_employee"] or result["is_manager"]
-        )
-        return result
+        is_owner = payload.get("owner_uid") == uid
+        is_assigned = role == "employee" and email.lower() == assigned
+        # RLS would hide the row from anyone who is none of these.
+        if not (is_owner or is_assigned or is_manager):
+            return {"visible": False, "is_owner": False,
+                    "is_assigned_employee": False, "is_manager": is_manager}
+        return {"visible": True, "is_owner": is_owner,
+                "is_assigned_employee": is_assigned, "is_manager": is_manager,
+                "case": payload}
 
 
 class FakeStorage:
@@ -73,7 +88,8 @@ class FakeStorage:
 @pytest.fixture
 def client_for(monkeypatch):
     def _build(token, storage=None):
-        monkeypatch.setattr(routes, "firebase_claim_lookup", FakeLookup(token))
+        monkeypatch.setattr(routes, "supabase_auth", FakeAuth(token))
+        monkeypatch.setattr(routes, "supabase_data", FakeData(token))
         monkeypatch.setattr(routes, "attachment_storage", storage or FakeStorage())
         # The rate limiter keys on uid and would trip across parametrised runs.
         monkeypatch.setattr(routes, "_enforce_rate_limit", lambda *a, **k: None)
@@ -117,9 +133,12 @@ def test_owner_can_upload_to_own_case(client_for):
 
 
 def test_stranger_cannot_upload_to_someone_elses_case(client_for):
+    # 404 rather than 403 on purpose: RLS does not distinguish "absent" from
+    # "not yours", and neither should the API, or it becomes an oracle for
+    # which claim ids exist.
     storage = FakeStorage()
     response = _post(client_for(STRANGER, storage))
-    assert response.status_code == 403
+    assert response.status_code == 404
     assert storage.uploads == []
 
 
@@ -131,7 +150,7 @@ def test_assigned_adjuster_can_upload(client_for):
 def test_unassigned_employee_cannot_upload(client_for):
     storage = FakeStorage()
     response = _post(client_for(UNASSIGNED, storage))
-    assert response.status_code == 403
+    assert response.status_code == 404
     assert storage.uploads == []
 
 

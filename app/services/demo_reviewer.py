@@ -10,7 +10,7 @@ customer side react to each step: status moves, notifications arrive, a message
 lands in the thread. It also replies in character when the customer writes back,
 so the two-way interaction is demonstrable.
 
-It must run server-side: firestore.rules deliberately forbids a customer from
+It must run server-side: the RLS policies deliberately forbid a customer from
 writing `review`, `status`, or `reviewed_total_cost_usd`, so a client-side
 version is impossible by design. Every write here goes through the Admin SDK.
 
@@ -56,39 +56,19 @@ class DemoReviewerError(RuntimeError):
 
 
 class DemoReviewer:
-    def __init__(self, narrator: Any, claim_lookup: Any) -> None:
+    def __init__(self, narrator: Any, admin: Any) -> None:
         self._narrator = narrator
-        self._claim_lookup = claim_lookup
+        self._admin = admin
 
     # ── plumbing ────────────────────────────────────────────────────────────
     @property
     def ready(self) -> bool:
-        return bool(getattr(self._claim_lookup, "ready", False))
-
-    def _db(self):
-        db = getattr(self._claim_lookup, "_firestore", None)
-        if db is None:
-            raise DemoReviewerError("Firestore is not available.")
-        return db
+        return bool(getattr(self._admin, "ready", False))
 
     @staticmethod
     def _now() -> str:
         """ISO string, for display-only fields inside a step."""
         return datetime.now(timezone.utc).isoformat()
-
-    @staticmethod
-    def _server_timestamp():
-        """Sentinel for updated_at.
-
-        The rest of the app writes updated_at with a server timestamp and the
-        employee queue does orderBy("updated_at", "desc"). Writing an ISO string
-        here would put a string next to Timestamps in the same field, and
-        Firestore orders across types by type first, so this claim would sort
-        into its own group and jump out of the queue's ordering.
-        """
-        from firebase_admin import firestore
-
-        return firestore.SERVER_TIMESTAMP
 
     def _actor(self) -> dict[str, Any]:
         return {
@@ -98,12 +78,11 @@ class DemoReviewer:
             "simulated": True,
         }
 
-    def _load(self, case_id: str) -> tuple[Any, dict[str, Any]]:
-        ref = self._db().collection("cases").document(case_id)
-        snapshot = ref.get()
-        if not snapshot.exists:
+    def _load(self, case_id: str) -> dict[str, Any]:
+        row = self._admin.get_case(case_id)
+        if row is None:
             raise DemoReviewerError("Case not found.")
-        return ref, (snapshot.to_dict() or {})
+        return row
 
     # ── enrolment ───────────────────────────────────────────────────────────
     def enroll(self, case_id: str, owner_uid: str) -> dict[str, Any]:
@@ -115,9 +94,9 @@ class DemoReviewer:
         through -- the claim has to be assigned before the first step runs.
         """
         if not self.ready:
-            raise DemoReviewerError("Firebase Admin is not configured.")
+            raise DemoReviewerError("Supabase service credentials are not configured.")
 
-        ref, case = self._load(case_id)
+        case = self._load(case_id)
         if str(case.get("owner_uid") or "") != owner_uid:
             # Same message as a missing case, so this cannot enumerate ids.
             raise DemoReviewerError("Case not found.")
@@ -125,7 +104,8 @@ class DemoReviewer:
         if case.get("demo_review_cursor") is not None:
             return self._status_payload(case_id, case)
 
-        ref.set(
+        self._admin.update_case(
+            case_id,
             {
                 "assigned_agent": {
                     "email": DEMO_REVIEWER_EMAIL,
@@ -136,11 +116,9 @@ class DemoReviewer:
                 "demo_review_cursor": 0,
                 "demo_review_state": {},
                 "review_steps": [],
-                "updated_at": self._server_timestamp(),
             },
-            merge=True,
         )
-        _, refreshed = self._load(case_id)
+        refreshed = self._load(case_id)
         return self._status_payload(case_id, refreshed)
 
     def status(self, case_id: str) -> dict[str, Any]:
@@ -166,9 +144,9 @@ class DemoReviewer:
     def advance(self, case_id: str) -> dict[str, Any]:
         """Run exactly one step of the review and persist it."""
         if not self.ready:
-            raise DemoReviewerError("Firebase Admin is not configured.")
+            raise DemoReviewerError("Supabase service credentials are not configured.")
 
-        ref, case = self._load(case_id)
+        case = self._load(case_id)
 
         cursor = case.get("demo_review_cursor")
         if cursor is None:
@@ -205,7 +183,6 @@ class DemoReviewer:
             "review_steps": steps,
             "demo_review_cursor": cursor + 1,
             "demo_review_state": {**state, **outcome.get("state", {})},
-            "updated_at": self._server_timestamp(),
         }
         updates.update(outcome.get("doc", {}))
 
@@ -217,7 +194,7 @@ class DemoReviewer:
             existing.append(note)
             updates["consumer_notifications"] = existing
 
-        ref.set(updates, merge=True)
+        self._admin.update_case(case_id, updates)
 
         # Every step lands in claim history, not just the final decision.
         # Previously only the release step wrote an event, so the history read
@@ -239,12 +216,11 @@ class DemoReviewer:
 
     def _post_activity(self, case_id: str, kind: str, label: str) -> None:
         try:
-            self._db().collection("case_activity").add(
+            self._admin.add_activity(
                 {
                     "case_id": case_id,
                     "type": kind,
                     "label": label,
-                    "created_at": self._server_timestamp(),
                     **self._actor(),
                 }
             )
@@ -261,21 +237,16 @@ class DemoReviewer:
         if not self.ready:
             raise DemoReviewerError("Firebase Admin is not configured.")
 
-        _, case = self._load(case_id)
-        db = self._db()
+        case = self._load(case_id)
 
         try:
-            events = list(
-                db.collection("case_activity").where("case_id", "==", case_id).stream()
-            )
+            records = self._admin.list_activity(case_id)
         except Exception as exc:  # noqa: BLE001
             raise DemoReviewerError(f"Could not read the message thread: {exc}") from exc
 
         def created_at(event: dict[str, Any]) -> str:
-            raw = event.get("created_at")
-            return str(getattr(raw, "isoformat", lambda: raw)())
+            return str(event.get("created_at") or "")
 
-        records = [e.to_dict() or {} for e in events]
         customer_msgs = [
             r for r in records
             if r.get("actor_role") not in {"employee", "manager", "admin"}
@@ -299,10 +270,7 @@ class DemoReviewer:
                 "message": f"{DEMO_REVIEWER_NAME} answered your question.",
             }
         )
-        self._db().collection("cases").document(case_id).set(
-            {"consumer_notifications": existing, "updated_at": self._server_timestamp()},
-            merge=True,
-        )
+        self._admin.update_case(case_id, {"consumer_notifications": existing})
 
         return {
             "case_id": case_id,

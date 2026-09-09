@@ -129,9 +129,9 @@ def _sample_case_payload() -> dict:
 
 def test_case_api_round_trip_and_queue_order(tmp_path) -> None:
     original_repository = routes.case_repository
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
+    original_verify = routes.supabase_auth.verify_bearer_token
     routes.case_repository = CaseRepository(tmp_path / "claimsight-test.db")
-    routes.firebase_claim_lookup.verify_bearer_token = _employee_token
+    routes.supabase_auth.verify_bearer_token = _employee_token
     try:
         first_payload = _sample_case_payload()
         second_payload = deepcopy(first_payload)
@@ -166,24 +166,24 @@ def test_case_api_round_trip_and_queue_order(tmp_path) -> None:
         assert detail_response.json()["reviewed_regions"][0]["review_note"] == "Bumper replacement likely required."
     finally:
         routes.case_repository = original_repository
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify
 
 
 def test_case_api_rejects_unauthenticated_requests() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: None
+    original_verify = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: None
     try:
         assert client.get("/api/cases").status_code == 401
         assert client.get("/api/queue").status_code == 401
         assert client.get("/api/cases/CLM-10248").status_code == 401
         assert client.post("/api/cases", json=_sample_case_payload()).status_code == 401
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify
 
 
 def test_case_api_rejects_customer_role() -> None:
-    original_verify = routes.firebase_claim_lookup.verify_bearer_token
-    routes.firebase_claim_lookup.verify_bearer_token = lambda authorization: {
+    original_verify = routes.supabase_auth.verify_bearer_token
+    routes.supabase_auth.verify_bearer_token = lambda authorization: {
         "uid": "customer-1",
         "email": "customer@example.com",
         "role": "customer",
@@ -192,4 +192,4 @@ def test_case_api_rejects_customer_role() -> None:
         assert client.get("/api/cases").status_code == 403
         assert client.get("/api/queue").status_code == 403
     finally:
-        routes.firebase_claim_lookup.verify_bearer_token = original_verify
+        routes.supabase_auth.verify_bearer_token = original_verify

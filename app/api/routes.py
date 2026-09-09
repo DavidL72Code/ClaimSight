@@ -38,12 +38,11 @@ from app.services.attachment_storage import (
 from app.services.case_repository import CaseRepository
 from app.services.demo_reviewer import DemoReviewer, DemoReviewerError
 from app.services.evaluation import AssessmentEvaluator
-from app.services.firebase_claims import FirebaseClaimLookup
 from app.services.gemini_client import GeminiClaimNarrator
 from app.services.report_generation import ClaimReportService
 from app.services.segmentation import get_segmentation_service
 from app.services.supabase_auth import SupabaseAuth
-from app.services.supabase_data import SupabaseData, SupabaseDataError
+from app.services.supabase_data import SupabaseAdmin, SupabaseData, SupabaseDataError
 
 router = APIRouter()
 
@@ -51,10 +50,10 @@ segmentation_service = get_segmentation_service()
 report_service = ClaimReportService()
 case_repository = CaseRepository()
 claim_assistant = GeminiClaimNarrator()
-firebase_claim_lookup = FirebaseClaimLookup()
 attachment_storage = SupabaseAttachmentStorage()
 supabase_auth = SupabaseAuth()
 supabase_data = SupabaseData()
+supabase_admin = SupabaseAdmin()
 assessment_evaluator = AssessmentEvaluator(
     narrator=getattr(segmentation_service, "narrator", None) or claim_assistant
 )
@@ -63,7 +62,7 @@ assessment_pipeline = AssessmentPipeline(
 )
 # Demo-only stand-in for the human adjuster; every route using it is gated on
 # DEMO_MODE, so constructing it in production costs nothing.
-demo_reviewer = DemoReviewer(narrator=claim_assistant, claim_lookup=firebase_claim_lookup)
+demo_reviewer = DemoReviewer(narrator=claim_assistant, admin=supabase_admin)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -123,7 +122,7 @@ async def assess_damage(
 ) -> AssessmentResponse:
     _enforce_origin_allowlist(request)
     _enforce_optional_api_token(request)
-    decoded_token = _require_firebase_user(request)
+    decoded_token = _require_user(request)
     _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
 
     # Accept either the multi-image field ("files") or the legacy single field ("file").
@@ -218,12 +217,16 @@ def ask_claim_assistant(request: Request, payload: ClaimAssistantRequest) -> Cla
     _enforce_origin_allowlist(request)
     _enforce_optional_api_token(request)
 
-    decoded_token = _require_firebase_user(request)
+    decoded_token = _require_user(request)
     _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
-    owned_context = firebase_claim_lookup.get_owned_claim_context(
-        uid=str(decoded_token.get("uid") or ""),
-        claim_reference=payload.context.claim_reference,
-    )
+    # Ownership is enforced by RLS: the lookup runs on the caller's own token,
+    # so a claim that is not theirs simply does not come back.
+    try:
+        owned_context = supabase_data.get_owned_claim_context(
+            _bearer_token(request), payload.context.claim_reference
+        )
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not owned_context:
         # Do not reveal whether a claim exists when it is not owned by this user.
         raise HTTPException(status_code=404, detail="Claim not found.")
@@ -377,37 +380,23 @@ async def upload_attachment(
         )
 
     # Access is decided by RLS, not here: the case is fetched with the
-    # caller's own token, so the select policy in supabase/migrations answers
-    # whether they may see it at all. On the Firebase path the Admin SDK
-    # bypassed rules, so the equivalent check had to be hand-written.
-    if decoded_token.get("provider") == "supabase" and supabase_data.ready:
-        try:
-            access = supabase_data.describe_case_access(
-                access_token=_bearer_token(request),
-                case_id=case_id,
-                uid=str(decoded_token.get("uid") or ""),
-                email=str(decoded_token.get("email") or ""),
-                role=str(decoded_token.get("role") or ""),
-            )
-        except SupabaseDataError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-        # Invisible and absent are the same answer on purpose -- replying
-        # differently would reveal whether a claim id exists to someone with
-        # no right to know.
-        if not access["visible"]:
-            raise HTTPException(status_code=404, detail="Case not found.")
-    else:
-        access = firebase_claim_lookup.describe_case_access(
+    # caller's own token, so the select policy answers whether they may see it.
+    try:
+        access = supabase_data.describe_case_access(
+            access_token=_bearer_token(request),
             case_id=case_id,
             uid=str(decoded_token.get("uid") or ""),
             email=str(decoded_token.get("email") or ""),
             role=str(decoded_token.get("role") or ""),
         )
-        if not access["exists"]:
-            raise HTTPException(status_code=404, detail="Case not found.")
-        if not access["allowed"]:
-            raise HTTPException(status_code=403, detail="You do not have access to this case.")
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Invisible and absent are the same answer on purpose -- replying
+    # differently would reveal whether a claim id exists to someone with no
+    # right to know.
+    if not access["visible"]:
+        raise HTTPException(status_code=404, detail="Case not found.")
     # Only the assigned adjuster (or a manager) may file reviewer evidence;
     # storage.rules drew the same line on claim-reviewer-evidence.
     if folder == "reviewer-evidence" and not (
@@ -457,7 +446,7 @@ def demo_enroll(request: Request, payload: DemoReviewRequest) -> DemoReviewRespo
     exist, so this cannot enumerate case ids.
     """
     _demo_guard(request)
-    decoded_token = _require_firebase_user(request)
+    decoded_token = _require_user(request)
     uid = str(decoded_token.get("uid") or "")
     _enforce_rate_limit(request, identity=uid)
 
@@ -637,43 +626,21 @@ def _bearer_token(request: Request) -> str:
 
 
 def _require_user(request: Request) -> dict[str, object]:
-    """Identify the caller, preferring Supabase over Firebase.
+    """Identify the caller from their Supabase access token.
 
-    Both are accepted while the migration is in flight, so a deployment can
-    move without a flag day. Supabase is tried first: once its credentials
-    are present it is the real identity provider, and the Firebase branch is
-    dead code waiting to be deleted.
-
-    The returned shape is uniform -- uid, email, role -- so call sites do not
-    care which provider answered.
+    Returns uid, email and role. The role comes from app_metadata, which only
+    the service key can write -- the same field public.jwt_role() reads in the
+    RLS policies, so the API and the database never disagree about who someone
+    is.
     """
-    authorization = request.headers.get("authorization", "")
-
-    claims = supabase_auth.verify_bearer_token(authorization)
-    if claims:
-        return {**claims, "provider": "supabase"}
-
-    decoded_token = firebase_claim_lookup.verify_bearer_token(authorization)
-    if decoded_token:
-        return {
-            "uid": str(decoded_token.get("uid") or ""),
-            "email": str(decoded_token.get("email") or ""),
-            "role": str(decoded_token.get("role") or ""),
-            "provider": "firebase",
-            "raw": decoded_token,
-        }
-
-    raise HTTPException(status_code=401, detail="Valid authentication is required.")
-
-
-# Kept as an alias so existing call sites read the same; both providers are
-# accepted, so the Firebase-specific name would now be misleading.
-def _require_firebase_user(request: Request) -> dict[str, object]:
-    return _require_user(request)
+    claims = supabase_auth.verify_bearer_token(request.headers.get("authorization", ""))
+    if not claims:
+        raise HTTPException(status_code=401, detail="Valid authentication is required.")
+    return claims
 
 
 def _require_employee(request: Request) -> dict[str, object]:
-    decoded_token = _require_firebase_user(request)
+    decoded_token = _require_user(request)
     if decoded_token.get("role") not in {"employee", "manager", "admin"}:
         raise HTTPException(status_code=403, detail="Employee access is required.")
     return decoded_token
