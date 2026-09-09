@@ -21,6 +21,20 @@ logger = logging.getLogger("claimsight.evaluation")
 
 VERDICTS = ("accept", "needs_review", "reject")
 
+# The judge is asked to score these five dimensions 0-5, and the overall
+# score is computed from them rather than asked for. Left to pick a
+# holistic 0-100 number the model returned 85 on 17 consecutive runs
+# across three different claims -- a grader with no discrimination.
+# Deriving it means the score can only move when an anchored dimension
+# moves ("0 unusable, 3 acceptable, 5 excellent").
+RUBRIC_DIMENSIONS = (
+    "evidence_grounding",
+    "severity_justification",
+    "valuation_support",
+    "internal_consistency",
+    "completeness",
+)
+
 # Penalties applied by the deterministic fallback.
 _FLAG_PENALTY = {"high": 25, "warning": 12, "info": 3}
 _COMPLETENESS_PENALTY = {"missing": 8, "partial": 4, "complete": 0}
@@ -110,12 +124,53 @@ class AssessmentEvaluator:
                     )
                 )
 
-            score = _clamp(int(raw.get("overall_score") or 0), 0, 100)
+            reported = _clamp(int(raw.get("overall_score") or 0), 0, 100)
+
+            # Derive the overall score from the rubric when the judge scored
+            # enough of the named dimensions. Requires at least 4 of 5 so a
+            # partially-filled rubric does not silently rescale.
+            by_dimension = {
+                r.dimension.strip().lower(): r.score
+                for r in rubric
+                if r.dimension.strip().lower() in RUBRIC_DIMENSIONS
+            }
+            if len(by_dimension) >= 4:
+                score = round(
+                    100 * sum(by_dimension.values()) / (5 * len(by_dimension))
+                )
+                if abs(score - reported) >= 15:
+                    logger.info(
+                        "Judge overall_score %s diverges from its own rubric (%s): %s",
+                        reported, score, by_dimension,
+                    )
+            else:
+                logger.info(
+                    "Judge rubric covered only %d of %d dimensions; using its reported score",
+                    len(by_dimension), len(RUBRIC_DIMENSIONS),
+                )
+                score = reported
+
             # A model that returns a score but an unusable verdict still gives us
             # a rankable number; derive the verdict rather than discarding it.
+            #
+            # Where both exist, take the more conservative of the two. The
+            # judge kept saying "accept" while its own rubric implied a much
+            # lower score, which left the queue ranking on one signal and the
+            # adjuster reading the opposite. Never upgrade the model's
+            # verdict: if it saw something bad enough to reject, that stands
+            # even when the rubric looks healthy.
+            # VERDICTS is ordered least-to-most severe, so the conservative
+            # pick is max-by-index, not min.
+            derived_verdict = _verdict_for(score)
+            final_verdict = (
+                max(verdict, derived_verdict, key=VERDICTS.index)
+                if verdict
+                else derived_verdict
+            )
+
             return EvaluationResult(
                 overall_score=score,
-                verdict=verdict or _verdict_for(score),
+                verdict=final_verdict,
                 rubric=rubric,
                 concerns=[str(c)[:300] for c in (raw.get("concerns") or [])][:8],
                 evaluator_model=getattr(self._narrator, "provider_name", "") or "",

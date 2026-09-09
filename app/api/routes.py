@@ -13,6 +13,7 @@ from PIL import Image, UnidentifiedImageError
 from app.core.config import (
     ALLOWED_ORIGINS,
     API_ACCESS_TOKEN,
+    DEMO_MODE,
     ENFORCE_ORIGIN,
     MAX_IMAGE_PIXELS,
     MAX_UPLOAD_BYTES,
@@ -26,8 +27,10 @@ from app.core.config import (
 from app.models.schemas import AssessmentResponse, CaseSavePayload, ClaimContext
 from app.models.schemas import ClaimAssistantRequest, ClaimAssistantResponse
 from app.models.schemas import SecondPassRequest, SecondPassResponse
+from app.models.schemas import DemoReviewRequest, DemoReviewResponse, DemoReplyResponse
 from app.services.assessment_pipeline import AssessmentPipeline
 from app.services.case_repository import CaseRepository
+from app.services.demo_reviewer import DemoReviewer, DemoReviewerError
 from app.services.evaluation import AssessmentEvaluator
 from app.services.firebase_claims import FirebaseClaimLookup
 from app.services.gemini_client import GeminiClaimNarrator
@@ -47,6 +50,9 @@ assessment_evaluator = AssessmentEvaluator(
 assessment_pipeline = AssessmentPipeline(
     segmentation_service, report_service, assessment_evaluator
 )
+# Demo-only stand-in for the human adjuster; every route using it is gated on
+# DEMO_MODE, so constructing it in production costs nothing.
+demo_reviewer = DemoReviewer(narrator=claim_assistant, claim_lookup=firebase_claim_lookup)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -62,6 +68,9 @@ def _health_payload() -> dict[str, object]:
         "status": "ok",
         "segmentation_provider": SEGMENTATION_PROVIDER,
         "active_segmentation_provider": segmentation_service.provider_name,
+        # Lets a client tell a demo deployment from a real one without having
+        # to probe /api/demo/review and interpret a 404.
+        "demo_mode": DEMO_MODE,
     }
 
     if hasattr(segmentation_service, "ready"):
@@ -255,6 +264,102 @@ def second_pass_review(request: Request, payload: SecondPassRequest) -> SecondPa
         model=SECOND_PASS_MODEL,
         fallback_used=False,
     )
+
+
+def _demo_guard(request: Request) -> None:
+    """Shared gate for every demo route.
+
+    404 rather than 403 when DEMO_MODE is off, so a production deployment is
+    indistinguishable from one where these routes were never written.
+    """
+    if not DEMO_MODE:
+        raise HTTPException(status_code=404, detail="Not found.")
+    _enforce_origin_allowlist(request)
+    _enforce_optional_api_token(request)
+    if not demo_reviewer.ready:
+        raise HTTPException(
+            status_code=503,
+            detail="Demo review is unavailable because Firebase Admin is not configured.",
+        )
+
+
+def _demo_error(exc: DemoReviewerError) -> HTTPException:
+    message = str(exc)
+    lowered = message.lower()
+    if "not found" in lowered:
+        return HTTPException(status_code=404, detail=message)
+    return HTTPException(status_code=409, detail=message)
+
+
+@router.post("/api/demo/enroll", response_model=DemoReviewResponse)
+def demo_enroll(request: Request, payload: DemoReviewRequest) -> DemoReviewResponse:
+    """Assign a newly submitted claim to the demo reviewer. Demo only.
+
+    Called by the customer straight after submission. The employee queue filters
+    on assigned_agent.email, so the claim has to be assigned before it is
+    visible in the employee portal -- otherwise there is nothing to step through.
+
+    Owner-callable, and ownership is re-checked in the service before it writes.
+    A claim the caller does not own returns the same 404 as one that does not
+    exist, so this cannot enumerate case ids.
+    """
+    _demo_guard(request)
+    decoded_token = _require_firebase_user(request)
+    uid = str(decoded_token.get("uid") or "")
+    _enforce_rate_limit(request, identity=uid)
+
+    try:
+        return DemoReviewResponse(**demo_reviewer.enroll(case_id=payload.case_id, owner_uid=uid))
+    except DemoReviewerError as exc:
+        raise _demo_error(exc) from exc
+
+
+@router.post("/api/demo/review/step", response_model=DemoReviewResponse)
+def demo_review_step(request: Request, payload: DemoReviewRequest) -> DemoReviewResponse:
+    """Advance the simulated adjuster by exactly one step. Demo only.
+
+    Driven from the employee portal so a viewer can walk the review one click at
+    a time and watch the customer side react to each step. Employee-gated: this
+    is the adjuster's side of the workflow, and it writes employee-only fields.
+    """
+    _demo_guard(request)
+    decoded_token = _require_employee(request)
+    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
+
+    try:
+        return DemoReviewResponse(**demo_reviewer.advance(case_id=payload.case_id))
+    except DemoReviewerError as exc:
+        raise _demo_error(exc) from exc
+
+
+@router.post("/api/demo/review/status", response_model=DemoReviewResponse)
+def demo_review_status(request: Request, payload: DemoReviewRequest) -> DemoReviewResponse:
+    """Where the step-through has got to, for rendering the next-step control."""
+    _demo_guard(request)
+    _require_employee(request)
+
+    try:
+        return DemoReviewResponse(**demo_reviewer.status(case_id=payload.case_id))
+    except DemoReviewerError as exc:
+        raise _demo_error(exc) from exc
+
+
+@router.post("/api/demo/reply", response_model=DemoReplyResponse)
+def demo_reply(request: Request, payload: DemoReviewRequest) -> DemoReplyResponse:
+    """Answer the customer's latest message in character. Demo only.
+
+    Completes the loop the other way: the viewer writes as the customer in one
+    tab, triggers this from the employee tab, and a real reply lands in the
+    thread with a notification.
+    """
+    _demo_guard(request)
+    decoded_token = _require_employee(request)
+    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
+
+    try:
+        return DemoReplyResponse(**demo_reviewer.reply_to_customer(case_id=payload.case_id))
+    except DemoReviewerError as exc:
+        raise _demo_error(exc) from exc
 
 
 def _second_pass_fallback(payload: SecondPassRequest) -> str:

@@ -4,40 +4,126 @@
     {
       "id": "megane-frontal",
       "image": "frontend/src/assets/damage-hero-left.jpg",
-      "claim": { "make": "Renault", "model": "Megane", "year": 2001, "mileage": 145000 },
+      "claim": {
+        "make": "Renault",
+        "model": "Megane",
+        "year": 2001,
+        "mileage": 145000
+      },
       "notes": "Renault Megane Mk1 hit a tree head-on. Bumper detached, hood folded, windshield shattered, door aperture sprung -- structural.",
       "expect": {
         "total_loss": true,
         "min_regions": 3,
-        "severity_in": ["high"],
-        "panels_any": ["hood", "bumper", "windshield"],
+        "severity_in": [
+          "high"
+        ],
+        "panels_any": [
+          "hood",
+          "bumper",
+          "windshield"
+        ],
         "structural_expected": true
       }
     },
     {
       "id": "estate-side",
       "image": "frontend/src/assets/damage-hero-center.jpg",
-      "claim": { "make": "Ford", "model": "Escort", "year": 1999, "mileage": 120000 },
-      "notes": "Side impact: front door skin and fender creased, window taped over. Panel damage only, no visible structural deformation. Repairable in principle, though value is low.",
+      "claim": {
+        "make": "Ford",
+        "model": "Escort",
+        "year": 1999,
+        "mileage": 120000
+      },
+      "notes": "Side impact: front door skin and fender creased, window taped over. Panel damage only, no structural deformation. A competent adjuster writes this off on economics rather than severity: door plus fender work on a 1999 Escort exceeds what the car is worth. Previously left unasserted, which meant the headline verdict on this case was never graded.",
       "expect": {
-        "total_loss": null,
+        "total_loss": true,
         "min_regions": 2,
-        "severity_in": ["low", "moderate", "high"],
-        "panels_any": ["door", "fender", "window", "quarter"],
+        "severity_in": [
+          "low",
+          "moderate",
+          "high"
+        ],
+        "panels_any": [
+          "door",
+          "fender",
+          "window",
+          "quarter"
+        ],
         "structural_expected": false
       }
     },
     {
       "id": "pickup-frontal",
       "image": "frontend/src/assets/damage-hero-right.jpg",
-      "claim": { "make": "Chevrolet", "model": "El Camino", "year": 1985, "mileage": 190000 },
+      "claim": {
+        "make": "Chevrolet",
+        "model": "El Camino",
+        "year": 1985,
+        "mileage": 190000
+      },
       "notes": "Severe frontal collision, front clip destroyed, wheel displaced, glass shattered. Clear total loss on an old vehicle.",
       "expect": {
         "total_loss": true,
         "min_regions": 3,
-        "severity_in": ["high"],
-        "panels_any": ["bumper", "hood", "fender", "headlight", "windshield"],
+        "severity_in": [
+          "high"
+        ],
+        "panels_any": [
+          "bumper",
+          "hood",
+          "fender",
+          "headlight",
+          "windshield"
+        ],
         "structural_expected": true
+      }
+    },
+    {
+      "id": "sedan-front-quarter",
+      "image": "frontend/src/assets/claimsight-damaged-car-hero.png",
+      "claim": {
+        "make": "Volkswagen",
+        "model": "Passat",
+        "year": 2018,
+        "mileage": 46000
+      },
+      "notes": "Late-model silver sedan, front-quarter impact. Front fender creased and the bumper corner scuffed and dented; headlight and glass intact, wheel and suspension undisturbed. Unambiguously a repair on a car of this value. The set had no confirmed not-a-total-loss case, so nothing was testing whether the cost-vs-value rule over-writes-off healthy vehicles.",
+      "expect": {
+        "total_loss": false,
+        "min_regions": 1,
+        "max_regions": 6,
+        "severity_in": [
+          "low",
+          "moderate"
+        ],
+        "panels_any": [
+          "fender",
+          "bumper",
+          "quarter",
+          "door"
+        ],
+        "structural_expected": false
+      }
+    },
+    {
+      "id": "undamaged-audi",
+      "image": "audi.png",
+      "claim": {
+        "make": "Audi",
+        "model": "RS e-tron GT",
+        "year": 2022,
+        "mileage": 12000
+      },
+      "notes": "Manufacturer press photo of an intact car in motion. No damage of any kind. A negative control: the set had none, so nothing tested whether the detector invents damage regions and a repair cost on a clean vehicle. Motion blur and dappled forest light are exactly the conditions that produce false positives.",
+      "expect": {
+        "total_loss": false,
+        "min_regions": 0,
+        "max_regions": 1,
+        "max_cost": 500,
+        "severity_in": [
+          "low"
+        ],
+        "structural_expected": false
       }
     }
   ]

@@ -70,6 +70,36 @@ MAX_ASSESSMENT_RETRIES = max(0, _env_int("MAX_ASSESSMENT_RETRIES", 1))
 # Judging and second-pass review are text-only, so a cheaper model is fine.
 EVALUATOR_MODEL = _env_str("EVALUATOR_MODEL") or CLAIM_ASSISTANT_MODEL
 SECOND_PASS_MODEL = _env_str("SECOND_PASS_MODEL") or CLAIM_ASSISTANT_MODEL
+# Per-node models. Gemini quotas are per-model, so pointing the busy nodes at
+# a high-RPD model and reserving a scarce one for rare, high-value calls
+# spreads load instead of piling every request onto a single limit.
+# Narrative writing is text-only reasoning over already-structured findings.
+SUMMARY_MODEL = _env_str("SUMMARY_MODEL") or CLAIM_ASSISTANT_MODEL
+# Grounded search draws on its own quota; isolating it keeps a search
+# exhaustion from also consuming the detection model's budget.
+GROUNDING_MODEL = _env_str("GROUNDING_MODEL") or GEMINI_MODEL
+# Escalation model for the self-correction retry only. The first detection
+# pass runs on the cheap high-RPD model; a stronger model is spent only when
+# that pass produced something the rules layer flagged, which is rare.
+RETRY_DETECTION_MODEL = _env_str("RETRY_DETECTION_MODEL") or GEMINI_MODEL
+
+# ── demo reviewer ────────────────────────────────────────────────────────────
+# A public demo has no staff on shift, so nothing ever moves a claim past
+# "submitted" and every interesting screen stays empty. With DEMO_MODE on, the
+# customer can trigger a model-driven review that performs the adjuster's
+# workflow server-side and records each step, so the employee portal shows the
+# same process a person would have produced.
+#
+# Off by default and guarded at the route. Point a demo deployment at its OWN
+# Firebase project: the reviewer writes employee-only fields, and a manager
+# claim can read every case in a project.
+DEMO_MODE = _env_bool("DEMO_MODE", False)
+DEMO_REVIEWER_EMAIL = _env_str("DEMO_REVIEWER_EMAIL", "demo.reviewer@claimsight.com")
+DEMO_REVIEWER_NAME = _env_str("DEMO_REVIEWER_NAME", "Demo Reviewer")
+# Seconds of dwell recorded against each step. Real review is not instant, and
+# a visible pending -> reviewed transition is most of what the demo is showing.
+DEMO_REVIEW_STEP_SECONDS = max(0, _env_int("DEMO_REVIEW_STEP_SECONDS", 2))
+DEMO_REVIEWER_MODEL = _env_str("DEMO_REVIEWER_MODEL") or SECOND_PASS_MODEL
 
 SEGMENTATION_PROVIDER = _env_str("SEGMENTATION_PROVIDER", "gemini").lower()
 # Optional MobileSAM (ONNX, CPU) mask refiner layered on Gemini's boxes.

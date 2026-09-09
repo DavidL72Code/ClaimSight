@@ -16,6 +16,54 @@ from app.services.gemini_client import GeminiClaimNarrator
 _YEAR_PREFIX_PATTERN = re.compile(r"^\d{4}\s+")
 
 
+# A low-severity ("cosmetic") finding below this confidence is dropped
+# rather than priced. Chosen from observed behaviour, not taste: across the
+# fixture set every genuine finding came back at 0.92-0.99, while the two
+# fabricated findings on an undamaged press photo came back at 0.75 and
+# 0.78. The gap is wide and consistent, so the floor sits inside it.
+#
+# Only cosmetic findings are filtered. High/moderate severity findings are
+# never dropped on confidence: a hedged call about structural damage is
+# exactly the kind of thing an adjuster must still see.
+COSMETIC_CONFIDENCE_FLOOR = 0.85
+
+# No single bolt-on panel should cost this share of the whole vehicle. Taken
+# from the audit: a Megane hood came back at 50% of ACV and an Escort door at
+# 70%, which no adjuster would sign. Those numbers come from pricing generic
+# body-shop labour without reference to what the car is worth.
+#
+# Structural work is deliberately exempt — a bent frame rail genuinely can
+# cost most of a cheap car's value, and that is precisely the signal that
+# should drive a total loss rather than be capped away.
+PANEL_COST_CAP_RATIO = 0.35
+
+STRUCTURAL_PANEL_TERMS = (
+    "frame", "rail", "pillar", "unibody", "chassis", "radiator support",
+    "subframe", "apron", "firewall", "structural", "crossmember", "front end",
+)
+
+
+# Labels that lump several parts into one line. An estimate built from these
+# cannot be ordered against, so they are reported rather than accepted
+# silently -- the audit found a single "front end - $6,000" region standing in
+# for bumper, hood, both fenders, grille, rad support, frame and suspension.
+AGGREGATE_PANEL_TERMS = (
+    "front end", "rear end", "front clip", "rear clip", "whole vehicle",
+    "entire vehicle", "body", "side panel", "front section", "rear section",
+    "multiple panels", "various",
+)
+
+
+def _is_aggregate(region) -> bool:
+    panel = (region.panel or "").strip().lower()
+    return any(panel == term or panel.startswith(term) for term in AGGREGATE_PANEL_TERMS)
+
+
+def _is_structural(region) -> bool:
+    text = f"{region.panel} {region.damage_type}".lower()
+    return any(term in text for term in STRUCTURAL_PANEL_TERMS)
+
+
 class ClaimReportService:
     def __init__(self) -> None:
         self._narrator = GeminiClaimNarrator()
@@ -29,9 +77,47 @@ class ClaimReportService:
         claim_context: ClaimContext | None = None,
     ) -> AssessmentResponse:
         claim_context = claim_context or ClaimContext()
+
+        # Drop unconvincing cosmetic findings before anything is priced.
+        discarded_cosmetic = [
+            region for region in regions
+            if region.severity == "low" and (region.confidence or 0) < COSMETIC_CONFIDENCE_FLOOR
+        ]
+        if discarded_cosmetic:
+            regions = [region for region in regions if region not in discarded_cosmetic]
+
+        # Cap implausible per-panel prices against the vehicle's own value.
+        # Done before totalling so the total-loss ratio is computed from
+        # defensible numbers rather than inflated ones.
+        capped_panels: list[tuple[str, int, int]] = []
+        uncapped_total = sum(region.estimated_repair_cost_usd for region in regions)
+        declared_value = max((region.vehicle_value_usd for region in regions), default=0)
+        if declared_value > 0:
+            cap = int(PANEL_COST_CAP_RATIO * declared_value)
+            for region in regions:
+                if _is_structural(region):
+                    continue
+                if region.estimated_repair_cost_usd > cap:
+                    capped_panels.append(
+                        (region.panel, region.estimated_repair_cost_usd, cap)
+                    )
+                    region.estimated_repair_cost_usd = cap
+
         total_cost = sum(region.estimated_repair_cost_usd for region in regions)
         high_count = sum(region.severity == "high" for region in regions)
-        overall_severity = "high" if high_count else "moderate" if total_cost >= 1000 else "low"
+        moderate_count = sum(region.severity == "moderate" for region in regions)
+
+        # Severity follows the parts, not the bill. The old rule was
+        # `"moderate" if total_cost >= 1000` — so two findings the detector
+        # itself called "low" became a moderate-severity claim purely because
+        # they summed past $1,000, which is trivially crossed on any modern
+        # vehicle.
+        if high_count:
+            overall_severity = "high"
+        elif moderate_count:
+            overall_severity = "moderate"
+        else:
+            overall_severity = "low"
 
         # Vehicle value comes from the detector (same across a vehicle's regions).
         vehicle_value = max((region.vehicle_value_usd for region in regions), default=0)
@@ -71,13 +157,31 @@ class ClaimReportService:
         )
 
         # Total-loss when EITHER the model flags it OR repairs exceed ~75% of ACV.
-        # When value is unknown (classical fallback), fall back to a flat threshold.
+        #
+        # With no valuation the ratio is not computable, and the flat $5,000
+        # threshold that used to stand in for it is not a decision — it is a
+        # guess that happens to be right on expensive cars and wrong on cheap
+        # ones. A $2,000 car with $4,000 of damage is a write-off, and that
+        # rule called it a repair. So when value is unknown the ratio abstains
+        # and the claim is escalated instead of being settled on a number
+        # nobody can defend.
         total_loss_ratio = 0.75
-        if adjusted_vehicle_value > 0:
-            ratio_total_loss = total_cost >= total_loss_ratio * adjusted_vehicle_value
-        else:
-            ratio_total_loss = total_cost >= 5000
-        is_total_loss = ai_total_loss or ratio_total_loss
+        value_known = adjusted_vehicle_value > 0
+        ratio_total_loss = (
+            total_cost >= total_loss_ratio * adjusted_vehicle_value if value_known else False
+        )
+        total_loss_undecidable = bool(regions) and not value_known
+
+        # The cap is a ceiling, not a real quote. If the write-off decision
+        # flips only because prices were capped, the honest answer is that the
+        # decision is sensitive to pricing — so keep the write-off (never deny
+        # one on the strength of a ceiling) and put it in front of a human.
+        ratio_uncapped = (
+            uncapped_total >= total_loss_ratio * adjusted_vehicle_value if value_known else False
+        )
+        pricing_sensitive = value_known and ratio_uncapped != ratio_total_loss
+
+        is_total_loss = ai_total_loss or ratio_total_loss or ratio_uncapped
         repairability = "review for total loss" if is_total_loss else "repair"
         assessment_flags = self._build_assessment_flags(
             regions=regions,
@@ -90,19 +194,54 @@ class ClaimReportService:
             grounding_status=grounding_status,
             ai_total_loss=ai_total_loss,
             ratio_total_loss=ratio_total_loss,
+            discarded_cosmetic=discarded_cosmetic,
+            total_loss_undecidable=total_loss_undecidable,
+            capped_panels=capped_panels,
+            pricing_sensitive=pricing_sensitive,
+            aggregate_regions=[r for r in regions if _is_aggregate(r)],
         )
         completeness_checks = self._build_completeness_checks(
             image_count=len(image_paths),
             claim_context=claim_context,
         )
 
-        if claim_context.pre_existing_damage and not is_total_loss:
+        # No damage found is a real outcome and needs to route somewhere other
+        # than "fast-track repair estimate", which is what a zero-region
+        # assessment used to produce.
+        if not regions:
+            recommended_action = "No damage detected — confirm the correct photos were submitted"
+        elif total_loss_undecidable:
+            recommended_action = "Escalate to adjuster: set vehicle value before deciding repair vs total loss"
+        elif pricing_sensitive:
+            recommended_action = "Escalate to adjuster: confirm panel pricing before settling"
+        elif claim_context.pre_existing_damage and not is_total_loss:
             recommended_action = "Route to adjuster to separate prior damage from this loss"
+        elif is_total_loss:
+            # "Escalate to adjuster for detailed review" was the old catch-all
+            # here, which told the adjuster nothing on the most consequential
+            # outcome the system produces. State the call and its basis.
+            recommended_action = (
+                f"Total loss — settle at vehicle value ${adjusted_vehicle_value:,} "
+                f"(repair ${total_cost:,} exceeds value); confirm ACV and salvage"
+                if adjusted_vehicle_value
+                else f"Total loss — repair ${total_cost:,} is uneconomic; confirm ACV before settling"
+            )
+        elif any(_is_structural(r) for r in regions):
+            structural = ", ".join(
+                sorted({str(getattr(r, "panel", "") or "").strip()
+                        for r in regions if _is_structural(r)} - {""})
+            )
+            recommended_action = (
+                f"Authorise teardown inspection before repair — structural damage to {structural}"
+                if structural
+                else "Authorise teardown inspection before repair — structural damage detected"
+            )
+        elif overall_severity in {"low", "moderate"}:
+            recommended_action = f"Send to fast-track repair estimate — approve ${total_cost:,} repair"
         else:
             recommended_action = (
-                "Send to fast-track repair estimate"
-                if overall_severity in {"low", "moderate"} and not is_total_loss
-                else "Escalate to adjuster for detailed review"
+                f"Adjuster review before authorising — {len(regions)} damaged area(s), "
+                f"${total_cost:,} repair with high-severity findings"
             )
 
         fallback_summary = self._build_summary(
@@ -206,8 +345,83 @@ class ClaimReportService:
         grounding_status: str,
         ai_total_loss: bool,
         ratio_total_loss: bool,
+        discarded_cosmetic: list[DamageRegion] | None = None,
+        total_loss_undecidable: bool = False,
+        capped_panels: list[tuple[str, int, int]] | None = None,
+        pricing_sensitive: bool = False,
+        aggregate_regions: list[DamageRegion] | None = None,
     ) -> list[AssessmentFlag]:
         flags: list[AssessmentFlag] = []
+
+        # A dropped finding must never be silent — the adjuster should be able
+        # to see that something was proposed and rejected, and on what basis.
+        for region in discarded_cosmetic or []:
+            flags.append(AssessmentFlag(
+                code="low_confidence_cosmetic_discarded",
+                level="info",
+                title="Unconvincing cosmetic finding dropped",
+                detail=(
+                    f"{region.panel or 'A panel'} was reported as {region.damage_type or 'cosmetic damage'} "
+                    f"at {region.confidence:.2f} confidence, below the {COSMETIC_CONFIDENCE_FLOOR:.2f} "
+                    "floor for cosmetic findings, so it was not priced."
+                ),
+            ))
+
+        for panel, original, cap in capped_panels or []:
+            flags.append(AssessmentFlag(
+                code="panel_cost_capped",
+                level="warning",
+                title="Panel estimate capped against vehicle value",
+                detail=(
+                    f"{panel or 'A panel'} was estimated at ${original:,}, more than "
+                    f"{PANEL_COST_CAP_RATIO:.0%} of the vehicle's ${cap / PANEL_COST_CAP_RATIO:,.0f} "
+                    f"value; reduced to ${cap:,} for the total. Confirm against a parts quote."
+                ),
+            ))
+
+        for region in aggregate_regions or []:
+            flags.append(AssessmentFlag(
+                code="aggregate_region_not_itemised",
+                level="warning",
+                title="Estimate line covers several parts at once",
+                detail=(
+                    f"\"{region.panel}\" was priced as a single ${region.estimated_repair_cost_usd:,} "
+                    "line rather than itemised parts. An adjuster cannot order against this — "
+                    "request a per-panel breakdown before settling."
+                ),
+            ))
+
+        if pricing_sensitive:
+            flags.append(AssessmentFlag(
+                code="total_loss_sensitive_to_pricing",
+                level="high",
+                title="Write-off decision turns on capped pricing",
+                detail=(
+                    "Repair cost sits either side of the total-loss threshold depending on whether "
+                    "the capped or the original panel estimates are used. Treated as a total loss "
+                    "pending a real parts quote."
+                ),
+            ))
+
+        if total_loss_undecidable:
+            flags.append(AssessmentFlag(
+                code="total_loss_undecidable_without_value",
+                level="high",
+                title="Total loss cannot be decided without a valuation",
+                detail=(
+                    "No market value could be established, so repair cost could not be weighed "
+                    "against the vehicle's worth. A human must set the value before this claim "
+                    "is settled either way."
+                ),
+            ))
+
+        if not regions:
+            flags.append(AssessmentFlag(
+                code="no_damage_detected",
+                level="info",
+                title="No damage detected",
+                detail="No visible damage was found. Confirm the submitted photos show the damaged vehicle.",
+            ))
         low_confidence_regions = [region for region in regions if region.confidence < 0.65]
         if low_confidence_regions:
             weakest_region = min(low_confidence_regions, key=lambda region: region.confidence)

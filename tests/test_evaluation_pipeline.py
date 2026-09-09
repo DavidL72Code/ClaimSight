@@ -345,8 +345,20 @@ def _r(panel="hood", severity="high", cost=500, conf=0.97, value=10000, year=0):
 
 
 def test_flags_thin_total_loss_margin() -> None:
-    # repair 2700 vs value 2746 -- the real Megane case, a 1.7% margin
-    codes, _ = _build([_r(cost=2700, value=2746)], ClaimContext())
+    """Repair lands within a few percent of value, so the verdict is a coin flip.
+
+    Spread across three panels on purpose: a single panel carrying the whole
+    2700 would exceed PANEL_COST_CAP_RATIO of the vehicle value and be capped
+    first, which is a different (and correctly reported) finding.
+    """
+    regions = [
+        _r(panel="front bumper", cost=900, value=2746),
+        _r(panel="hood", cost=900, value=2746),
+        _r(panel="front fender", cost=900, value=2746),
+    ]
+    codes, out = _build(regions, ClaimContext())
+    assert "panel_cost_capped" not in codes, "no single panel should trip the cap here"
+    assert out.estimated_total_cost_usd == 2700
     assert "total_loss_margin_thin" in codes
 
 

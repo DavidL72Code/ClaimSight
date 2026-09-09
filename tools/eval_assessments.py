@@ -53,6 +53,15 @@ def score_run(case: dict, assessment) -> dict:
 
     checks["min_regions"] = len(regions) >= exp.get("min_regions", 1)
 
+    # Upper bounds catch the opposite failure to min_regions: damage
+    # invented on a vehicle that does not have it. Without these a
+    # negative control cannot fail.
+    if exp.get("max_regions") is not None:
+        checks["max_regions"] = len(regions) <= exp["max_regions"]
+
+    if exp.get("max_cost") is not None:
+        checks["max_cost"] = d.get("estimated_total_cost_usd", 0) <= exp["max_cost"]
+
     if exp.get("severity_in"):
         checks["severity"] = d.get("overall_severity") in exp["severity_in"]
 
@@ -72,6 +81,15 @@ def score_run(case: dict, assessment) -> dict:
     # A run where the vision model or the judge silently fell back is not a
     # measurement of this variant -- it is a measurement of the rate limiter.
     degraded = bool(meta.get("fallback_used")) or bool(ev.get("fallback_used", True))
+
+    # The detector falling back to the classical path means no AI assessment
+    # happened at all. That has to register as a failed check: a previous run
+    # recorded detector_fallback=True with the judge scoring 14/100 and still
+    # reported 5/5 passed, so the aggregate could not see a total outage.
+    # Judge fallback is deliberately NOT included here -- it is tracked
+    # separately in judge_fallback, and folding it in would fail every run
+    # whenever the evaluator is switched off.
+    checks["detector_live"] = not bool(meta.get("fallback_used"))
     return {
         "checks": checks,
         "degraded": degraded,

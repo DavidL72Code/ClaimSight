@@ -83,6 +83,42 @@ class SecondPassResponse(BaseModel):
     fallback_used: bool = False
 
 
+class DemoReviewRequest(BaseModel):
+    case_id: str = Field(min_length=1, max_length=120)
+
+
+class DemoReviewStep(BaseModel):
+    seq: int = 0
+    title: str = ""
+    detail: str = ""
+    at: str = ""
+    actor_name: str = ""
+    actor_email: str = ""
+    actor_role: str = ""
+    # Always true for this path: the record itself never claims a person did it.
+    simulated: bool = True
+
+
+class DemoReviewResponse(BaseModel):
+    case_id: str
+    # Where the viewer-driven step-through has got to.
+    cursor: int = 0
+    total_steps: int = 0
+    done: bool = False
+    next_step_title: str = ""
+    # The step just executed, when this response came from advancing one.
+    step: Optional[DemoReviewStep] = None
+    steps: list[DemoReviewStep] = Field(default_factory=list)
+    simulated: bool = True
+
+
+class DemoReplyResponse(BaseModel):
+    case_id: str
+    customer_question: str = ""
+    reply: str = ""
+    simulated: bool = True
+
+
 class ReviewPayload(BaseModel):
     claim_reference: str = ""
     reviewer_name: str = ""

@@ -110,19 +110,26 @@ def test_build_assessment_does_not_duplicate_year_in_vehicle_label() -> None:
 
 def test_build_assessment_emits_flags_and_completeness_guidance() -> None:
     service = ClaimReportService()
+    # Spread over three panels: one 9500 line on a 12000 car exceeds
+    # PANEL_COST_CAP_RATIO and would be capped before the ratio is computed,
+    # which is a different finding. Three 3200 lines clear the cap and still
+    # put repairs at 80% of value.
     regions = [
         DamageRegion(
-            part_id="P1",
-            panel="rear quarter panel",
+            part_id=f"P{i}",
+            panel=panel,
             damage_type="crumple",
             severity="high",
             confidence=0.42,
             bounding_box=BoundingBox(x=10, y=20, width=120, height=80),
-            estimated_repair_cost_usd=9500,
+            estimated_repair_cost_usd=3200,
             source="mock",
             vehicle_value_usd=12000,
             vehicle_label="Honda Civic",
             vehicle_total_loss=True,
+        )
+        for i, panel in enumerate(
+            ("rear quarter panel", "rear door", "rear bumper"), start=1
         )
     ]
 
@@ -142,6 +149,7 @@ def test_build_assessment_emits_flags_and_completeness_guidance() -> None:
 
     assert "low_visual_confidence" in flag_codes
     assert "limited_photo_set" in flag_codes
+    assert "panel_cost_capped" not in flag_codes
     assert "repair_ratio_exceeds_threshold" in flag_codes
     assert "ai_total_loss_signal" in flag_codes
     assert "photo_coverage" in check_codes

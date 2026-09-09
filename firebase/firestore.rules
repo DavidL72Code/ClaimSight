@@ -81,22 +81,69 @@ service cloud.firestore {
           "supporting_documents",
           "consumer_decision",
           "appeal",
-          "updated_at"
+          "updated_at",
+          // set when the customer sends a message, so the adjuster's
+          // notification centre can show an unread indicator
+          "last_customer_message_at",
+          // the customer's own read marker for the message thread, kept
+          // on the case doc so read state follows the account across
+          // devices. The customer cannot touch the adjuster's marker
+          // (employee_thread_seen_at) or the adjuster's message stamp,
+          // because this hasOnly list does not include them.
+          "customer_thread_seen_at"
         ])
         && validCustomerDecision()
         && validCustomerAppeal();
+    }
+
+    // The assigned adjuster used to be allowed to change any field except
+    // assigned_agent and owner_uid. That let an adjuster overwrite things
+    // that belong to the customer: consumer_decision (spoofing an
+    // acceptance), appeal, supporting_documents, the customer's read
+    // marker, and the customer's own message stamp. The allowlist below
+    // is every field the employee pages actually write — enumerated from
+    // employee-dashboard.js, employee-messages.js and adjustment.js — so
+    // the boundary is enforced rather than trusted.
+    function validEmployeeUpdate() {
+      return isAssignedEmployee()
+        && request.resource.data.assigned_agent == resource.data.assigned_agent
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          // triage and workflow state
+          "status",
+          "status_label",
+          "report_ready",
+          "updated_at",
+          // evidence requests back to the customer
+          "requested_evidence",
+          "requested_evidence_types",
+          "reviewer_request_note",
+          "evidence_requested_at",
+          "evidence_due_at",
+          "consumer_notifications",
+          // the adjuster's review and estimate work
+          "review",
+          "reviewed_total_cost_usd",
+          "estimate_line_items",
+          "estimate_versions",
+          "final_action",
+          "reviewer_evidence",
+          "ai_reasoning",
+          "customer_statement",
+          "claim_context",
+          "vehicle_type",
+          // the adjuster's own messaging fields
+          "last_employee_message_at",
+          "employee_thread_seen_at"
+        ]);
     }
 
     match /cases/{caseId} {
       allow create: if validCustomerCreate() || isManager();
       allow read: if ownsCase() || isAssignedEmployee() || isManager();
       allow update: if validCustomerUpdate()
-        || isManager()
-        || (
-          isAssignedEmployee()
-          && request.resource.data.assigned_agent == resource.data.assigned_agent
-          && request.resource.data.owner_uid == resource.data.owner_uid
-        );
+        || validEmployeeUpdate()
+        || isManager();
       allow delete: if isManager();
     }
 

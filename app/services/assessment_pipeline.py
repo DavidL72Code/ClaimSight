@@ -23,7 +23,11 @@ from __future__ import annotations
 import copy
 import logging
 
-from app.core.config import ENABLE_ASSESSMENT_RETRY, MAX_ASSESSMENT_RETRIES
+from app.core.config import (
+    ENABLE_ASSESSMENT_RETRY,
+    MAX_ASSESSMENT_RETRIES,
+    RETRY_DETECTION_MODEL,
+)
 from app.models.schemas import AssessmentResponse, ClaimContext, RetryAttempt
 
 logger = logging.getLogger("claimsight.pipeline")
@@ -236,8 +240,15 @@ class AssessmentPipeline:
                 narrator.reground_vehicle_value(image_paths, regions, claim_context)
                 new_regions = regions
             else:
+                # Escalate: the first pass runs on the cheap high-RPD model,
+                # and a scarcer, stronger model is spent only here -- on the
+                # rare occasion that pass produced something the rules flagged.
                 new_regions = narrator.detect_regions(
-                    image_paths, filenames, claim_context, corrective_hint=hint
+                    image_paths,
+                    filenames,
+                    claim_context,
+                    corrective_hint=hint,
+                    model=RETRY_DETECTION_MODEL,
                 )
                 if not new_regions:
                     raise ValueError("retry returned no regions")
