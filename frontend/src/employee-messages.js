@@ -64,9 +64,6 @@
     return;
   }
 
-  const storage = typeof window.firebase.storage === "function"
-    ? window.firebase.storage(app)
-    : null;
 
   // ── attachments ────────────────────────────────────────────────
   const renderAttachmentPreview = () => {

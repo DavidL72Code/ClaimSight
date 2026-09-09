@@ -49,14 +49,18 @@ for (const file of [
 const strictEnv =
   process.env.REQUIRE_ENV === "1" ||
   (process.env.VERCEL === "1" && process.env.REQUIRE_ENV !== "0");
+// Only what the app actually reads at runtime. Firebase here does Auth
+// (apiKey + authDomain) and Firestore (projectId) and nothing else:
+// attachments moved to Supabase behind /api/attachments, so storageBucket is
+// unused; there is no Cloud Messaging, so messagingSenderId is unused; and
+// there is no Analytics, so appId is unused. They stay in the emitted config
+// below as optional pass-throughs, but a missing one no longer fails a build
+// that would have worked.
 const requiredEnv = [
   "VITE_API_BASE_URL",
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
   "VITE_FIREBASE_PROJECT_ID",
-  "VITE_FIREBASE_STORAGE_BUCKET",
-  "VITE_FIREBASE_MESSAGING_SENDER_ID",
-  "VITE_FIREBASE_APP_ID",
 ];
 
 if (strictEnv) {

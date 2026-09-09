@@ -19,9 +19,6 @@ const firebaseAuth = firebaseApp && typeof window.firebase.auth === "function"
   ? window.firebase.auth(firebaseApp)
   : null;
 const casesCollection = firestore ? firestore.collection("cases") : null;
-const firebaseStorage = firebaseApp && typeof window.firebase.storage === "function"
-  ? window.firebase.storage(firebaseApp)
-  : null;
 const consumerClaimIdsStorageKey = "claimsight.consumer-claim-ids";
 const consumerCurrentClaimStorageKey = "claimsight.consumer-current-claim";
 const consumerDraftStorageKey = "claimsight.consumer-draft";
@@ -382,7 +379,10 @@ const collectSupportingDocuments = async (claimReference) => {
   }
 
   const uploadedAt = new Date().toISOString();
-  if (!firebaseStorage) {
+  // Attachments live in Supabase behind /api/attachments now. When that
+  // isn't configured, record the file metadata without a download URL
+  // rather than failing the whole claim submission.
+  if (!(await window.attachmentsEnabled())) {
     return files.map((file) => ({
       name: file.name,
       size: file.size,

@@ -864,9 +864,6 @@ if (firebaseEnabled) {
   const db = window.firebase.firestore(app);
   const auth = firebaseAuthAvailable ? window.firebase.auth(app) : null;
   const casesCollection = db.collection("cases");
-  const storage = typeof window.firebase.storage === "function"
-    ? window.firebase.storage(app)
-    : null;
 
   const elements = {
     dashboardClaims: document.getElementById("consumer-dashboard-claims"),
@@ -1418,7 +1415,7 @@ if (firebaseEnabled) {
     const files = Array.from(elements.appealFiles?.files || []);
     if (!files.length) return [];
     const uploadedAt = new Date().toISOString();
-    if (!storage) {
+    if (!(await window.attachmentsEnabled())) {
       return files.map((file) => ({
         name: file.name,
         size: file.size,
@@ -1452,7 +1449,7 @@ if (firebaseEnabled) {
       return [];
     }
     const uploadedAt = new Date().toISOString();
-    if (!storage) {
+    if (!(await window.attachmentsEnabled())) {
       return files.map((file) => ({
         name: file.name,
         size: file.size,

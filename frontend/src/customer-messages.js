@@ -60,9 +60,6 @@
     return;
   }
 
-  const storage = typeof window.firebase.storage === "function"
-    ? window.firebase.storage(app)
-    : null;
 
   let claims = [];
   let unsubMessages = null;
