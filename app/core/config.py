@@ -148,5 +148,12 @@ ENFORCE_ORIGIN = _env_bool("ENFORCE_ORIGIN", False)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
 SUPABASE_ATTACHMENT_BUCKET = _env_str("SUPABASE_ATTACHMENT_BUCKET", "claim-attachments")
+# Sent as the apikey header on PostgREST calls. Public by design -- RLS,
+# not this key, decides what a request may see.
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+# Only needed on projects still using the legacy symmetric JWT secret.
+# Newer projects sign with rotating asymmetric keys, which are verified
+# against the JWKS endpoint instead and need no secret here.
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
 # Signed download URLs expire; the frontend re-requests one when a link is opened.
 ATTACHMENT_URL_TTL_SECONDS = _env_int("ATTACHMENT_URL_TTL_SECONDS", 60 * 60 * 24 * 7)

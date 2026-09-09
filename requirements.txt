@@ -7,6 +7,9 @@ python-multipart==0.0.27
 pydantic==2.11.7
 google-genai==1.30.0
 firebase-admin==6.8.0
+# Verifies Supabase access tokens. Currently arrives via firebase-admin as
+# well, but this is a direct dependency now and must outlive it.
+PyJWT==2.13.0
 pillow==11.3.0
 numpy==2.2.6
 requests==2.33.0

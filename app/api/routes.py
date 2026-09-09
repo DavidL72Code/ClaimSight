@@ -42,6 +42,8 @@ from app.services.firebase_claims import FirebaseClaimLookup
 from app.services.gemini_client import GeminiClaimNarrator
 from app.services.report_generation import ClaimReportService
 from app.services.segmentation import get_segmentation_service
+from app.services.supabase_auth import SupabaseAuth
+from app.services.supabase_data import SupabaseData, SupabaseDataError
 
 router = APIRouter()
 
@@ -51,6 +53,8 @@ case_repository = CaseRepository()
 claim_assistant = GeminiClaimNarrator()
 firebase_claim_lookup = FirebaseClaimLookup()
 attachment_storage = SupabaseAttachmentStorage()
+supabase_auth = SupabaseAuth()
+supabase_data = SupabaseData()
 assessment_evaluator = AssessmentEvaluator(
     narrator=getattr(segmentation_service, "narrator", None) or claim_assistant
 )
@@ -360,7 +364,7 @@ async def upload_attachment(
     instead, which means the ownership check that storage.rules used to do
     has to happen here -- see describe_case_access, which ports it.
     """
-    decoded_token = _require_firebase_user(request)
+    decoded_token = _require_user(request)
     _enforce_rate_limit(request, str(decoded_token.get("uid") or ""))
 
     if folder not in ATTACHMENT_FOLDERS:
@@ -372,16 +376,38 @@ async def upload_attachment(
             detail="Attachment storage is not configured on this deployment.",
         )
 
-    access = firebase_claim_lookup.describe_case_access(
-        case_id=case_id,
-        uid=str(decoded_token.get("uid") or ""),
-        email=str(decoded_token.get("email") or ""),
-        role=str(decoded_token.get("role") or ""),
-    )
-    if not access["exists"]:
-        raise HTTPException(status_code=404, detail="Case not found.")
-    if not access["allowed"]:
-        raise HTTPException(status_code=403, detail="You do not have access to this case.")
+    # Access is decided by RLS, not here: the case is fetched with the
+    # caller's own token, so the select policy in supabase/migrations answers
+    # whether they may see it at all. On the Firebase path the Admin SDK
+    # bypassed rules, so the equivalent check had to be hand-written.
+    if decoded_token.get("provider") == "supabase" and supabase_data.ready:
+        try:
+            access = supabase_data.describe_case_access(
+                access_token=_bearer_token(request),
+                case_id=case_id,
+                uid=str(decoded_token.get("uid") or ""),
+                email=str(decoded_token.get("email") or ""),
+                role=str(decoded_token.get("role") or ""),
+            )
+        except SupabaseDataError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        # Invisible and absent are the same answer on purpose -- replying
+        # differently would reveal whether a claim id exists to someone with
+        # no right to know.
+        if not access["visible"]:
+            raise HTTPException(status_code=404, detail="Case not found.")
+    else:
+        access = firebase_claim_lookup.describe_case_access(
+            case_id=case_id,
+            uid=str(decoded_token.get("uid") or ""),
+            email=str(decoded_token.get("email") or ""),
+            role=str(decoded_token.get("role") or ""),
+        )
+        if not access["exists"]:
+            raise HTTPException(status_code=404, detail="Case not found.")
+        if not access["allowed"]:
+            raise HTTPException(status_code=403, detail="You do not have access to this case.")
     # Only the assigned adjuster (or a manager) may file reviewer evidence;
     # storage.rules drew the same line on claim-reviewer-evidence.
     if folder == "reviewer-evidence" and not (
@@ -605,13 +631,45 @@ def _enforce_optional_api_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing API access token.")
 
 
+def _bearer_token(request: Request) -> str:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    return token if scheme.lower() == "bearer" else ""
+
+
+def _require_user(request: Request) -> dict[str, object]:
+    """Identify the caller, preferring Supabase over Firebase.
+
+    Both are accepted while the migration is in flight, so a deployment can
+    move without a flag day. Supabase is tried first: once its credentials
+    are present it is the real identity provider, and the Firebase branch is
+    dead code waiting to be deleted.
+
+    The returned shape is uniform -- uid, email, role -- so call sites do not
+    care which provider answered.
+    """
+    authorization = request.headers.get("authorization", "")
+
+    claims = supabase_auth.verify_bearer_token(authorization)
+    if claims:
+        return {**claims, "provider": "supabase"}
+
+    decoded_token = firebase_claim_lookup.verify_bearer_token(authorization)
+    if decoded_token:
+        return {
+            "uid": str(decoded_token.get("uid") or ""),
+            "email": str(decoded_token.get("email") or ""),
+            "role": str(decoded_token.get("role") or ""),
+            "provider": "firebase",
+            "raw": decoded_token,
+        }
+
+    raise HTTPException(status_code=401, detail="Valid authentication is required.")
+
+
+# Kept as an alias so existing call sites read the same; both providers are
+# accepted, so the Firebase-specific name would now be misleading.
 def _require_firebase_user(request: Request) -> dict[str, object]:
-    decoded_token = firebase_claim_lookup.verify_bearer_token(
-        request.headers.get("authorization", "")
-    )
-    if not decoded_token:
-        raise HTTPException(status_code=401, detail="Valid Firebase authentication is required.")
-    return decoded_token
+    return _require_user(request)
 
 
 def _require_employee(request: Request) -> dict[str, object]:
