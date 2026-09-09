@@ -1,24 +1,11 @@
 const apiBaseUrl = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
-const firebaseConfig = window.FIREBASE_CONFIG || {};
+
 const portalMode = document.body.dataset.portal || "employee";
 const consumerMode = portalMode === "consumer";
 const maxClientUploadBytes = 8 * 1024 * 1024;
 const maxImages = 8;
 const allowedClientMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const firebaseEnabled = Boolean(
-  window.firebase
-  && firebaseConfig.apiKey
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
-const firebaseApp = firebaseEnabled
-  ? (window.firebase.apps?.length ? window.firebase.app() : window.firebase.initializeApp(firebaseConfig))
-  : null;
-const firestore = firebaseApp ? window.firebase.firestore(firebaseApp) : null;
-const firebaseAuth = firebaseApp && typeof window.firebase.auth === "function"
-  ? window.firebase.auth(firebaseApp)
-  : null;
-const casesCollection = firestore ? firestore.collection("cases") : null;
+const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 const consumerClaimIdsStorageKey = "claimsight.consumer-claim-ids";
 const consumerCurrentClaimStorageKey = "claimsight.consumer-current-claim";
 const consumerDraftStorageKey = "claimsight.consumer-draft";
@@ -123,7 +110,10 @@ const setStatus = (message) => {
   elements.status.textContent = message;
 };
 
-const firestoreTimestampToIso = (value) => {
+// Postgres returns timestamptz as an ISO string, so this is mostly a
+// pass-through now. The toDate branch stays because cached Firestore reads
+// could still be in flight on a page loaded before the switch.
+const timestampToIso = (value) => {
   if (!value) {
     return "";
   }
@@ -282,14 +272,14 @@ const requestDemoReview = async (claimReference) => {
   if (!apiBaseUrl || !claimReference) return;
 
   try {
-    const authUser = window.firebase?.auth?.()?.currentUser;
-    if (!authUser?.getIdToken) return;
+    const token = await window.sbAuth?.accessToken?.();
+    if (!token) return;
 
     const response = await fetch(`${apiBaseUrl}/api/demo/enroll`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${await authUser.getIdToken()}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ case_id: claimReference }),
     });
@@ -411,21 +401,21 @@ const collectSupportingDocuments = async (claimReference) => {
 };
 
 const saveConsumerClaim = async (assessment) => {
-  if (!casesCollection) {
+  if (!dataEnabled) {
     return null;
   }
 
-  const currentUser = firebaseAuth?.currentUser || null;
-  if (firebaseAuth && !currentUser) {
+  const currentUser = window.sbAuth.currentUser();
+  if (!currentUser) {
     throw new Error("Sign in before submitting a claim.");
   }
 
   const claimReference = `CLM-${Date.now().toString().slice(-8)}`;
   const docId = claimReference;
-  const now = window.firebase.firestore.FieldValue.serverTimestamp();
+  const now = window.claimData.nowIso();
   const claimContext = mergeVehicleContext(assessment.claim_context || {});
   const statusMeta = deriveConsumerStatus(assessment);
-  const queue = computeQueueMeta(assessment);
+  const queueMeta = computeQueueMeta(assessment);
   const assignedAgent = pickRandomAdjuster();
   const payload = {
     ...assessment,
@@ -435,7 +425,8 @@ const saveConsumerClaim = async (assessment) => {
       ...(assessment.review || {}),
       claim_reference: claimReference,
     },
-    queue,
+    priority_score: queueMeta.priority_score || 0,
+    queue_bucket: queueMeta.bucket || "routine",
     status: statusMeta.code,
     status_label: statusMeta.label,
     report_ready: statusMeta.reportReady,
@@ -454,25 +445,23 @@ const saveConsumerClaim = async (assessment) => {
     created_at: now,
   };
 
-  await casesCollection.doc(docId).set(payload, { merge: true });
-  await firestore.collection("case_activity").add({
+  // createCase, not an upsert: the insert policy is much stricter than the
+  // update one, so a submission that RLS refuses must fail loudly here rather
+  // than silently turn into an update of someone else's row.
+  await window.claimData.createCase({ id: docId, ...payload });
+  await window.claimData.addActivity({
     case_id: docId,
     type: "claim_submitted",
     label: "Claim submitted with initial photos and vehicle details.",
     actor_role: "customer",
     actor_uid: currentUser.uid,
-    actor_name: currentUser.displayName || "Customer",
-    created_at: now,
+    actor_name: currentUser.email || "Customer",
   });
   const supportingDocuments = await collectSupportingDocuments(claimReference);
   if (supportingDocuments.length) {
-    await casesCollection.doc(docId).set(
-      {
-        supporting_documents: supportingDocuments,
-        updated_at: now,
-      },
-      { merge: true }
-    );
+    await window.claimData.updateCase(docId, {
+      supporting_documents: supportingDocuments,
+    });
   }
   rememberConsumerClaim(claimReference);
   createCustomerMessageThread(claimReference, assignedAgent);
@@ -489,9 +478,9 @@ const normalizeCaseSummary = (docId, payload = {}) => ({
   overall_severity: payload.overall_severity || "",
   estimated_total_cost_usd: payload.estimated_total_cost_usd || 0,
   reviewed_total_cost_usd: payload.review?.reviewed_total_cost_usd || payload.reviewed_total_cost_usd || 0,
-  priority_score: payload.queue?.priority_score || 0,
-  queue_bucket: payload.queue?.bucket || "routine",
-  updated_at: firestoreTimestampToIso(payload.updated_at),
+  priority_score: payload.priority_score || 0,
+  queue_bucket: payload.queue_bucket || "routine",
+  updated_at: timestampToIso(payload.updated_at),
 });
 
 const computeQueueMeta = (assessment) => {
@@ -1838,36 +1827,35 @@ const renderCases = () => {
 };
 
 const fetchCases = async () => {
-  if (!casesCollection || !elements.casesList) {
+  if (!dataEnabled || !elements.casesList) {
     return;
   }
-  const snapshot = await casesCollection.orderBy("updated_at", "desc").limit(25).get();
-  savedCases = snapshot.docs.map((doc) => normalizeCaseSummary(doc.id, doc.data()));
+  const rows = await window.claimData.listCases({ limit: 25 });
+  savedCases = rows.map((row) => normalizeCaseSummary(row.id, row));
   renderCases();
 };
 
 const fetchQueue = async () => {
-  if (!casesCollection || !elements.queueListPanel) {
+  if (!dataEnabled || !elements.queueListPanel) {
     return;
   }
-  const snapshot = await casesCollection
-    .orderBy("queue.priority_score", "desc")
-    .limit(25)
-    .get();
-  queueCases = snapshot.docs.map((doc) => normalizeCaseSummary(doc.id, doc.data()));
+  // Ordered by the real priority_score column. The old
+  // orderBy("queue.priority_score") matched nothing: no writer ever set that
+  // field, and Firestore omits documents missing the sort key.
+  const rows = await window.claimData.listCasesByPriority({ limit: 25 });
+  queueCases = rows.map((row) => normalizeCaseSummary(row.id, row));
   renderCases();
 };
 
 const loadCase = async (caseId) => {
-  if (!casesCollection) {
+  if (!dataEnabled) {
     return;
   }
   setStatus(`Loading ${caseId}...`);
-  const snapshot = await casesCollection.doc(caseId).get();
-  if (!snapshot.exists) {
+  const payload = await window.claimData.getCase(caseId);
+  if (!payload) {
     throw new Error("Failed to load case.");
   }
-  const payload = snapshot.data();
 
   latestAssessment = payload;
   initializeReviewState(payload);
@@ -1883,19 +1871,20 @@ const loadCase = async (caseId) => {
 
 const saveCurrentCase = async () => {
   const exportPayload = getReviewedAssessment();
-  if (!exportPayload || !casesCollection) {
+  if (!exportPayload || !dataEnabled) {
     return;
   }
 
   setStatus("Saving reviewed case...");
   const claimReference = (exportPayload.review?.claim_reference || reviewState?.claimReference || "").trim();
   const docId = (claimReference || `case-${Date.now()}`).replace(/[^A-Za-z0-9_-]+/g, "-");
-  const now = window.firebase.firestore.FieldValue.serverTimestamp();
-  const queue = computeQueueMeta(exportPayload);
+  const now = window.claimData.nowIso();
+  const queueMeta = computeQueueMeta(exportPayload);
   const statusMeta = deriveConsumerStatus(exportPayload);
   const payload = {
     ...exportPayload,
-    queue,
+    priority_score: queueMeta.priority_score || 0,
+    queue_bucket: queueMeta.bucket || "routine",
     claim_reference: docId,
     status: statusMeta.code,
     status_label: statusMeta.label,
@@ -1903,12 +1892,14 @@ const saveCurrentCase = async () => {
     consumer_notifications: buildConsumerNotifications(exportPayload, statusMeta, docId),
     updated_at: now,
   };
-  const docRef = casesCollection.doc(docId);
-  const existing = await docRef.get();
-  if (!existing.exists) {
-    payload.created_at = now;
+  // Firestore's set({merge:true}) created the row when it was missing;
+  // updateCase only updates, so the two cases are explicit now.
+  const existing = await window.claimData.getCase(docId);
+  if (existing) {
+    await window.claimData.updateCase(docId, payload);
+  } else {
+    await window.claimData.createCase({ id: docId, created_at: now, ...payload });
   }
-  await docRef.set(payload, { merge: true });
 
   reviewState.claimReference = claimReference || docId;
   if (elements.claimReference) {
@@ -2021,9 +2012,9 @@ elements.form.addEventListener("submit", async (event) => {
     });
 
     const requestHeaders = {};
-    const authUser = window.firebase?.auth?.()?.currentUser;
-    if (authUser?.getIdToken) {
-      requestHeaders.Authorization = `Bearer ${await authUser.getIdToken()}`;
+    const token = await window.sbAuth?.accessToken?.();
+    if (token) {
+      requestHeaders.Authorization = `Bearer ${token}`;
     }
 
     const response = await fetch(`${apiBaseUrl}/api/assess`, {
@@ -2172,7 +2163,7 @@ document.addEventListener("click", (event) => {
 
 if (apiBaseUrl) {
   Promise.allSettled([fetchCases(), fetchQueue()]);
-} else if (firebaseEnabled) {
+} else if (dataEnabled) {
   Promise.allSettled([fetchCases(), fetchQueue()]);
 }
 
