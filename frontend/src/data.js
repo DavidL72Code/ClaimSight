@@ -55,8 +55,21 @@
     return data;
   };
 
+  // Kept in one place so the copy and the number cannot drift from the
+  // database. The cap itself is enforced by public.demo_claim_limit().
+  const DEMO_CLAIM_LIMIT = 5;
+
   const data = {
     nowIso,
+    demoClaimLimit: DEMO_CLAIM_LIMIT,
+
+    // How many demo claims a visitor has left, or null when they are not on a
+    // demo session and so are not capped.
+    demoClaimsRemaining: async () => {
+      if (!window.sbAuth?.isAnonymous?.()) return null;
+      const rows = await data.listCases({ limit: 100 });
+      return Math.max(0, DEMO_CLAIM_LIMIT - rows.length);
+    },
 
     getCase: async (caseId) => {
       const rows = unwrap(
@@ -87,8 +100,26 @@
           .limit(limit)
       ) || [],
 
-    createCase: async (payload) =>
-      unwrap(await client().from(TABLE_CASES).insert(payload).select())?.[0] || null,
+    createCase: async (payload) => {
+      try {
+        return unwrap(await client().from(TABLE_CASES).insert(payload).select())?.[0] || null;
+      } catch (error) {
+        // The insert policy caps how many claims one anonymous demo visitor
+        // may create, and PostgREST reports that as a plain policy violation
+        // (42501). Without this the visitor would see
+        // "new row violates row-level security policy", which tells them
+        // nothing about what happened or what to do.
+        if (error?.code === "42501" && window.sbAuth?.isAnonymous?.()) {
+          const friendly = new Error(
+            "You have reached the demo limit of 5 claims. Sign up for a free " +
+            "account to keep going, or delete a demo claim to free a slot."
+          );
+          friendly.demoLimitReached = true;
+          throw friendly;
+        }
+        throw error;
+      }
+    },
 
     updateCase: async (caseId, patch) => {
       const rows = unwrap(

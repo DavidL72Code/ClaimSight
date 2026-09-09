@@ -37,6 +37,7 @@ psqlq -f "$ROOT/supabase/migrations/0005_realtime.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0006_assessment_columns.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0007_internal_note.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0008_demo_review.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0009_demo_claim_limit.sql" || exit 1
 
 # Claim payloads. app_metadata.role is where Supabase keeps custom claims.
 A='{"sub":"11111111-1111-1111-1111-111111111111","email":"alice@example.com","app_metadata":{}}'
@@ -44,6 +45,8 @@ B='{"sub":"22222222-2222-2222-2222-222222222222","email":"bob@example.com","app_
 ADJ='{"sub":"33333333-3333-3333-3333-333333333333","email":"adjuster@claimsight.com","app_metadata":{"role":"employee"}}'
 OTH='{"sub":"44444444-4444-4444-4444-444444444444","email":"other@claimsight.com","app_metadata":{"role":"employee"}}'
 MGR='{"sub":"55555555-5555-5555-5555-555555555555","email":"boss@claimsight.com","app_metadata":{"role":"manager"}}'
+# A demo visitor: same shape as a customer, plus the is_anonymous claim.
+DEMO='{"sub":"66666666-6666-6666-6666-666666666666","email":"","app_metadata":{},"is_anonymous":true}'
 
 echo "==> seeding"
 psqlq <<SEED
@@ -52,7 +55,8 @@ insert into auth.users (id, email) values
   ('22222222-2222-2222-2222-222222222222', 'bob@example.com'),
   ('33333333-3333-3333-3333-333333333333', 'adjuster@claimsight.com'),
   ('44444444-4444-4444-4444-444444444444', 'other@claimsight.com'),
-  ('55555555-5555-5555-5555-555555555555', 'boss@claimsight.com');
+  ('55555555-5555-5555-5555-555555555555', 'boss@claimsight.com'),
+  ('66666666-6666-6666-6666-666666666666', null);
 select set_config('request.jwt.claims', '$MGR', false);
 set role authenticated;
 insert into public.cases (id, owner_uid, status, status_label, assigned_agent)
@@ -131,6 +135,18 @@ act "cannot create a pre-approved claim"         "$A" "insert into public.cases 
 act "cannot create a report_ready claim"         "$A" "insert into public.cases (id,owner_uid,status,status_label,report_ready) values ('CLM-4','11111111-1111-1111-1111-111111111111','submitted','Submitted',true);" DENY
 act "cannot prefill the review"                  "$A" "insert into public.cases (id,owner_uid,status,status_label,review) values ('CLM-5','11111111-1111-1111-1111-111111111111','submitted','Submitted','{\"final_action\":\"approve\"}'::jsonb);" DENY
 act "cannot create a claim owned by someone else" "$A" "insert into public.cases (id,owner_uid,status,status_label) values ('CLM-6','22222222-2222-2222-2222-222222222222','submitted','Submitted');" DENY
+
+echo "==> demo visitors are capped, real customers are not"
+# The cap is 5. Five inserts must pass, the sixth must not.
+for i in 1 2 3 4 5; do
+  act "demo claim $i of 5 allowed" "$DEMO" "insert into public.cases (id,owner_uid,status,status_label) values ('DEMO-$i','66666666-6666-6666-6666-666666666666','submitted','Submitted');" OK
+done
+act "demo claim 6 is refused"                    "$DEMO" "insert into public.cases (id,owner_uid,status,status_label) values ('DEMO-6','66666666-6666-6666-6666-666666666666','submitted','Submitted');" DENY
+act "a real customer is not capped"              "$A"    "insert into public.cases (id,owner_uid,status,status_label) values ('CLM-20','11111111-1111-1111-1111-111111111111','submitted','Submitted');" OK
+act "demo visitor still cannot preapprove"       "$DEMO" "insert into public.cases (id,owner_uid,status,status_label) values ('DEMO-7','66666666-6666-6666-6666-666666666666','approved','Approved');" DENY
+act "demo visitor cannot claim for someone else" "$DEMO" "insert into public.cases (id,owner_uid,status,status_label) values ('DEMO-8','11111111-1111-1111-1111-111111111111','submitted','Submitted');" DENY
+act "deleting one frees a slot"                  "$MGR"  "delete from public.cases where id='DEMO-1';" OK
+act "demo can insert again after the delete"     "$DEMO" "insert into public.cases (id,owner_uid,status,status_label) values ('DEMO-9','66666666-6666-6666-6666-666666666666','submitted','Submitted');" OK
 
 echo "==> case_internal is adjuster-only"
 act "assigned adjuster reads internal notes"     "$ADJ" "select case_id from public.case_internal where case_id='CLM-1';" OK
