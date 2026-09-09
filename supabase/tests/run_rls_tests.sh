@@ -32,6 +32,8 @@ psqlq -f "$HERE/supabase_shim.sql"                     || exit 1
 psqlq -f "$ROOT/supabase/migrations/0001_schema.sql"   || exit 1
 psqlq -f "$ROOT/supabase/migrations/0002_rls.sql"      || exit 1
 psqlq -f "$ROOT/supabase/migrations/0003_queue_columns.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0004_activity_attachments.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0005_realtime.sql" || exit 1
 
 # Claim payloads. app_metadata.role is where Supabase keeps custom claims.
 A='{"sub":"11111111-1111-1111-1111-111111111111","email":"alice@example.com","app_metadata":{}}'
@@ -143,6 +145,9 @@ act "label longer than 2000 chars refused"       "$A"   "insert into public.case
 act "history cannot be rewritten"                "$ADJ" "update public.case_activity set label='rewritten' where case_id='CLM-1';" DENY
 act "customer cannot delete history"             "$A"   "delete from public.case_activity where case_id='CLM-1';" DENY
 act "manager can delete history"                 "$MGR" "delete from public.case_activity where case_id='CLM-1';" OK
+
+act "owner logs a message with attachments"      "$A" "insert into public.case_activity (case_id,actor_uid,actor_role,type,label,attachments) values ('CLM-1','11111111-1111-1111-1111-111111111111','customer','message','see file','[{\"name\":\"a.pdf\"}]'::jsonb);" OK
+act "attachments cannot be rewritten later"      "$ADJ" "update public.case_activity set attachments='[]'::jsonb where case_id='CLM-1';" DENY
 
 echo
 if [ "$FAILED" -eq 0 ]; then

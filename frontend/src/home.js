@@ -10,13 +10,7 @@ const customerForgotPassword = document.getElementById("customer-forgot-password
 const customerLoginStatus = document.getElementById("customer-login-status");
 const customerLoginForm = document.getElementById("customer-login-form");
 const customerGoogleLogin = document.getElementById("customer-google-login");
-const firebaseConfig = window.FIREBASE_CONFIG || {};
-const firebaseAuthEnabled = Boolean(
-  window.firebase
-  && firebaseConfig.apiKey
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
+const authEnabled = Boolean(window.sbAuth?.ready());
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -151,21 +145,15 @@ const setLoginOpen = (open) => {
 
 loginOpen?.addEventListener("click", () => setLoginOpen(true));
 loginClose?.addEventListener("click", () => setLoginOpen(false));
-const getFirebaseAuth = () => {
-  if (!firebaseAuthEnabled) {
-    return null;
-  }
-
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  return window.firebase.auth(app);
-};
-
-const routeSignedInUser = async (user) => {
-  const token = await user.getIdTokenResult?.();
-  const role = token?.claims?.role || "customer";
-  window.location.href = role === "employee" ? "./employee-assessment.html" : "./dashboard.html";
+// Sends an employee to the adjuster portal and everyone else to the customer
+// dashboard. The role rides on app_metadata in the session the SDK already
+// holds, so this needs no extra token round trip.
+const routeSignedInUser = () => {
+  const role = window.sbAuth.currentUser()?.role || "customer";
+  const employeeRoles = new Set(["employee", "manager", "admin"]);
+  window.location.href = employeeRoles.has(role)
+    ? "./employee-assessment.html"
+    : "./dashboard.html";
 };
 
 customerForgotPassword?.addEventListener("click", async () => {
@@ -179,15 +167,14 @@ customerForgotPassword?.addEventListener("click", async () => {
     return;
   }
 
-  const auth = getFirebaseAuth();
-  if (!auth) {
-    customerLoginStatus.textContent = "Firebase password reset is not configured yet.";
+  if (!authEnabled) {
+    customerLoginStatus.textContent = "Password reset is not configured yet.";
     return;
   }
 
   try {
     customerLoginStatus.textContent = "Sending password reset...";
-    await auth.sendPasswordResetEmail(email);
+    await window.sbAuth.sendPasswordReset(email);
     customerLoginStatus.textContent = `Password reset instructions sent to ${email}.`;
   } catch (error) {
     customerLoginStatus.textContent = error?.message || "Unable to send password reset.";
@@ -202,18 +189,17 @@ customerLoginForm?.addEventListener("submit", async (event) => {
 
   const email = customerLoginForm.querySelector("input[type='email']")?.value?.trim();
   const password = customerLoginForm.querySelector("input[type='password']")?.value || "";
-  const auth = getFirebaseAuth();
 
-  if (!auth) {
-    customerLoginStatus.textContent = "Firebase login is not configured yet. Preview mode can still open the dashboard.";
+  if (!authEnabled) {
+    customerLoginStatus.textContent = "Login is not configured yet. Preview mode can still open the dashboard.";
     window.location.href = "./dashboard.html";
     return;
   }
 
   try {
     customerLoginStatus.textContent = "Signing in...";
-    const credential = await auth.signInWithEmailAndPassword(email, password);
-    await routeSignedInUser(credential.user);
+    await window.sbAuth.signIn(email, password);
+    routeSignedInUser();
   } catch (error) {
     customerLoginStatus.textContent = error?.message || "Unable to sign in.";
   }
@@ -225,17 +211,18 @@ customerGoogleLogin?.addEventListener("click", async (event) => {
     return;
   }
 
-  const auth = getFirebaseAuth();
-  if (!auth || typeof window.firebase.auth.GoogleAuthProvider !== "function") {
+  if (!authEnabled) {
     customerLoginStatus.textContent = "Google login is not configured yet.";
     return;
   }
 
   try {
     customerLoginStatus.textContent = "Opening Google sign-in...";
-    const provider = new window.firebase.auth.GoogleAuthProvider();
-    const credential = await auth.signInWithPopup(provider);
-    await routeSignedInUser(credential.user);
+    // Supabase redirects rather than opening a popup, so there is no
+    // credential to route on here -- the provider sends the browser back to
+    // the dashboard, where the session guard picks it up. This stays inert
+    // until Google is enabled under Authentication -> Providers.
+    await window.sbAuth.signInWithGoogle(`${window.location.origin}/dashboard.html`);
   } catch (error) {
     customerLoginStatus.textContent = error?.message || "Unable to sign in with Google.";
   }

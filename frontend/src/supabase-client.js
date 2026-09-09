@@ -18,9 +18,10 @@
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          // The old Firebase pages read the session on load rather than from
-          // a redirect, so there is no callback URL to parse.
-          detectSessionInUrl: false,
+          // Required by the Google sign-in path: OAuth hands the session back
+          // in the URL fragment, and with this off the SDK would ignore it and
+          // the redirect would land signed out.
+          detectSessionInUrl: true,
         },
       })
     : null;
@@ -104,6 +105,19 @@
       const { data, error } = await client.auth.signUp({ email, password });
       if (error) throw error;
       return data;
+    },
+
+    // OAuth is a redirect, not a popup: Supabase sends the browser to the
+    // provider and back to redirectTo. Requires the provider to be enabled
+    // under Authentication -> Providers, and the URL to be listed under
+    // Authentication -> URL Configuration.
+    signInWithGoogle: async (redirectTo) => {
+      if (!client) throw new Error("Supabase is not configured.");
+      const { error } = await client.auth.signInWithOAuth({
+        provider: "google",
+        options: redirectTo ? { redirectTo } : undefined,
+      });
+      if (error) throw error;
     },
 
     signOut: async () => {

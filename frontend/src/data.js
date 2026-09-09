@@ -30,6 +30,14 @@
 
   const nowIso = () => new Date().toISOString();
 
+  // client.channel(name) hands back an already-subscribed channel when the
+  // name is reused, and adding a listener to one of those throws
+  // "cannot add postgres_changes callbacks after subscribe()". Selecting a
+  // claim twice did exactly that, so every subscription gets its own name and
+  // its unsubscribe function tears the channel down.
+  let channelSeq = 0;
+  const uniqueChannel = (prefix) => `${prefix}-${++channelSeq}`;
+
   // PostgREST reports a write that RLS reduced to zero rows as success with an
   // empty body, so "did nothing" and "was refused" look identical. Callers
   // that care are told, rather than silently believing a write landed.
@@ -155,7 +163,7 @@
       };
       push();
       const channel = client()
-        .channel(`case-${caseId}`)
+        .channel(uniqueChannel("case"))
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: TABLE_CASES, filter: `id=eq.${caseId}` },
@@ -175,7 +183,7 @@
       };
       push();
       const channel = client()
-        .channel("cases-all")
+        .channel(uniqueChannel("cases-all"))
         .on("postgres_changes", { event: "*", schema: "public", table: TABLE_CASES }, push)
         .subscribe();
       return () => client().removeChannel(channel);
@@ -191,7 +199,7 @@
       };
       push();
       const channel = client()
-        .channel(`activity-${caseId}`)
+        .channel(uniqueChannel("activity"))
         .on(
           "postgres_changes",
           {

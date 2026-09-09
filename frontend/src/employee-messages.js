@@ -7,10 +7,7 @@
  * case_activity documents (type "message"), live.
  */
 (() => {
-  const firebaseConfig = window.FIREBASE_CONFIG || {};
-  const firebaseEnabled = Boolean(
-    window.firebase && firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId
-  );
+  const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 
   const threadList = document.getElementById("employee-thread-list");
   const threadCount = document.getElementById("employee-thread-count");
@@ -36,8 +33,6 @@
   };
 
   let app = null;
-  let db = null;
-  let auth = null;
   let claims = [];
   let activeClaimId = new URLSearchParams(location.search).get("claim") || null;
   let unsubMessages = null;
@@ -47,20 +42,9 @@
     if (node) node.innerHTML = `<article class="empty">${esc(text)}</article>`;
   };
 
-  if (!firebaseEnabled) {
-    setEmpty(chatHistory, "Messaging needs Firebase configuration.");
+  if (!dataEnabled) {
+    setEmpty(chatHistory, "Messaging needs Supabase configuration.");
     setEmpty(threadList, "No claims available.");
-    return;
-  }
-
-  try {
-    app = window.firebase.apps?.length
-      ? window.firebase.app()
-      : window.firebase.initializeApp(firebaseConfig);
-    db = window.firebase.firestore(app);
-    auth = window.firebase.auth(app);
-  } catch {
-    setEmpty(chatHistory, "Messaging is unavailable right now.");
     return;
   }
 
@@ -130,10 +114,9 @@
     const local = claims.find((c) => c.id === claimId);
     if (local) local[seenField] = new Date();
     try {
-      await db.collection("cases").doc(claimId).set(
-        { [seenField]: window.firebase.firestore.FieldValue.serverTimestamp() },
-        { merge: true }
-      );
+      await window.claimData.updateCase(claimId, {
+        [seenField]: window.claimData.nowIso(),
+      });
     } catch {
       // Read state is a convenience; if the write is refused the thread
       // simply stays flagged rather than breaking the page.
@@ -190,15 +173,11 @@
     if (!claimId) return;
     setEmpty(chatHistory, "Loading messages...");
     try {
-      unsubMessages = db.collection("case_activity")
-        .where("case_id", "==", claimId)
-        .where("type", "==", "message")
-        .orderBy("created_at", "asc")
-        .limit(200)
-        .onSnapshot(
-          (snap) => renderMessages(snap.docs.map((d) => d.data())),
-          () => setEmpty(chatHistory, "Messages are unavailable for this claim.")
-        );
+      unsubMessages = window.claimData.watchActivity(
+        claimId,
+        (rows) => renderMessages(rows),
+        { type: "message", limit: 200, ascending: true }
+      );
     } catch {
       setEmpty(chatHistory, "Messages are unavailable for this claim.");
     }
@@ -225,22 +204,21 @@
     const hasFiles = Array.from(messageFiles?.files || []).length > 0;
     if ((!text && !hasFiles) || !activeClaimId) return;
 
-    const user = auth.currentUser;
+    const user = window.sbAuth.currentUser();
     if (!user) return;
 
     const submit = messageForm.querySelector("button[type='submit']");
     if (submit) submit.disabled = true;
     try {
       const attachments = await uploadAttachments(activeClaimId);
-      await db.collection("case_activity").add({
+      await window.claimData.addActivity({
         case_id: activeClaimId,
         type: "message",
         label: text || "Attached claim file",
         actor_role: "employee",
         actor_uid: user.uid,
-        actor_name: user.displayName || user.email || "Adjuster",
+        actor_name: user.email || "Adjuster",
         attachments,
-        created_at: window.firebase.firestore.FieldValue.serverTimestamp(),
       });
       // Stamp the case doc so the *other* side can raise a notification.
       // Neither messaging script used to touch anything outside
@@ -251,10 +229,9 @@
       // above, so a rejected stamp must not report the send as failed.
       // It only costs the unread indicator.
       try {
-        await db.collection("cases").doc(activeClaimId).set(
-          { last_employee_message_at: window.firebase.firestore.FieldValue.serverTimestamp() },
-          { merge: true }
-        );
+        await window.claimData.updateCase(activeClaimId, {
+          last_employee_message_at: window.claimData.nowIso(),
+        });
       } catch { /* unread indicator only; the message itself went through */ }
       if (messageInput) messageInput.value = "";
       if (messageFiles) messageFiles.value = "";
@@ -272,21 +249,19 @@
     unsubClaims = null;
     if (!email) return;
     try {
-      unsubClaims = db.collection("cases")
-        .where("assigned_agent.email", "==", email)
-        .orderBy("updated_at", "desc")
-        .limit(25)
-        .onSnapshot(
-          (snap) => {
-            claims = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            if (!activeClaimId || !claims.some((c) => c.id === activeClaimId)) {
-              activeClaimId = claims[0]?.id || activeClaimId;
-              if (activeClaimId) subscribeMessages(activeClaimId);
-            }
-            renderThreads();
-          },
-          () => setEmpty(threadList, "Could not load your claims.")
-        );
+      // No assignment filter: the select policy already limits this to the
+      // cases assigned to the signed-in adjuster.
+      unsubClaims = window.claimData.watchCases(
+        (rows) => {
+          claims = rows;
+          if (!activeClaimId || !claims.some((c) => c.id === activeClaimId)) {
+            activeClaimId = claims[0]?.id || activeClaimId;
+            if (activeClaimId) subscribeMessages(activeClaimId);
+          }
+          renderThreads();
+        },
+        { limit: 25 }
+      );
     } catch {
       setEmpty(threadList, "Could not load your claims.");
     }
@@ -297,7 +272,7 @@
     unsubClaims?.();
   });
 
-  auth.onAuthStateChanged((user) => {
+  window.sbAuth.onChange((user) => {
     if (!user) {
       setEmpty(threadList, "Sign in to see your claims.");
       setEmpty(chatHistory, "Sign in to view messages.");
