@@ -1,14 +1,16 @@
 """Supabase-backed storage for claim attachments.
 
-Firebase Storage needs the Blaze (paid) plan before it will provision a
-bucket, so attachments live in Supabase Storage instead while Auth and
-Firestore stay on Firebase. Nothing about the identity model changes: the
-caller still proves who they are with a Firebase ID token, and the route
-layer checks case ownership before calling in here.
+This was the first piece to move off Firebase -- Firebase Storage will not
+provision a bucket without the paid Blaze plan -- and the rest of the app
+followed. Auth, claim data and access control are all Supabase now.
 
-The Supabase service key is a full-access credential, so it stays on the
-server. The browser never talks to Supabase directly -- it POSTs to
-/api/attachments and gets back a signed URL.
+The caller proves who they are with a Supabase access token, and the route
+layer confirms the case is visible to them before calling in here. That
+check runs on the caller's own token, so the RLS policies decide it.
+
+The service key used here is a full-access credential and never leaves the
+server: the browser POSTs to /api/attachments and gets back a signed URL for
+a private bucket.
 """
 
 from __future__ import annotations
@@ -28,8 +30,9 @@ from app.core.config import (
 
 logger = logging.getLogger("claimsight.attachments")
 
-# Mirrors the three prefixes in firebase/storage.rules, so the access rules
-# that used to live there map one-to-one onto folders here.
+# The three prefixes the app uses. These mirror what storage.rules used to
+# police before it was deleted; the equivalent checks now live in the
+# /api/attachments route.
 ATTACHMENT_FOLDERS = {
     "supporting-documents": "claim-supporting-documents",
     "messages": "claim-messages",
