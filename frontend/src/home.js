@@ -181,6 +181,37 @@ customerForgotPassword?.addEventListener("click", async () => {
   }
 });
 
+// One-click trial: no email, no password, no confirmation step. The visitor
+// gets a real Supabase session, so the app behaves exactly as it does for a
+// signed-up customer and RLS scopes them to their own claims.
+const demoStart = document.getElementById("home-demo-start");
+const demoStatus = document.getElementById("home-demo-status");
+
+demoStart?.addEventListener("click", async () => {
+  if (!authEnabled) {
+    if (demoStatus) demoStatus.textContent = "The demo is not configured yet.";
+    return;
+  }
+  demoStart.disabled = true;
+  const original = demoStart.textContent;
+  demoStart.textContent = "Starting demo...";
+  try {
+    await window.sbAuth.signInAnonymously();
+    window.location.href = "./dashboard.html";
+  } catch (error) {
+    demoStart.disabled = false;
+    demoStart.textContent = original;
+    // Anonymous sign-ins are a project setting, so say which one when it is
+    // off rather than showing the raw provider error.
+    const disabled = String(error?.code || error?.message || "").includes("anonymous");
+    if (demoStatus) {
+      demoStatus.textContent = disabled
+        ? "The demo is turned off. Enable Anonymous sign-ins in Supabase to switch it on."
+        : (error?.message || "Could not start the demo.");
+    }
+  }
+});
+
 customerLoginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!customerLoginStatus) {

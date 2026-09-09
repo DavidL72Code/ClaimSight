@@ -128,6 +128,23 @@
       if (error) throw error;
     },
 
+    // A no-signup trial. Supabase mints a real user with a real uid and an
+    // is_anonymous claim, so every RLS policy applies unchanged -- the visitor
+    // still only sees the claims they created. Nothing about the security
+    // model bends to accommodate this.
+    //
+    // Requires "Anonymous sign-ins" to be enabled under Authentication ->
+    // Providers; until then the call returns anonymous_provider_disabled and
+    // callers should fall back to the normal login.
+    signInAnonymously: async () => {
+      if (!client) throw new Error("Supabase is not configured.");
+      const { data, error } = await client.auth.signInAnonymously();
+      if (error) throw error;
+      return data;
+    },
+
+    isAnonymous: () => Boolean(cachedUser?.is_anonymous),
+
     signOut: async () => {
       if (!client) return;
       await client.auth.signOut();
