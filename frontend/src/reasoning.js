@@ -1,18 +1,6 @@
-const firebaseConfig = window.FIREBASE_CONFIG || {};
-const firebaseEnabled = Boolean(
-  window.firebase
-  && firebaseConfig.apiKey
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
+const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 
-if (firebaseEnabled) {
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const db = window.firebase.firestore(app);
-  const auth = window.firebase.auth(app);
-  const casesCollection = db.collection("cases");
+if (dataEnabled) {
 
   const elements = {
     casesList: document.getElementById("cases-list"),
@@ -36,9 +24,10 @@ if (firebaseEnabled) {
       .replaceAll("'", "&#39;");
 
   const getAuthenticatedEmployee = () => {
-    if (auth.currentUser) return Promise.resolve(auth.currentUser);
+    const current = window.sbAuth.currentUser();
+    if (current) return Promise.resolve(current);
     return new Promise((resolve, reject) => {
-      const unsubscribe = auth.onAuthStateChanged((user) => {
+      const unsubscribe = window.sbAuth.onChange((user) => {
         unsubscribe();
         if (user) resolve(user);
         else reject(new Error("Employee authentication required."));
@@ -52,8 +41,8 @@ if (firebaseEnabled) {
     vehicle_type: payload.vehicle_type || "Vehicle unavailable",
     reviewed_total_cost_usd: payload.review?.reviewed_total_cost_usd || payload.reviewed_total_cost_usd || 0,
     final_action: payload.review?.final_action || payload.final_action || payload.recommended_action || "Pending",
-    queue_bucket: payload.queue?.bucket || "routine",
-    priority_score: payload.queue?.priority_score || 0,
+    queue_bucket: payload.queue_bucket || "routine",
+    priority_score: payload.priority_score || 0,
     updated_at: toIso(payload.updated_at),
   });
 
@@ -85,13 +74,11 @@ if (firebaseEnabled) {
   };
 
   const fetchCases = async () => {
-    const employee = await getAuthenticatedEmployee();
-    const snapshot = await casesCollection
-      .where("assigned_agent.email", "==", employee.email)
-      .orderBy("updated_at", "desc")
-      .limit(25)
-      .get();
-    const items = snapshot.docs.map((doc) => normalize(doc.id, doc.data()));
+    // No assignment filter: the select policy already restricts these rows
+    // to the cases assigned to this adjuster.
+    await getAuthenticatedEmployee();
+    const rows = await window.claimData.listCases({ limit: 25 });
+    const items = rows.map((row) => normalize(row.id, row));
     renderList(
       elements.casesList,
       items,
@@ -102,13 +89,12 @@ if (firebaseEnabled) {
   };
 
   const fetchQueue = async () => {
-    const employee = await getAuthenticatedEmployee();
-    const snapshot = await casesCollection
-      .where("assigned_agent.email", "==", employee.email)
-      .orderBy("queue.priority_score", "desc")
-      .limit(25)
-      .get();
-    const items = snapshot.docs.map((doc) => normalize(doc.id, doc.data()));
+    await getAuthenticatedEmployee();
+    // Ordered by the real priority_score column added in 0003. The old
+    // orderBy("queue.priority_score") matched nothing, because no writer ever
+    // set that field and Firestore omits documents missing the sort key.
+    const rows = await window.claimData.listCasesByPriority({ limit: 25 });
+    const items = rows.map((row) => normalize(row.id, row));
     renderList(
       elements.queueListPanel,
       items,

@@ -78,6 +78,17 @@
           .limit(limit)
       ) || [],
 
+    // Queue view: ordered by the priority_score column from migration 0003.
+    listCasesByPriority: async ({ limit = 25 } = {}) =>
+      unwrap(
+        await client()
+          .from(TABLE_CASES)
+          .select("*")
+          .order("priority_score", { ascending: false })
+          .order("updated_at", { ascending: false })
+          .limit(limit)
+      ) || [],
+
     createCase: async (payload) =>
       unwrap(await client().from(TABLE_CASES).insert(payload).select())?.[0] || null,
 

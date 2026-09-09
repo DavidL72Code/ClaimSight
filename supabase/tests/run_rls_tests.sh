@@ -31,6 +31,7 @@ psql $PG_FLAGS -d postgres -q -c "drop database if exists $DB;" -c "create datab
 psqlq -f "$HERE/supabase_shim.sql"                     || exit 1
 psqlq -f "$ROOT/supabase/migrations/0001_schema.sql"   || exit 1
 psqlq -f "$ROOT/supabase/migrations/0002_rls.sql"      || exit 1
+psqlq -f "$ROOT/supabase/migrations/0003_queue_columns.sql" || exit 1
 
 # Claim payloads. app_metadata.role is where Supabase keeps custom claims.
 A='{"sub":"11111111-1111-1111-1111-111111111111","email":"alice@example.com","app_metadata":{}}'
@@ -106,6 +107,9 @@ act "adjuster cannot forge consumer_decision"    "$ADJ" "update public.cases set
 act "adjuster cannot rewrite supporting docs"    "$ADJ" "update public.cases set supporting_documents='[{\"name\":\"forged.pdf\"}]'::jsonb where id='CLM-1';" DENY
 act "adjuster cannot write the appeal"           "$ADJ" "update public.cases set appeal='{\"category\":\"x\",\"explanation\":\"y\"}'::jsonb where id='CLM-1';" DENY
 act "adjuster cannot touch customer read marker" "$ADJ" "update public.cases set customer_thread_seen_at=now() where id='CLM-1';" DENY
+
+act "adjuster may set triage priority"           "$ADJ" "update public.cases set priority_score=7, queue_bucket='high_risk' where id='CLM-1';" OK
+act "customer cannot raise own priority"        "$A"   "update public.cases set priority_score=99 where id='CLM-1';" DENY
 
 echo "==> decision and appeal state gates"
 act "decision refused before final_review"       "$A"   "update public.cases set consumer_decision='{\"decision\":\"accepted\"}'::jsonb where id='CLM-1';" DENY

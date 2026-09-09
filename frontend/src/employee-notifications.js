@@ -13,10 +13,7 @@
 // from claim status. No new Firestore collection is involved.
 // ══════════════════════════════════════════════════════════════════
 (() => {
-  const firebaseConfig = window.FIREBASE_CONFIG || {};
-  const firebaseEnabled = Boolean(
-    window.firebase && firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId
-  );
+  const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 
   const list = document.querySelector(".employee-notification-list");
   const badges = document.querySelectorAll(".notification-count");
@@ -240,26 +237,19 @@
     ]));
   };
 
-  const loadFirebase = async () => {
+  const loadLive = async () => {
     try {
-      const app = window.firebase.apps?.length
-        ? window.firebase.app()
-        : window.firebase.initializeApp(firebaseConfig);
-      const email = String(
-        window.localStorage.getItem("claimsight.employee-preview-email") ||
-        window.firebase.auth(app).currentUser?.email || ""
-      ).toLowerCase();
-      const snapshot = await window.firebase.firestore(app).collection("cases")
-        .where("assigned_agent.email", "==", email)
-        .orderBy("updated_at", "desc")
-        .limit(25)
-        .get();
-      render(collect(snapshot.docs.map((d) => shape(d.id, d.data()))));
+      // The select policy already limits this to the cases assigned to
+      // the signed-in adjuster, so no email filter is needed -- which
+      // also removes the preview-email fallback that could previously
+      // widen the query to another adjuster's address.
+      const rows = await window.claimData.listCases({ limit: 25 });
+      render(collect(rows.map((row) => shape(row.id, row))));
     } catch {
       loadPreview();
     }
   };
 
-  if (firebaseEnabled) loadFirebase();
+  if (dataEnabled) loadLive();
   else loadPreview();
 })();

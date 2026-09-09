@@ -252,14 +252,13 @@
     </main>
 
     <footer class="site-footer">ClaimSight — Employee Assessment</footer>
-
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <!-- config.js supplies window.APP_CONFIG.API_BASE_URL; without it the demo
          review controls would silently call a same-origin URL with no backend. -->
     <script src="./config.js"></script>
-    <script src="./firebase-config.js"></script>
+    <script src="./assets/vendor/supabase/supabase.js"></script>
+    <script src="./supabase-config.js"></script>
+    <script src="./supabase-client.js"></script>
+    <script src="./data.js"></script>
     <script src="./employee-auth.js?v=security-1"></script>
     <script src="./employee-notifications.js"></script>
     <script src="./employee-dashboard.js?v=workflow-upgrades-1"></script>
