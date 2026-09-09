@@ -76,16 +76,6 @@
           .limit(limit)
       ) || [],
 
-    listCasesByStatus: async (status, { limit = 25 } = {}) =>
-      unwrap(
-        await client()
-          .from(TABLE_CASES)
-          .select("*")
-          .eq("status", status)
-          .order("updated_at", { ascending: false })
-          .limit(limit)
-      ) || [],
-
     // Queue view: ordered by the priority_score column from migration 0003.
     listCasesByPriority: async ({ limit = 25 } = {}) =>
       unwrap(
@@ -139,11 +129,16 @@
 
     // Upsert rather than update: there is one internal row per case and the
     // adjuster writing a note first is what creates it.
-    setInternal: async (caseId, payload) =>
+    setInternalNote: async (caseId, note, updatedBy) =>
       unwrap(
         await client()
           .from(TABLE_INTERNAL)
-          .upsert({ case_id: caseId, data: payload, updated_at: nowIso() })
+          .upsert({
+            case_id: caseId,
+            note,
+            updated_by: updatedBy || null,
+            updated_at: nowIso(),
+          })
           .select()
       )?.[0] || null,
 
@@ -152,26 +147,6 @@
     // onSnapshot fired once with current data and again on every change.
     // Postgres change feeds only carry changes, so each watcher does an
     // initial read first to keep the call sites' behaviour the same.
-
-    watchCase: (caseId, callback) => {
-      const push = async () => {
-        try {
-          callback(await data.getCase(caseId));
-        } catch (error) {
-          console.warn("watchCase read failed:", error?.message || error);
-        }
-      };
-      push();
-      const channel = client()
-        .channel(uniqueChannel("case"))
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: TABLE_CASES, filter: `id=eq.${caseId}` },
-          push
-        )
-        .subscribe();
-      return () => client().removeChannel(channel);
-    },
 
     watchCases: (callback, { limit = 25 } = {}) => {
       const push = async () => {

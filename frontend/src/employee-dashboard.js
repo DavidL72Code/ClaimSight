@@ -1,11 +1,5 @@
 (() => {
-const firebaseConfig = window.FIREBASE_CONFIG || {};
-const firebaseEnabled = Boolean(
-  window.firebase
-  && firebaseConfig.apiKey
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
+const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 
 const consumerClaimIdsStorageKey = "claimsight.consumer-claim-ids";
 const consumerDraftStorageKey = "claimsight.consumer-draft";
@@ -149,9 +143,9 @@ const fallbackAssignedAgent = (claimId = "") =>
 
 const getCurrentEmployeeEmail = () => {
   try {
-    const app = window.firebase?.apps?.length ? window.firebase.app() : null;
-    const auth = app && typeof window.firebase.auth === "function" ? window.firebase.auth(app) : null;
-    return auth?.currentUser?.email || window.localStorage.getItem(employeePreviewEmailKey) || "alex.morgan@claimsight.com";
+    return window.sbAuth?.currentUser()?.email
+      || window.localStorage.getItem(employeePreviewEmailKey)
+      || "alex.morgan@claimsight.com";
   } catch {
     return "alex.morgan@claimsight.com";
   }
@@ -432,7 +426,7 @@ const selectClaim = (claimId) => {
   }
   const notes = readInternalNotes();
   if (elements.internalNotes) elements.internalNotes.value = notes[claim.id] || "";
-  loadFirebaseInternalNote(claim.id).then((note) => {
+  loadLiveInternalNote(claim.id).then((note) => {
     if (note === null || selectedClaim?.id !== claim.id || !elements.internalNotes) return;
     elements.internalNotes.value = note;
   });
@@ -496,11 +490,11 @@ const demoApiBase = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
 let demoModeEnabled = false;
 
 const demoAuthHeaders = async () => {
-  const user = window.firebase?.auth?.()?.currentUser;
-  if (!user?.getIdToken) return null;
+  const token = await window.sbAuth?.accessToken?.();
+  if (!token) return null;
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${await user.getIdToken()}`,
+    Authorization: `Bearer ${token}`,
   };
 };
 
@@ -617,75 +611,44 @@ const renderAuditLog = (claimId) => {
   `).join("");
 };
 
-const loadFirebaseCases = async () => {
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const db = window.firebase.firestore(app);
-  const employeeEmail = getCurrentEmployeeEmail();
-  const snapshot = await db.collection("cases")
-    .where("assigned_agent.email", "==", employeeEmail)
-    .orderBy("updated_at", "desc")
-    .limit(25)
-    .get();
-  return snapshot.docs.map((doc) => normalizeCase(doc.id, doc.data()));
+// No assignment filter: the select policy already limits this to the cases
+// assigned to the signed-in adjuster. That also removes the old dependence on
+// getCurrentEmployeeEmail(), which could fall back to a hardcoded address and
+// silently query the wrong adjuster's queue.
+const loadLiveCases = async () => {
+  const rows = await window.claimData.listCases({ limit: 25 });
+  return rows.map((row) => normalizeCase(row.id, row));
 };
 
-const updateFirebaseClaim = async (claimId, updates) => {
-  if (!firebaseEnabled || !claimId) return;
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const db = window.firebase.firestore(app);
-  await db.collection("cases").doc(claimId).set(
-    {
-      ...updates,
-      updated_at: window.firebase.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+const updateLiveClaim = async (claimId, updates) => {
+  if (!dataEnabled || !claimId) return;
+  await window.claimData.updateCase(claimId, updates);
 };
 
-const loadFirebaseInternalNote = async (claimId) => {
-  if (!firebaseEnabled || !claimId) return null;
+const loadLiveInternalNote = async (claimId) => {
+  if (!dataEnabled || !claimId) return null;
   try {
-    const app = window.firebase.apps?.length
-      ? window.firebase.app()
-      : window.firebase.initializeApp(firebaseConfig);
-    const snapshot = await window.firebase.firestore(app).collection("case_internal").doc(claimId).get();
-    return snapshot.exists ? String(snapshot.data()?.note || "") : "";
+    const row = await window.claimData.getInternal(claimId);
+    return row ? String(row.note || "") : "";
   } catch {
     return null;
   }
 };
 
-const updateFirebaseInternalNote = async (claimId, note) => {
-  if (!firebaseEnabled || !claimId) return;
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  await window.firebase.firestore(app).collection("case_internal").doc(claimId).set(
-    {
-      note,
-      updated_at: window.firebase.firestore.FieldValue.serverTimestamp(),
-      updated_by: getCurrentEmployeeEmail(),
-    },
-    { merge: true }
-  );
+const updateLiveInternalNote = async (claimId, note) => {
+  if (!dataEnabled || !claimId) return;
+  await window.claimData.setInternalNote(claimId, note, getCurrentEmployeeEmail());
 };
 
-const appendFirebaseActivity = async (claimId, type, label) => {
-  if (!firebaseEnabled || !claimId) return;
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  await window.firebase.firestore(app).collection("case_activity").add({
+const appendLiveActivity = async (claimId, type, label) => {
+  if (!dataEnabled || !claimId) return;
+  await window.claimData.addActivity({
     case_id: claimId,
     type,
     label,
     actor_role: "employee",
+    actor_uid: window.sbAuth.currentUser()?.uid || null,
     actor_name: getCurrentEmployeeEmail(),
-    created_at: window.firebase.firestore.FieldValue.serverTimestamp(),
   });
 };
 
@@ -702,7 +665,7 @@ const loadClaims = async () => {
   `;
 
   try {
-    claims = firebaseEnabled ? await loadFirebaseCases() : readLocalCases();
+    claims = dataEnabled ? await loadLiveCases() : readLocalCases();
   } catch (error) {
     // Previously fell back to local/fixture cases, so a broken query looked
     // like a working queue. Fail loudly instead: a missing composite index or
@@ -775,7 +738,7 @@ elements.requestEvidence?.addEventListener("click", async () => {
   const dueValue = elements.requestEvidenceDue?.value || "";
   const evidenceDueAt = dueValue ? new Date(`${dueValue}T23:59:59`).toISOString() : "";
   appendAuditEvent(selectedClaim.id, "Requested more evidence from customer");
-  await updateFirebaseClaim(selectedClaim.id, {
+  await updateLiveClaim(selectedClaim.id, {
     status: "needs_info",
     status_label: "Needs more information",
     requested_evidence: requestedEvidence,
@@ -791,7 +754,7 @@ elements.requestEvidence?.addEventListener("click", async () => {
       },
     ],
   });
-  await appendFirebaseActivity(
+  await appendLiveActivity(
     selectedClaim.id,
     "evidence_requested",
     `Requested ${requestedTypes.join(", ")}${requestedEvidence.length ? ` (${requestedEvidence.join(", ")})` : ""}: ${requestNote}`
@@ -808,11 +771,11 @@ elements.finalizeClaim?.addEventListener("click", async () => {
     return;
   }
   appendAuditEvent(selectedClaim.id, "Marked claim ready for finalization");
-  await updateFirebaseClaim(selectedClaim.id, {
+  await updateLiveClaim(selectedClaim.id, {
     status: "final_review",
     status_label: "Final review",
   });
-  await appendFirebaseActivity(selectedClaim.id, "final_review_ready", "Claim moved to final review.");
+  await appendLiveActivity(selectedClaim.id, "final_review_ready", "Claim moved to final review.");
   if (elements.actionStatus) elements.actionStatus.textContent = "Finalization logged. Send the claim to final reasoning/report review next.";
 });
 
@@ -821,7 +784,7 @@ elements.saveInternalNote?.addEventListener("click", async () => {
   const notes = readInternalNotes();
   notes[selectedClaim.id] = elements.internalNotes?.value || "";
   writeInternalNotes(notes);
-  await updateFirebaseInternalNote(selectedClaim.id, notes[selectedClaim.id]);
+  await updateLiveInternalNote(selectedClaim.id, notes[selectedClaim.id]);
   appendAuditEvent(selectedClaim.id, "Saved private internal note");
   if (elements.actionStatus) elements.actionStatus.textContent = "Internal note saved privately.";
 });
@@ -832,16 +795,11 @@ elements.saveInternalNote?.addEventListener("click", async () => {
 // adjuster saw "No assigned claims" until they clicked Refresh. Load once the
 // auth state is actually known, the way the consumer side already does.
 const bootstrapClaims = () => {
-  if (!firebaseEnabled || typeof window.firebase?.auth !== "function") {
+  if (!dataEnabled) {
     loadClaims();
     return;
   }
   try {
-    const app = window.firebase.apps?.length
-      ? window.firebase.app()
-      : window.firebase.initializeApp(firebaseConfig);
-    const auth = window.firebase.auth(app);
-    const db = window.firebase.firestore(app);
     let loadedFor;
     let unsubscribe = null;
 
@@ -852,21 +810,15 @@ const bootstrapClaims = () => {
       unsubscribe = null;
       if (!email) return;
       try {
-        unsubscribe = db.collection("cases")
-          .where("assigned_agent.email", "==", email)
-          .orderBy("updated_at", "desc")
-          .limit(25)
-          .onSnapshot(
-            (snapshot) => {
-              claims = snapshot.docs.map((doc) => normalizeCase(doc.id, doc.data()));
-              renderTable();
-              const saved = readStorageValue(selectedEmployeeClaimKey);
-              selectClaim(saved || claims[0]?.id);
-            },
-            () => {
-              // Listener failed; Refresh and the next load still work.
-            }
-          );
+        unsubscribe = window.claimData.watchCases(
+          (rows) => {
+            claims = rows.map((row) => normalizeCase(row.id, row));
+            renderTable();
+            const saved = readStorageValue(selectedEmployeeClaimKey);
+            selectClaim(saved || claims[0]?.id);
+          },
+          { limit: 25 }
+        );
       } catch {
         unsubscribe = null;
       }
@@ -874,7 +826,7 @@ const bootstrapClaims = () => {
 
     window.addEventListener("beforeunload", () => unsubscribe?.());
 
-    auth.onAuthStateChanged((user) => {
+    window.sbAuth.onChange((user) => {
       const identity = user?.email || null;
       if (identity === loadedFor) return;  // ignore repeat notifications
       loadedFor = identity;

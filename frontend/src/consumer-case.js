@@ -1,11 +1,5 @@
-const firebaseConfig = window.FIREBASE_CONFIG || {};
-const firebaseEnabled = Boolean(
-  window.firebase
-  && firebaseConfig.apiKey
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
-const firebaseAuthAvailable = firebaseEnabled && typeof window.firebase.auth === "function";
+const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
+const authAvailable = dataEnabled;
 
 const consumerClaimIdsStorageKey = "claimsight.consumer-claim-ids";
 const consumerCurrentClaimStorageKey = "claimsight.consumer-current-claim";
@@ -303,7 +297,9 @@ const buildVehicleLabel = (context = {}, fallback = "Vehicle unavailable") => {
   return label || fallback;
 };
 
-const firestoreTimestampToIso = (value) => {
+// Postgres returns timestamptz as an ISO string, so this is largely a
+// pass-through now; the toDate branch is harmless and covers a cached read.
+const timestampToIso = (value) => {
   if (!value) {
     return "";
   }
@@ -460,18 +456,18 @@ const normalize = (docId, payload = {}) => {
     requested_evidence: payload.requested_evidence || review.requested_evidence || [],
     requested_evidence_types: payload.requested_evidence_types || review.requested_evidence_types || [],
     reviewer_request_note: payload.reviewer_request_note || review.reviewer_request_note || "",
-    evidence_requested_at: firestoreTimestampToIso(payload.evidence_requested_at || review.evidence_requested_at),
-    evidence_due_at: firestoreTimestampToIso(payload.evidence_due_at || review.evidence_due_at),
-    last_employee_message_at: firestoreTimestampToIso(payload.last_employee_message_at),
-    customer_thread_seen_at: firestoreTimestampToIso(payload.customer_thread_seen_at),
+    evidence_requested_at: timestampToIso(payload.evidence_requested_at || review.evidence_requested_at),
+    evidence_due_at: timestampToIso(payload.evidence_due_at || review.evidence_due_at),
+    last_employee_message_at: timestampToIso(payload.last_employee_message_at),
+    customer_thread_seen_at: timestampToIso(payload.customer_thread_seen_at),
     estimate_line_items: review.estimate_line_items || payload.estimate_line_items || [],
     estimate_versions: payload.estimate_versions || [],
     appeal: payload.appeal || null,
     report_ready: Boolean(statusMeta.reportReady),
     status_code: statusMeta.code,
     status_label: statusMeta.label,
-    updated_at: firestoreTimestampToIso(payload.updated_at),
-    created_at: firestoreTimestampToIso(payload.created_at || payload.updated_at),
+    updated_at: timestampToIso(payload.updated_at),
+    created_at: timestampToIso(payload.created_at || payload.updated_at),
     raw: payload,
   };
 };
@@ -845,7 +841,7 @@ reviewTabButtons.forEach((button) => {
   button.addEventListener("click", () => activateReviewTab(button.dataset.reviewTab || "decision"));
 });
 
-if (!firebaseAuthAvailable) {
+if (!authAvailable) {
   document.getElementById("customer-logout")?.addEventListener("click", () => {
     try {
       window.localStorage.removeItem(consumerCurrentClaimStorageKey);
@@ -857,13 +853,7 @@ if (!firebaseAuthAvailable) {
   });
 }
 
-if (firebaseEnabled) {
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const db = window.firebase.firestore(app);
-  const auth = firebaseAuthAvailable ? window.firebase.auth(app) : null;
-  const casesCollection = db.collection("cases");
+if (dataEnabled) {
 
   const elements = {
     dashboardClaims: document.getElementById("consumer-dashboard-claims"),
@@ -1379,17 +1369,12 @@ if (firebaseEnabled) {
     if (!elements.activityList) return;
     elements.activityList.innerHTML = "<article>Loading claim activity...</article>";
     try {
-      const snapshot = await db.collection("case_activity")
-        .where("case_id", "==", selected.id)
-        .orderBy("created_at", "desc")
-        .limit(30)
-        .get();
-      const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const events = await window.claimData.listActivity(selected.id, { limit: 30 });
       elements.activityList.innerHTML = events.length
         ? events.map((event) => `
           <article>
             <strong>${escapeHtml(event.label || "Claim updated")}</strong>
-            <p>${escapeHtml(event.actor_name || (event.actor_role === "customer" ? "Customer" : "ClaimSight"))} · ${escapeHtml(formatDate(firestoreTimestampToIso(event.created_at)))}</p>
+            <p>${escapeHtml(event.actor_name || (event.actor_role === "customer" ? "Customer" : "ClaimSight"))} · ${escapeHtml(formatDate(timestampToIso(event.created_at)))}</p>
           </article>
         `).join("")
         : "<article>No activity recorded yet.</article>";
@@ -1400,14 +1385,13 @@ if (firebaseEnabled) {
 
   const addCustomerActivity = async (selected, type, label) => {
     if (!currentCustomer) return;
-    await db.collection("case_activity").add({
+    await window.claimData.addActivity({
       case_id: selected.id,
       type,
       label,
       actor_role: "customer",
       actor_uid: currentCustomer.uid,
-      actor_name: currentCustomer.displayName || "Customer",
-      created_at: window.firebase.firestore.FieldValue.serverTimestamp(),
+      actor_name: currentCustomer.email || "Customer",
     });
   };
 
@@ -1498,14 +1482,7 @@ if (firebaseEnabled) {
     if (!selected) {
       return;
     }
-    const now = window.firebase.firestore.FieldValue.serverTimestamp();
-    await casesCollection.doc(selected.id).set(
-      {
-        ...updates,
-        updated_at: now,
-      },
-      { merge: true }
-    );
+    await window.claimData.updateCase(selected.id, updates);
     await refreshPortal();
   };
 
@@ -1556,16 +1533,12 @@ if (firebaseEnabled) {
         elements.acceptDecision.disabled = true;
         elements.acceptDecision.textContent = "Accepting...";
         try {
-          await casesCollection.doc(selected.id).set(
-            {
-              consumer_decision: {
-                decision: "accepted",
-                decided_at: new Date().toISOString(),
-              },
-              updated_at: window.firebase.firestore.FieldValue.serverTimestamp(),
+          await window.claimData.updateCase(selected.id, {
+            consumer_decision: {
+              decision: "accepted",
+              decided_at: new Date().toISOString(),
             },
-            { merge: true }
-          );
+          });
           await addCustomerActivity(selected, "decision_accepted", "Customer accepted the adjuster decision.");
           await refreshPortal();
         } catch {
@@ -1680,19 +1653,15 @@ if (firebaseEnabled) {
     }
 
     if (currentCustomer) {
-      const snapshot = await casesCollection
-        .where("owner_uid", "==", currentCustomer.uid)
-        .orderBy("updated_at", "desc")
-        .limit(50)
-        .get();
-      ownClaims = sortClaims(snapshot.docs.map((doc) => normalize(doc.id, doc.data())));
+      // No owner filter: the select policy already limits this to the
+      // signed-in customer's own claims.
+      const rows = await window.claimData.listCases({ limit: 50 });
+      ownClaims = sortClaims(rows.map((row) => normalize(row.id, row)));
     } else {
       const claimIds = readConsumerClaimIds();
-      const snapshots = await Promise.all(claimIds.map((id) => casesCollection.doc(id).get()));
+      const rows = await Promise.all(claimIds.map((id) => window.claimData.getCase(id)));
       ownClaims = sortClaims(
-        snapshots
-          .filter((snapshot) => snapshot.exists)
-          .map((snapshot) => normalize(snapshot.id, snapshot.data()))
+        rows.filter(Boolean).map((row) => normalize(row.id, row))
       );
     }
 
@@ -1735,8 +1704,8 @@ if (firebaseEnabled) {
 
   // Live claim updates. Same query as refreshPortal, but pushed: when an
   // adjuster changes a claim, the customer sees it without reloading.
-  // Previously there were no onSnapshot listeners anywhere and no polling, so
-  // an employee action stayed invisible until a manual refresh.
+  // Before live updates existed there was no polling either, so an
+  // employee action stayed invisible until a manual refresh.
   let unsubscribeClaims = null;
 
   const renderPortalFromClaims = () => {
@@ -1753,22 +1722,13 @@ if (firebaseEnabled) {
     unsubscribeClaims = null;
     if (!user) return;
     try {
-      unsubscribeClaims = casesCollection
-        .where("owner_uid", "==", user.uid)
-        .orderBy("updated_at", "desc")
-        .limit(50)
-        .onSnapshot(
-          (snapshot) => {
-            ownClaims = sortClaims(
-              snapshot.docs.map((doc) => normalize(doc.id, doc.data()))
-            );
-            renderPortalFromClaims();
-          },
-          () => {
-            // Listener failed (rules, offline). Manual Refresh and the next
-            // page load still work, so fail quietly rather than alarm the user.
-          }
-        );
+      unsubscribeClaims = window.claimData.watchCases(
+        (rows) => {
+          ownClaims = sortClaims(rows.map((row) => normalize(row.id, row)));
+          renderPortalFromClaims();
+        },
+        { limit: 50 }
+      );
     } catch {
       unsubscribeClaims = null;
     }
@@ -1776,15 +1736,11 @@ if (firebaseEnabled) {
 
   window.addEventListener("beforeunload", () => unsubscribeClaims?.());
 
-  if (auth) {
-    auth.onAuthStateChanged((user) => {
-      currentCustomer = user;
-      refreshPortal();
-      subscribeToClaims(user);
-    });
-  } else {
+  window.sbAuth.onChange((user) => {
+    currentCustomer = user;
     refreshPortal();
-  }
+    subscribeToClaims(user);
+  });
 } else {
   const dashboardClaims = document.getElementById("consumer-dashboard-claims");
   const notificationToggle = document.getElementById("notification-toggle");

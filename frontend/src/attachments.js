@@ -28,9 +28,9 @@
   };
 
   const idToken = async () => {
-    const user = window.firebase?.auth?.().currentUser;
-    if (!user) throw new Error("Not signed in.");
-    return user.getIdToken();
+    const token = await window.sbAuth?.accessToken?.();
+    if (!token) throw new Error("Not signed in.");
+    return token;
   };
 
   // folder is one of: "supporting-documents" | "messages" | "reviewer-evidence"

@@ -98,8 +98,7 @@ const saveAssistantMessage = (role, text) => {
 const askAssistantBackend = async (question) => {
   const headers = { "Content-Type": "application/json" };
   try {
-    const auth = window.firebase?.auth?.();
-    const token = await auth?.currentUser?.getIdToken?.();
+    const token = await window.sbAuth?.accessToken?.();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

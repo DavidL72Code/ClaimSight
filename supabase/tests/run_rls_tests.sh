@@ -35,6 +35,7 @@ psqlq -f "$ROOT/supabase/migrations/0003_queue_columns.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0004_activity_attachments.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0005_realtime.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0006_assessment_columns.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0007_internal_note.sql" || exit 1
 
 # Claim payloads. app_metadata.role is where Supabase keeps custom claims.
 A='{"sub":"11111111-1111-1111-1111-111111111111","email":"alice@example.com","app_metadata":{}}'
@@ -134,6 +135,8 @@ echo "==> case_internal is adjuster-only"
 act "assigned adjuster reads internal notes"     "$ADJ" "select case_id from public.case_internal where case_id='CLM-1';" OK
 act "customer cannot read internal notes"        "$A"   "select 1/count(*) from public.case_internal where case_id='CLM-1';" DENY
 act "unassigned adjuster cannot read them"       "$OTH" "select 1/count(*) from public.case_internal where case_id='CLM-1';" DENY
+act "adjuster writes a note with an author"      "$ADJ" "insert into public.case_internal (case_id,note,updated_by) values ('CLM-1','call the shop','adjuster@claimsight.com') on conflict (case_id) do update set note=excluded.note, updated_by=excluded.updated_by;" OK
+act "customer cannot read the note"              "$A"   "select 1/count(*) from public.case_internal where case_id='CLM-1' and note is not null;" DENY
 act "manager reads internal notes"               "$MGR" "select case_id from public.case_internal where case_id='CLM-1';" OK
 
 echo "==> case_activity is append-only and attributable"

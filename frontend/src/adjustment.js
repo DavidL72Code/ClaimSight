@@ -1,11 +1,5 @@
 (() => {
-const firebaseConfig = window.FIREBASE_CONFIG || {};
-const firebaseEnabled = Boolean(
-  window.firebase
-  && firebaseConfig.apiKey
-  && firebaseConfig.projectId
-  && firebaseConfig.appId
-);
+const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 
 const params = new URLSearchParams(window.location.search);
 const claimId = params.get("claim") || "CLM-1048";
@@ -244,7 +238,7 @@ const uploadReviewerEvidence = async () => {
   // Reviewer evidence goes through POST /api/attachments, which checks that
   // the caller really is the adjuster assigned to this case before storing
   // anything -- the check storage.rules used to make.
-  if (!firebaseEnabled || !(await window.attachmentsEnabled())) {
+  if (!dataEnabled || !(await window.attachmentsEnabled())) {
     return buildLocalReviewerEvidence();
   }
 
@@ -330,15 +324,15 @@ const renderLineItems = () => {
   syncEstimateTotals();
 };
 
-const addActivityEvent = async (db, type, label) => {
+const addActivityEvent = async (type, label) => {
   if (!activeClaim) return;
-  await db.collection("case_activity").add({
+  await window.claimData.addActivity({
     case_id: activeClaim.id,
     type,
     label,
     actor_role: "employee",
+    actor_uid: window.sbAuth.currentUser()?.uid || null,
     actor_name: elements.reviewerName?.value?.trim() || "Adjuster",
-    created_at: window.firebase.firestore.FieldValue.serverTimestamp(),
   });
 };
 
@@ -377,18 +371,14 @@ const submitAdjustment = async () => {
     estimate_line_items: version.line_items,
     completed_at: new Date().toISOString(),
   };
-  if (!firebaseEnabled) {
+  if (!dataEnabled) {
     activeEstimateVersions.push(version);
     renderEstimateHistory();
-    setText(elements.submitStatus, "Preview adjustment saved. Firebase is required to persist it.");
+    setText(elements.submitStatus, "Preview adjustment saved. A database connection is required to persist it.");
     return;
   }
   setText(elements.submitStatus, "Saving adjustment...");
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const db = window.firebase.firestore(app);
-  await db.collection("cases").doc(activeClaim.id).set({
+  await window.claimData.updateCase(activeClaim.id, {
     review,
     vehicle_type: elements.vehicle?.value?.trim() || activeClaim.vehicle,
     claim_context: {
@@ -405,9 +395,8 @@ const submitAdjustment = async () => {
     status: "final_review",
     status_label: "Final review",
     report_ready: false,
-    updated_at: window.firebase.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  await addActivityEvent(db, "adjustment_submitted", `Adjustment version ${nextVersion} submitted for final review.`);
+  });
+  await addActivityEvent("adjustment_submitted", `Adjustment version ${nextVersion} submitted for final review.`);
   setText(elements.submitStatus, "Adjustment saved and sent to final review.");
   window.setTimeout(() => {
     window.location.href = `./further-reasoning.html?claim=${encodeURIComponent(activeClaim.id)}`;
@@ -462,20 +451,16 @@ const applyCase = (claim) => {
   });
 };
 
-const fetchFirebaseCase = async () => {
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const db = window.firebase.firestore(app);
-  const doc = await db.collection("cases").doc(claimId).get();
-  return doc.exists ? normalizeCase(doc.id, doc.data()) : null;
+const fetchLiveCase = async () => {
+  const row = await window.claimData.getCase(claimId);
+  return row ? normalizeCase(row.id, row) : null;
 };
 
 const loadCase = async () => {
   let claim = null;
-  if (firebaseEnabled) {
+  if (dataEnabled) {
     try {
-      claim = await fetchFirebaseCase();
+      claim = await fetchLiveCase();
     } catch {
       claim = null;
     }
@@ -546,9 +531,9 @@ const requestSecondPass = async () => {
   };
 
   const headers = { "Content-Type": "application/json" };
-  const authUser = window.firebase?.auth?.()?.currentUser;
-  if (authUser?.getIdToken) {
-    headers.Authorization = `Bearer ${await authUser.getIdToken()}`;
+  const token = await window.sbAuth?.accessToken?.();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${apiBaseUrl}/api/second-pass`, {
@@ -617,21 +602,13 @@ elements.saveReviewerEvidence?.addEventListener("click", async () => {
     elements.reviewerEvidenceInput.value = "";
   }
 
-  if (firebaseEnabled) {
+  if (dataEnabled) {
     try {
-      const app = window.firebase.apps?.length
-        ? window.firebase.app()
-        : window.firebase.initializeApp(firebaseConfig);
-      const db = window.firebase.firestore(app);
-      await db.collection("cases").doc(activeClaim.id).set(
-        {
-          reviewer_evidence: activeReviewerEvidence,
-          updated_at: window.firebase.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+      await window.claimData.updateCase(activeClaim.id, {
+        reviewer_evidence: activeReviewerEvidence,
+      });
     } catch {
-      // Keep local preview evidence visible even if Firebase is not reachable.
+      // Keep local preview evidence visible even if the write is refused.
     }
   }
 });
