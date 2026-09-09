@@ -79,19 +79,11 @@
 
   const uploadAttachments = async (claimId) => {
     const files = Array.from(messageFiles?.files || []);
-    if (!files.length || !storage) return [];
-    const out = [];
-    for (const file of files) {
-      try {
-        const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
-        const ref = storage.ref().child(`claim-messages/${claimId}/${Date.now()}-${safe}`);
-        await ref.put(file);
-        out.push({ name: file.name, download_url: await ref.getDownloadURL() });
-      } catch {
-        // Attachment upload is best-effort; the message text still sends.
-      }
-    }
-    return out;
+    if (!files.length) return [];
+    // Goes through POST /api/attachments rather than Firebase Storage,
+    // which needs the Blaze plan to provision a bucket. Still
+    // best-effort per file: the message text still sends without the attachment.
+    return window.uploadClaimAttachments(claimId, files, "messages");
   };
 
   const renderMessageAttachments = (attachments = []) => {

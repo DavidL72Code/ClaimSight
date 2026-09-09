@@ -134,3 +134,19 @@ RATE_LIMIT_MAX_REQUESTS = _env_int("RATE_LIMIT_MAX_REQUESTS", 5)
 # Reject /api/assess requests whose Origin/Referer isn't in ALLOWED_ORIGINS.
 # Opt-in (default off) so it can't break the live site until the real domain is allowlisted.
 ENFORCE_ORIGIN = _env_bool("ENFORCE_ORIGIN", False)
+
+# ---------------------------------------------------------------------------
+# Supabase Storage — holds claim attachments (supporting documents, message
+# attachments, reviewer evidence). Firebase Storage needs the Blaze plan to
+# provision a bucket, so attachments live here instead while Auth and
+# Firestore stay on Firebase.
+#
+# The service key is a full-access credential and never reaches the browser:
+# uploads go through POST /api/attachments, which verifies the caller's
+# Firebase ID token first.
+# ---------------------------------------------------------------------------
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+SUPABASE_ATTACHMENT_BUCKET = _env_str("SUPABASE_ATTACHMENT_BUCKET", "claim-attachments")
+# Signed download URLs expire; the frontend re-requests one when a link is opened.
+ATTACHMENT_URL_TTL_SECONDS = _env_int("ATTACHMENT_URL_TTL_SECONDS", 60 * 60 * 24 * 7)

@@ -121,3 +121,55 @@ class FirebaseClaimLookup:
             "document_count": len(documents),
             "reviewer_evidence_count": len(reviewer_evidence),
         }
+
+    def describe_case_access(
+        self,
+        *,
+        case_id: str,
+        uid: str,
+        email: str,
+        role: str,
+    ) -> dict[str, Any]:
+        """Decide what a caller may do to one case.
+
+        This is a direct port of three functions in firebase/firestore.rules,
+        needed because attachment uploads now go through the backend and the
+        Admin SDK bypasses Security Rules entirely -- so the rules cannot
+        enforce this path and the check has to live here:
+
+            ownsCaseId(caseId)     -> owner_uid == request.auth.uid
+            isAssignedToCase(id)   -> role == "employee"
+                                      && assigned_agent.email == token email
+            isManager()            -> role in ("manager", "admin")
+
+        Returns a dict rather than a bool so callers can log *why* access was
+        refused without re-deriving it.
+        """
+        result = {
+            "exists": False,
+            "is_owner": False,
+            "is_assigned_employee": False,
+            "is_manager": role in {"manager", "admin"},
+            "allowed": False,
+        }
+        if not self._ready or not case_id:
+            return result
+
+        snapshot = self._firestore.collection("cases").document(case_id).get()
+        if not snapshot.exists:
+            # A manager may still act on a missing case only in the sense that
+            # the caller gets a 404 rather than a 403; access stays False here.
+            return result
+
+        payload = snapshot.to_dict() or {}
+        assigned_email = ((payload.get("assigned_agent") or {}).get("email") or "").lower()
+
+        result["exists"] = True
+        result["is_owner"] = bool(uid) and payload.get("owner_uid") == uid
+        result["is_assigned_employee"] = (
+            role == "employee" and bool(email) and assigned_email == email.lower()
+        )
+        result["allowed"] = (
+            result["is_owner"] or result["is_assigned_employee"] or result["is_manager"]
+        )
+        return result

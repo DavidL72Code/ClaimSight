@@ -29,6 +29,12 @@ from app.models.schemas import ClaimAssistantRequest, ClaimAssistantResponse
 from app.models.schemas import SecondPassRequest, SecondPassResponse
 from app.models.schemas import DemoReviewRequest, DemoReviewResponse, DemoReplyResponse
 from app.services.assessment_pipeline import AssessmentPipeline
+from app.services.attachment_storage import (
+    ALLOWED_ATTACHMENT_TYPES,
+    ATTACHMENT_FOLDERS,
+    AttachmentStorageError,
+    SupabaseAttachmentStorage,
+)
 from app.services.case_repository import CaseRepository
 from app.services.demo_reviewer import DemoReviewer, DemoReviewerError
 from app.services.evaluation import AssessmentEvaluator
@@ -44,6 +50,7 @@ report_service = ClaimReportService()
 case_repository = CaseRepository()
 claim_assistant = GeminiClaimNarrator()
 firebase_claim_lookup = FirebaseClaimLookup()
+attachment_storage = SupabaseAttachmentStorage()
 assessment_evaluator = AssessmentEvaluator(
     narrator=getattr(segmentation_service, "narrator", None) or claim_assistant
 )
@@ -71,6 +78,9 @@ def _health_payload() -> dict[str, object]:
         # Lets a client tell a demo deployment from a real one without having
         # to probe /api/demo/review and interpret a 404.
         "demo_mode": DEMO_MODE,
+        # Lets the frontend hide attachment controls instead of throwing
+        # when no storage backend is configured.
+        "attachments_enabled": attachment_storage.ready,
     }
 
     if hasattr(segmentation_service, "ready"):
@@ -289,6 +299,78 @@ def _demo_error(exc: DemoReviewerError) -> HTTPException:
     if "not found" in lowered:
         return HTTPException(status_code=404, detail=message)
     return HTTPException(status_code=409, detail=message)
+
+
+@router.post("/api/attachments")
+async def upload_attachment(
+    request: Request,
+    case_id: str = Form(...),
+    folder: str = Form(...),
+    file: UploadFile = File(...),
+) -> dict[str, object]:
+    """Store one claim attachment and hand back a signed download URL.
+
+    Firebase Storage would have enforced access with storage.rules, but it
+    needs the Blaze plan to provision a bucket. Attachments go to Supabase
+    instead, which means the ownership check that storage.rules used to do
+    has to happen here -- see describe_case_access, which ports it.
+    """
+    decoded_token = _require_firebase_user(request)
+    _enforce_rate_limit(request, str(decoded_token.get("uid") or ""))
+
+    if folder not in ATTACHMENT_FOLDERS:
+        raise HTTPException(status_code=400, detail="Unknown attachment folder.")
+
+    if not attachment_storage.ready:
+        raise HTTPException(
+            status_code=503,
+            detail="Attachment storage is not configured on this deployment.",
+        )
+
+    access = firebase_claim_lookup.describe_case_access(
+        case_id=case_id,
+        uid=str(decoded_token.get("uid") or ""),
+        email=str(decoded_token.get("email") or ""),
+        role=str(decoded_token.get("role") or ""),
+    )
+    if not access["exists"]:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    if not access["allowed"]:
+        raise HTTPException(status_code=403, detail="You do not have access to this case.")
+    # Only the assigned adjuster (or a manager) may file reviewer evidence;
+    # storage.rules drew the same line on claim-reviewer-evidence.
+    if folder == "reviewer-evidence" and not (
+        access["is_assigned_employee"] or access["is_manager"]
+    ):
+        raise HTTPException(
+            status_code=403, detail="Only the assigned adjuster can add reviewer evidence."
+        )
+
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in ALLOWED_ATTACHMENT_TYPES:
+        raise HTTPException(status_code=415, detail="That file type is not supported.")
+
+    content = await file.read()
+    _validate_upload_size(content)
+
+    try:
+        stored = attachment_storage.upload(
+            folder_key=folder,
+            case_id=case_id,
+            filename=file.filename or "attachment",
+            content=content,
+            content_type=content_type,
+        )
+    except AttachmentStorageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "name": file.filename or "attachment",
+        "download_url": stored["download_url"],
+        "path": stored["path"],
+        "content_type": content_type,
+        "size_bytes": len(content),
+    }
 
 
 @router.post("/api/demo/enroll", response_model=DemoReviewResponse)

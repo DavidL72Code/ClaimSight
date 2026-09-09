@@ -391,17 +391,20 @@ const collectSupportingDocuments = async (claimReference) => {
     }));
   }
 
+  // Supporting documents go through POST /api/attachments instead of
+  // Firebase Storage, which cannot provision a bucket on the free plan.
   const uploads = files.map(async (file) => {
-    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
-    const ref = firebaseStorage.ref().child(`claim-supporting-documents/${claimReference}/${Date.now()}-${safeName}`);
-    await ref.put(file);
-    const download_url = await ref.getDownloadURL();
+    const stored = await window.uploadClaimAttachment(
+      claimReference,
+      file,
+      "supporting-documents",
+    );
     return {
       name: file.name,
       size: file.size,
       type: file.type || "application/octet-stream",
       uploaded_at: uploadedAt,
-      download_url,
+      download_url: stored.download_url,
     };
   });
   return Promise.all(uploads);

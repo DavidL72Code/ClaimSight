@@ -27,6 +27,7 @@ for (const file of [
   "final-report.html",
   "styles.css",
   "app.js",
+  "attachments.js",
   "home.js",
   "customer-auth.js",
   "claim-assistant.js",

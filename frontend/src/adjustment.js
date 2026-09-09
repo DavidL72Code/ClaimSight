@@ -241,26 +241,26 @@ const uploadReviewerEvidence = async () => {
     return [];
   }
   const uploadedAt = new Date().toISOString();
-  if (!firebaseEnabled || typeof window.firebase.storage !== "function") {
+  // Reviewer evidence goes through POST /api/attachments, which checks that
+  // the caller really is the adjuster assigned to this case before storing
+  // anything -- the check storage.rules used to make.
+  if (!firebaseEnabled || !(await window.attachmentsEnabled())) {
     return buildLocalReviewerEvidence();
   }
 
-  const app = window.firebase.apps?.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(firebaseConfig);
-  const storage = window.firebase.storage(app);
   return Promise.all(files.map(async (file) => {
-    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
-    const ref = storage.ref().child(`claim-reviewer-evidence/${activeClaim.id}/${Date.now()}-${safeName}`);
-    await ref.put(file);
-    const download_url = await ref.getDownloadURL();
+    const stored = await window.uploadClaimAttachment(
+      activeClaim.id,
+      file,
+      "reviewer-evidence",
+    );
     return {
       name: file.name,
       size: file.size,
       type: file.type || "application/octet-stream",
       uploaded_at: uploadedAt,
       source: "employee_adjustment",
-      download_url,
+      download_url: stored.download_url,
     };
   }));
 };

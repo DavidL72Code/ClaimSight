@@ -1427,17 +1427,21 @@ if (firebaseEnabled) {
         source: "customer_appeal",
       }));
     }
+    // POST /api/attachments rather than Firebase Storage, which needs the
+    // Blaze plan before it will provision a bucket.
     return Promise.all(files.map(async (file) => {
-      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
-      const ref = storage.ref().child(`claim-supporting-documents/${selected.id}/${Date.now()}-${safeName}`);
-      await ref.put(file);
+      const stored = await window.uploadClaimAttachment(
+        selected.id,
+        file,
+        "supporting-documents",
+      );
       return {
         name: file.name,
         size: file.size,
         type: file.type || "application/octet-stream",
         uploaded_at: uploadedAt,
         source: "customer_appeal",
-        download_url: await ref.getDownloadURL(),
+        download_url: stored.download_url,
       };
     }));
   };
@@ -1458,16 +1462,17 @@ if (firebaseEnabled) {
       }));
     }
     return Promise.all(files.map(async (file) => {
-      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-");
-      const ref = storage.ref().child(`claim-supporting-documents/${item.id}/${Date.now()}-${safeName}`);
-      await ref.put(file);
-      const download_url = await ref.getDownloadURL();
+      const stored = await window.uploadClaimAttachment(
+        item.id,
+        file,
+        "supporting-documents",
+      );
       return {
         name: file.name,
         size: file.size,
         type: file.type || "application/octet-stream",
         uploaded_at: uploadedAt,
-        download_url,
+        download_url: stored.download_url,
         source: "customer_added_later",
       };
     }));
