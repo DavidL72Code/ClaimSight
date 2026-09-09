@@ -34,6 +34,7 @@ for (const file of [
   "employee-auth.js",
   "employee-dashboard.js",
   "employee-messages.js",
+  "employee-notifications.js",
   "customer-messages.js",
   "reasoning.js",
   "consumer-case.js",

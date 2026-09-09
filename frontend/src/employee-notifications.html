@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaimSight | Employee Notifications</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./assets/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght@400&display=swap" />
@@ -26,7 +28,7 @@
       <div class="topbar-actions">
         <a class="employee-notification-bell icon-button active" href="./employee-notifications.html" aria-label="Employee notifications">
         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
-        <span class="notification-count">3</span>
+        <span class="notification-count hidden">0</span>
       </a>
         <button class="logout-button" type="button" data-employee-logout>Logout</button>
       </div>
@@ -44,28 +46,16 @@
         <div class="consumer-panel-head">
           <span>Claim alerts</span>
         </div>
-        <div class="employee-notification-list">
-          <article>
-            <strong>Dispute received</strong>
-            <p>CLM-1048 needs employee response before final report is released.</p>
-            <span>2 minutes ago</span>
-          </article>
-          <article>
-            <strong>Adjustment submitted</strong>
-            <p>CLM-1047 was sent to further reasoning for final review.</p>
-            <span>18 minutes ago</span>
-          </article>
-          <article>
-            <strong>Missing evidence</strong>
-            <p>CLM-1046 is waiting on additional passenger-side photos.</p>
-            <span>Today</span>
-          </article>
+        <div class="employee-notification-list" aria-live="polite">
+          <article class="employee-notification-empty"><strong>Loading alerts...</strong></article>
         </div>
       </section>
     </main>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="./firebase-config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="./employee-auth.js?v=security-1"></script>
+    <script src="./employee-notifications.js"></script>
   </body>
 </html>

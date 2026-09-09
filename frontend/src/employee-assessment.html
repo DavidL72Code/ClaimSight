@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaimSight | Employee Assessment</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./assets/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght@400&display=swap" />
@@ -26,7 +28,7 @@
       <div class="topbar-actions">
         <a class="employee-notification-bell icon-button" href="./employee-notifications.html" aria-label="Employee notifications">
         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
-        <span class="notification-count">3</span>
+        <span class="notification-count hidden">0</span>
       </a>
         <button class="logout-button" type="button" data-employee-logout>Logout</button>
       </div>
@@ -140,9 +142,21 @@
               <div class="consumer-panel-head">
                 <span>Review actions</span>
               </div>
+              <fieldset class="employee-request-types">
+                <legend>Which sections does the customer need to redo?</legend>
+                <label><input type="checkbox" name="request-type" value="photos" /><span>Damage photos</span></label>
+                <label><input type="checkbox" name="request-type" value="vin" /><span>VIN / odometer photo</span></label>
+                <label><input type="checkbox" name="request-type" value="estimate" /><span>Repair estimate or invoice</span></label>
+                <label><input type="checkbox" name="request-type" value="documents" /><span>Police, tow, or storage docs</span></label>
+                <label><input type="checkbox" name="request-type" value="vehicle" /><span>Vehicle details</span></label>
+              </fieldset>
               <div class="employee-evidence-request-fields">
                 <label>
-                  <span>Evidence needed</span>
+                  <span>Be specific about what is wrong</span>
+                  <textarea id="employee-request-evidence-note" rows="3" placeholder="The left-side photo is too dark to see the door crease. Please retake it in daylight, straight on, from about 2 metres."></textarea>
+                </label>
+                <label>
+                  <span>Evidence needed (short list)</span>
                   <input id="employee-request-evidence-items" type="text" placeholder="Left-side photo, repair estimate" />
                 </label>
                 <label>
@@ -204,6 +218,27 @@
 
             <section class="employee-submission-panel">
               <div class="consumer-panel-head">
+                <span>Review process</span>
+                <span id="demo-review-progress" class="demo-progress hidden"></span>
+              </div>
+              <!-- Demo only: revealed by employee-dashboard.js when the backend
+                   reports demo_mode, so a viewer can advance the simulated
+                   adjuster one step at a time and watch the customer react. -->
+              <div id="demo-review-controls" class="demo-controls hidden">
+                <button id="demo-review-next" class="primary-button" type="button">
+                  <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+                  <span id="demo-review-next-label">Advance review</span>
+                </button>
+                <button id="demo-review-reply" class="text-action" type="button">Reply to customer</button>
+                <p id="demo-review-status" class="demo-controls-status"></p>
+              </div>
+              <div id="employee-review-steps" class="review-step-list">
+                <article class="review-step empty">No review activity yet. Steps appear here as the claim is worked.</article>
+              </div>
+            </section>
+
+            <section class="employee-submission-panel">
+              <div class="consumer-panel-head">
                 <span>Audit log</span>
               </div>
               <div id="employee-audit-log" class="audit-log-list">
@@ -221,8 +256,12 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <!-- config.js supplies window.APP_CONFIG.API_BASE_URL; without it the demo
+         review controls would silently call a same-origin URL with no backend. -->
+    <script src="./config.js"></script>
     <script src="./firebase-config.js"></script>
     <script src="./employee-auth.js?v=security-1"></script>
+    <script src="./employee-notifications.js"></script>
     <script src="./employee-dashboard.js?v=workflow-upgrades-1"></script>
   </body>
 </html>

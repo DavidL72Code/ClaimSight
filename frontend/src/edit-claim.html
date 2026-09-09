@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaimSight | Edit Claim</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./assets/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght@400&display=swap" />
@@ -148,29 +150,38 @@
                   </label>
                 </div>
               </div>
+              <section id="reviewer-request-panel" class="reviewer-request-panel hidden" aria-label="What your adjuster needs">
+                <div class="consumer-panel-head">
+                  <span>Your adjuster needs changes</span>
+                  <strong id="reviewer-request-due"></strong>
+                </div>
+                <p id="reviewer-request-note" class="reviewer-request-note"></p>
+                <ul id="reviewer-request-items" class="reviewer-request-items"></ul>
+              </section>
+
               <section class="evidence-checklist-card claim-form-checklist" aria-label="Evidence checklist">
                 <div class="consumer-panel-head">
                   <span>Evidence checklist</span>
                   <strong>Required vs optional</strong>
                 </div>
                 <ul class="evidence-checklist">
-                  <li class="complete">
+                  <li class="complete" data-edit-check="submitted">
                     <span class="check-dot"></span>
                     <div><strong>Claim submitted</strong><p>Complete · your claim is already in the review queue.</p></div>
                   </li>
-                  <li class="needed">
+                  <li data-edit-check="photos">
                     <span class="check-dot"></span>
                     <div><strong>Clear damage photos</strong><p>Required if the adjuster cannot see the damaged area clearly.</p></div>
                   </li>
-                  <li class="needed">
+                  <li data-edit-check="vehicle">
                     <span class="check-dot"></span>
-                    <div><strong>Accurate vehicle details</strong><p>Required · confirm make, model, year, mileage, trim, and usage.</p></div>
+                    <div><strong>Accurate vehicle details</strong><p>Required · confirm make, model, year, mileage, and usage.</p></div>
                   </li>
-                  <li class="optional">
+                  <li class="optional" data-edit-check="estimate">
                     <span class="check-dot"></span>
                     <div><strong>Repair estimate or invoice</strong><p>Optional · helpful if a shop already inspected the vehicle.</p></div>
                   </li>
-                  <li class="optional">
+                  <li class="optional" data-edit-check="documents">
                     <span class="check-dot"></span>
                     <div><strong>Police, tow, or storage documents</strong><p>Optional · only needed if they exist for this crash.</p></div>
                   </li>
@@ -180,6 +191,7 @@
                 <label>
                   <span>Add photos or documents</span>
                   <input id="consumer-supporting-documents" type="file" accept="image/*,.pdf,.doc,.docx" multiple />
+                  <div id="consumer-doc-links" class="evidence-link-list hidden" aria-label="Evidence type for each upload"></div>
                 </label>
                 <button id="consumer-save-documents" class="secondary-action" type="button">Update claim</button>
               </div>

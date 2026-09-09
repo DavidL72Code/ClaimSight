@@ -117,7 +117,7 @@ let latestAssessment = null;
 let reviewState = null;
 let savedCases = [];
 let queueCases = [];
-// Ordered list of { file, dataUrl }. The array index is the image_index the
+// Ordered list of { file, dataUrl, evidenceTag }. The array index is the
 // backend uses for each detected region.
 let selectedImages = [];
 let activeImageIndex = 0;
@@ -266,6 +266,51 @@ const restoreConsumerDraft = () => {
     setStatus(draft.saved_at ? `Draft restored from ${new Date(draft.saved_at).toLocaleDateString()}.` : "Draft restored.");
   } catch {
     window.localStorage.removeItem(consumerDraftStorageKey);
+  }
+};
+
+/* Demo deployments have no staff on shift, so nothing would ever move a claim
+   past "submitted". Enrol the claim with the demo reviewer, which assigns it so
+   it appears in the employee queue -- the review itself is then advanced one
+   step at a time from the employee portal, which is the point of the demo.
+
+   Deliberately does NOT run the review: a viewer needs to be watching the
+   employee tab when each step lands.
+
+   Self-gating: the endpoint is registered only when DEMO_MODE is on, so a
+   production backend answers 404 and this quietly does nothing. Failure is
+   never surfaced to the customer -- the claim is already safely submitted, and
+   a broken demo extra must not read as a broken submission. */
+const requestDemoReview = async (claimReference) => {
+  if (!apiBaseUrl || !claimReference) return;
+
+  try {
+    const authUser = window.firebase?.auth?.()?.currentUser;
+    if (!authUser?.getIdToken) return;
+
+    const response = await fetch(`${apiBaseUrl}/api/demo/enroll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${await authUser.getIdToken()}`,
+      },
+      body: JSON.stringify({ case_id: claimReference }),
+    });
+
+    if (response.status === 404) return; // not a demo deployment
+    if (!response.ok) {
+      console.debug("Demo enrol unavailable:", response.status);
+      return;
+    }
+
+    const result = await response.json();
+    if (result.next_step_title) {
+      setStatus(
+        `Claim ${claimReference} submitted. An adjuster will pick it up shortly.`,
+      );
+    }
+  } catch (error) {
+    console.debug("Demo enrol request failed:", error);
   }
 };
 
@@ -575,14 +620,147 @@ const formatBytes = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+// ── evidence tagging ─────────────────────────────────────────────
+// Which checklist row an upload counts towards used to be guessed from
+// the filename (/vin|odometer|mileage/, /estimate|invoice|quote/), so a
+// repair estimate saved as "scan01.pdf" satisfied nothing and the
+// claimant had no way to say what they had attached. Uploads are now
+// tagged explicitly and the checklist reads those tags.
+const evidenceTypes = [
+  { key: "photos", label: "Damage photo" },
+  { key: "vin", label: "VIN / odometer photo" },
+  { key: "estimate", label: "Repair estimate or invoice" },
+  { key: "documents", label: "Police, tow, or storage document" },
+];
+
+// Parallel to elements.supportingDocumentsInput.files. A FileList cannot
+// be annotated, and picking new files replaces it wholesale, so the tags
+// are reset whenever the input changes.
+let supportingDocTags = [];
+
+const evidenceTagSelect = (value, onChange) => {
+  const select = document.createElement("select");
+  select.className = "evidence-link-select";
+  select.setAttribute("aria-label", "What this upload shows");
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Select what this shows...";
+  select.appendChild(placeholder);
+
+  evidenceTypes.forEach(({ key, label }) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = label;
+    select.appendChild(option);
+  });
+
+  select.value = value || "";
+  // the queue item behind this select selects the preview image
+  select.addEventListener("click", (event) => event.stopPropagation());
+  select.addEventListener("change", (event) => {
+    event.stopPropagation();
+    onChange(select.value);
+  });
+  return select;
+};
+
+// Staged supporting documents are only a filename until you can look
+// at them. Each row gets a thumbnail (a real image preview where the
+// browser can make one) and a View control.
+//
+// This page does not load consumer-case.js, so the rich preview modal
+// used on Edit Claim is not available here; View opens the file in a
+// new tab instead, which the browser renders natively for images and
+// PDFs. Damage photos already preview in the main stage.
+let supportingDocUrls = [];
+
+const releaseSupportingDocUrls = () => {
+  supportingDocUrls.forEach((url) => URL.revokeObjectURL(url));
+  supportingDocUrls = [];
+};
+
+const supportingDocKind = (file) => {
+  const name = file.name.toLowerCase();
+  if (file.type.includes("pdf") || name.endsWith(".pdf")) return "PDF";
+  if (file.type.includes("word") || /\.(docx?|rtf)$/.test(name)) return "DOC";
+  return "FILE";
+};
+
+const stagedDocPreview = (file) => {
+  const url = URL.createObjectURL(file);
+  supportingDocUrls.push(url);
+  const isImage = file.type.startsWith("image/");
+
+  const thumb = document.createElement("a");
+  thumb.className = `evidence-link-thumb${isImage ? " photo" : ""}`;
+  thumb.href = url;
+  thumb.target = "_blank";
+  thumb.rel = "noopener noreferrer";
+  thumb.setAttribute("aria-label", `Preview ${file.name}`);
+  if (isImage) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    thumb.appendChild(img);
+  } else {
+    const chip = document.createElement("span");
+    chip.textContent = supportingDocKind(file);
+    thumb.appendChild(chip);
+  }
+
+  const view = document.createElement("a");
+  view.className = "evidence-link-view";
+  view.href = url;
+  view.target = "_blank";
+  view.rel = "noopener noreferrer";
+  view.textContent = "View";
+
+  return { thumb, view };
+};
+
+const renderSupportingDocLinks = () => {
+  const list = document.getElementById("supporting-doc-links");
+  if (!list) return;
+  const files = Array.from(elements.supportingDocumentsInput?.files || []);
+  releaseSupportingDocUrls();
+  list.innerHTML = "";
+  list.classList.toggle("hidden", files.length === 0);
+
+  files.forEach((file, index) => {
+    const row = document.createElement("div");
+    row.className = "evidence-link-row";
+
+    const { thumb, view } = stagedDocPreview(file);
+
+    const name = document.createElement("span");
+    name.className = "evidence-link-name";
+    name.textContent = file.name;
+
+    const select = evidenceTagSelect(supportingDocTags[index], (value) => {
+      supportingDocTags[index] = value;
+      row.classList.toggle("untagged", !value);
+      // field-invalid is the post-submit red state; drop it once tagged
+      if (value) row.classList.remove("field-invalid");
+      updateEvidenceChecklist();
+    });
+
+    row.classList.toggle("untagged", !supportingDocTags[index]);
+    row.append(thumb, name, select, view);
+    list.appendChild(row);
+  });
+};
+
 const getEvidenceState = () => {
-  const supportingFiles = Array.from(elements.supportingDocumentsInput?.files || []);
-  const fileNames = [
-    ...selectedImages.map((item) => item.file.name),
-    ...supportingFiles.map((file) => file.name),
-  ].join(" ").toLowerCase();
+  const tagged = {};
+  const count = (tag) => {
+    if (tag) tagged[tag] = (tagged[tag] || 0) + 1;
+  };
+  selectedImages.forEach((item) => count(item.evidenceTag));
+  supportingDocTags.forEach((tag) => count(tag));
+
   return {
-    photos: selectedImages.length >= 2,
+    photos: (tagged.photos || 0) >= 2,
     vehicle: Boolean(
       elements.vehicleMakeInput?.value?.trim()
       && elements.vehicleModelInput?.value?.trim()
@@ -592,14 +770,146 @@ const getEvidenceState = () => {
       elements.incidentDateInput?.value
       && (elements.incidentDescriptionInput?.value?.trim().length || 0) >= 20
     ),
-    vin: /vin|odometer|mileage/.test(fileNames),
-    estimate: /estimate|invoice|quote/.test(fileNames),
-    documents: supportingFiles.length > 0,
+    vin: Boolean(tagged.vin),
+    estimate: Boolean(tagged.estimate),
+    documents: Boolean(tagged.documents),
   };
 };
 
+// ── inline required-field validation ─────────────────────────────
+// The checklist only reported which *group* was short ("photos,
+// vehicle, incident"), leaving the claimant to work out which box was
+// actually empty. These rules map each requirement to the specific
+// control so submit can mark the offending fields directly.
+const requiredFields = () => [
+  {
+    input: elements.vehicleMakeInput,
+    ok: (el) => Boolean(el.value.trim()),
+    message: "Enter the vehicle make.",
+  },
+  {
+    input: elements.vehicleModelInput,
+    ok: (el) => Boolean(el.value.trim()),
+    message: "Enter the vehicle model.",
+  },
+  {
+    input: elements.vehicleYearInput,
+    ok: (el) => Boolean(el.value),
+    message: "Enter the vehicle year.",
+  },
+  {
+    input: elements.incidentDateInput,
+    ok: (el) => Boolean(el.value),
+    message: "Choose the date of the incident.",
+  },
+  {
+    input: elements.incidentDescriptionInput,
+    ok: (el) => el.value.trim().length >= 20,
+    message: "Describe what happened in at least 20 characters.",
+  },
+];
+
+// The field wrapper is the <label> around the control; the dropzone is
+// itself a label, so it is its own wrapper.
+const fieldWrapper = (input) => input.closest("label") || input.parentElement;
+
+const clearFieldError = (input) => {
+  if (!input) return;
+  const wrapper = fieldWrapper(input);
+  wrapper?.classList.remove("field-invalid");
+  wrapper?.querySelector(".field-error")?.remove();
+  input.removeAttribute("aria-invalid");
+};
+
+const markFieldError = (input, message) => {
+  if (!input) return;
+  const wrapper = fieldWrapper(input);
+  if (!wrapper) return;
+  wrapper.classList.add("field-invalid");
+  input.setAttribute("aria-invalid", "true");
+  let note = wrapper.querySelector(".field-error");
+  if (!note) {
+    note = document.createElement("span");
+    note.className = "field-error";
+    note.setAttribute("role", "alert");
+    wrapper.appendChild(note);
+  }
+  note.textContent = message;
+};
+
+const clearAllFieldErrors = () => {
+  requiredFields().forEach(({ input }) => clearFieldError(input));
+  elements.dropzone?.classList.remove("field-invalid");
+  elements.dropzone?.querySelector(".field-error")?.remove();
+};
+
+// Returns the controls that failed, first one first, so submit can
+// focus it. Photos are handled separately because the "control" is the
+// dropzone and the requirement is a count, not a value.
+const validateRequiredFields = () => {
+  const failed = [];
+
+  if (selectedImages.length < 2) {
+    const message = selectedImages.length === 0
+      ? "Add at least 2 damage photos."
+      : "Add at least 2 damage photos — 1 selected.";
+    if (elements.dropzone) {
+      elements.dropzone.classList.add("field-invalid");
+      let note = elements.dropzone.querySelector(".field-error");
+      if (!note) {
+        note = document.createElement("span");
+        note.className = "field-error";
+        note.setAttribute("role", "alert");
+        elements.dropzone.appendChild(note);
+      }
+      note.textContent = message;
+      failed.push(elements.dropzone);
+    }
+  } else {
+    elements.dropzone?.classList.remove("field-invalid");
+    elements.dropzone?.querySelector(".field-error")?.remove();
+  }
+
+  requiredFields().forEach(({ input, ok, message }) => {
+    if (!input) return;
+    if (ok(input)) {
+      clearFieldError(input);
+    } else {
+      markFieldError(input, message);
+      failed.push(input);
+    }
+  });
+
+  return failed;
+};
+
+// Clear a field's error as soon as it is corrected, so the red state
+// never lingers on something the claimant has already fixed.
+requiredFields().forEach(({ input, ok }) => {
+  if (!input) return;
+  const revalidate = () => {
+    if (ok(input)) clearFieldError(input);
+  };
+  input.addEventListener("input", revalidate);
+  input.addEventListener("change", revalidate);
+});
+
 const updateEvidenceChecklist = () => {
   const evidenceState = getEvidenceState();
+
+  // Clear the dropzone's red state as soon as enough photos are tagged.
+  // The text fields self-clear through their own input listeners, but
+  // the dropzone is not an input, so without this the "Add at least 2
+  // damage photos" error stayed until the next submit attempt.
+  if (evidenceState.photos && elements.dropzone?.classList.contains("field-invalid")) {
+    elements.dropzone.classList.remove("field-invalid");
+    elements.dropzone.querySelector(".field-error")?.remove();
+    if (elements.status?.classList.contains("status-error")) {
+      elements.status.classList.remove("status-error");
+      setStatus(`${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} ready to assess.`);
+    }
+  }
+
   document.querySelectorAll("[data-evidence-check]").forEach((item) => {
     const complete = Boolean(evidenceState[item.dataset.evidenceCheck]);
     item.classList.toggle("complete", complete);
@@ -647,9 +957,17 @@ const renderQueue = () => {
       removeImage(index);
     });
 
+    const tag = evidenceTagSelect(item.evidenceTag, (value) => {
+      item.evidenceTag = value;
+      li.classList.toggle("untagged", !value);
+      if (value) li.classList.remove("field-invalid");
+      updateEvidenceChecklist();
+    });
+    li.classList.toggle("untagged", !item.evidenceTag);
+
     // Clicking the item previews that image.
     li.addEventListener("click", () => setActiveImage(index));
-    li.append(thumb, meta, remove);
+    li.append(thumb, meta, tag, remove);
     elements.queueList.appendChild(li);
   });
 
@@ -678,7 +996,8 @@ const addFiles = async (fileList) => {
       continue;
     }
     const dataUrl = await readFileAsDataUrl(file);
-    selectedImages.push({ file, dataUrl });
+    // dropped into the claim-photo zone, so it starts tagged as one
+    selectedImages.push({ file, dataUrl, evidenceTag: "photos" });
     added += 1;
   }
 
@@ -1271,6 +1590,10 @@ const renderActiveOverlay = () => {
 };
 
 const downloadAssessmentReport = () => {
+  // The report had no images at all — a damage report with no damage.
+  // selectedImages holds the data URLs already read for the preview, so
+  // they embed without another fetch.
+  const reportPhotos = selectedImages.map((entry) => entry.dataUrl).filter(Boolean);
   const exportPayload = getReviewedAssessment();
   if (!exportPayload) {
     return;
@@ -1320,6 +1643,10 @@ const downloadHtmlReport = () => {
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 10px; border-bottom: 1px solid #d6ddd8; vertical-align: top; }
     .small { color: #516157; font-size: 0.92rem; }
+    .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .photos figure { margin: 0; }
+    .photos img { width: 100%; border-radius: 6px; border: 1px solid #dde2e9; }
+    @media print { .photos { grid-template-columns: repeat(2, 1fr); } .card { break-inside: avoid; } }
   </style>
 </head>
 <body>
@@ -1335,12 +1662,55 @@ const downloadHtmlReport = () => {
     <div class="tile"><strong>Final action</strong><div>${escapeHtml(exportPayload.review?.final_action || exportPayload.recommended_action || "—")}</div></div>
     <div class="tile"><strong>AI estimate</strong><div>${escapeHtml(formatCurrency(exportPayload.estimated_total_cost_usd))}</div></div>
     <div class="tile"><strong>Reviewed estimate</strong><div>${escapeHtml(formatCurrency(exportPayload.review?.reviewed_total_cost_usd || 0))}</div></div>
+    <div class="tile"><strong>Assessed vehicle value</strong><div>${escapeHtml(formatCurrency(exportPayload.estimated_vehicle_value_usd || 0))}</div></div>
+    <div class="tile"><strong>Outcome</strong><div>${escapeHtml(
+      (exportPayload.assessment_flags || []).some((f) => f.code === "total_loss_undecidable_without_value")
+        ? "Pending — adjuster to set vehicle value"
+        : (exportPayload.total_loss ? "Total loss" : "Repair"))}</div></div>
   </div>
   <div class="card">
     <h2>Assessment summary</h2>
     <p>${escapeHtml(exportPayload.summary || "")}</p>
     <p class="small">${escapeHtml(exportPayload.review?.notes || "No reviewer notes entered.")}</p>
   </div>
+  ${exportPayload.total_loss ? `
+  <div class="card">
+    <h2>Basis for total loss</h2>
+    <p>${escapeHtml(exportPayload.total_loss_reason
+      || `Repair cost of ${formatCurrency(exportPayload.review?.reviewed_total_cost_usd || exportPayload.estimated_total_cost_usd)} against an assessed vehicle value of ${formatCurrency(exportPayload.estimated_vehicle_value_usd || 0)}.`)}</p>
+  </div>` : ""}
+  ${(exportPayload.valuation_methodology
+     || (exportPayload.valuation_comparable_prices_usd || []).length
+     || (exportPayload.sources || []).length) ? `
+  <div class="card">
+    <h2>How the vehicle was valued</h2>
+    ${exportPayload.valuation_methodology ? `<p>${escapeHtml(exportPayload.valuation_methodology)}</p>` : ""}
+    ${(exportPayload.valuation_comparable_prices_usd || []).length
+      ? `<p class="small">Comparable listings: ${(exportPayload.valuation_comparable_prices_usd || []).map((v) => escapeHtml(formatCurrency(v))).join(", ")}</p>`
+      : ""}
+    ${(exportPayload.sources || []).length
+      ? `<ul class="small">${(exportPayload.sources || []).slice(0, 8).map((src) => {
+          const label = src.title || src.name || src.uri || src.url || "";
+          const href = src.uri || src.url || "";
+          return `<li>${href ? `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>` : escapeHtml(label)}</li>`;
+        }).join("")}</ul>`
+      : ""}
+    ${exportPayload.meta?.grounding_status
+      ? `<p class="small">Grounding: ${escapeHtml(exportPayload.meta.grounding_status)}</p>`
+      : ""}
+    ${(exportPayload.search_queries || []).length
+      ? `<p class="small">Searches run: ${(exportPayload.search_queries || []).map((q) => escapeHtml(q)).join(" | ")}</p>`
+      : ""}
+  </div>` : ""}
+  ${reportPhotos.length ? `
+  <div class="card">
+    <h2>Damage photos</h2>
+    <div class="photos">
+      ${reportPhotos.map((photo, i) => `
+        <figure><img src="${escapeHtml(photo)}" alt="Claim photo ${i + 1}" /><figcaption class="small">Photo ${i + 1}</figcaption></figure>
+      `).join("")}
+    </div>
+  </div>` : ""}
   <div class="card">
     <h2>Review signals</h2>
     ${(flags.length
@@ -1590,22 +1960,44 @@ elements.queueNext.addEventListener("click", () => {
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const evidenceState = updateEvidenceChecklist();
-  const missingRequired = Object.entries(evidenceState)
-    .filter(([key, complete]) => ["photos", "vehicle", "incident"].includes(key) && !complete)
-    .map(([key]) => key);
-  if (missingRequired.length) {
-    setStatus(`Complete the required evidence checklist: ${missingRequired.join(", ")}.`);
+  updateEvidenceChecklist();
+  const failedFields = validateRequiredFields();
+
+  // An upload with no evidence type tells us nothing about what was
+  // supplied, so it blocks submit the same way an empty field does.
+  const untaggedDocs = Array.from(elements.supportingDocumentsInput?.files || [])
+    .filter((_, index) => !supportingDocTags[index]).length;
+  const untaggedPhotos = selectedImages.filter((item) => !item.evidenceTag).length;
+
+  if (untaggedDocs || untaggedPhotos) {
+    document.getElementById("supporting-doc-links")
+      ?.querySelectorAll(".evidence-link-row.untagged")
+      .forEach((row) => row.classList.add("field-invalid"));
+    elements.queueList?.querySelectorAll(".queue-item.untagged")
+      .forEach((row) => row.classList.add("field-invalid"));
+  }
+
+  if (failedFields.length || untaggedDocs || untaggedPhotos) {
+    const problems = failedFields.length + untaggedDocs + untaggedPhotos;
+    const verb = problems === 1 ? "needs" : "need";
+    setStatus(
+      untaggedDocs || untaggedPhotos
+        ? `${problems} item${problems === 1 ? "" : "s"} ${verb} attention — every upload needs an evidence type.`
+        : `${problems} required field${problems === 1 ? "" : "s"} ${verb} attention.`
+    );
+    elements.status?.classList.add("status-error");
+    const first = failedFields[0];
+    if (first) {
+      first.scrollIntoView({ behavior: "smooth", block: "center" });
+      // the dropzone is a label; focusing it would open the file picker
+      if (first !== elements.dropzone) first.focus({ preventScroll: true });
+    }
     return;
   }
+  elements.status?.classList.remove("status-error");
 
   if (!apiBaseUrl) {
     setStatus("Set VITE_API_BASE_URL before running the frontend.");
-    return;
-  }
-
-  if (selectedImages.length === 0) {
-    setStatus("Add at least one image before submitting.");
     return;
   }
 
@@ -1660,6 +2052,8 @@ elements.form.addEventListener("submit", async (event) => {
         window.localStorage.removeItem(consumerDraftStorageKey);
         window.ClaimSightConsumer?.refreshPortal?.();
         setStatus(`Assessment complete. Claim ${claimReference} submitted.`);
+        await requestDemoReview(claimReference);
+        window.ClaimSightConsumer?.refreshPortal?.();
         window.location.href = `./messages.html?claim=${encodeURIComponent(claimReference)}`;
       } else {
         setStatus("Assessment complete.");
@@ -1682,7 +2076,12 @@ elements.saveDraft?.addEventListener("click", saveConsumerDraft);
   elements.supportingDocumentsInput,
 ].forEach((input) => input?.addEventListener("input", updateEvidenceChecklist));
 
-elements.supportingDocumentsInput?.addEventListener("change", updateEvidenceChecklist);
+// Picking files replaces the FileList outright, so the tags start over.
+elements.supportingDocumentsInput?.addEventListener("change", () => {
+  supportingDocTags = Array.from(elements.supportingDocumentsInput.files || []).map(() => "");
+  renderSupportingDocLinks();
+  updateEvidenceChecklist();
+});
 
 elements.previewImage.addEventListener("load", renderActiveOverlay);
 

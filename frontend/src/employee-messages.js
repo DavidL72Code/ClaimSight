@@ -104,6 +104,55 @@
   };
 
   // ── thread list (assigned claims) ──────────────────────────────
+  // Read state lives on the case doc as `employee_thread_seen_at` so it
+  // follows the account across devices — reading a thread on a laptop
+  // clears the unread dot on a phone. It was in localStorage first,
+  // which made "read" per-browser.
+  //
+  // Each side only ever writes its own marker; the other side's stamp
+  // and marker are never touched.
+  const seenField = "employee_thread_seen_at";
+  const otherStamp = "last_customer_message_at";
+
+  // Firestore hands back Timestamps, cached writes hand back Dates, and
+  // older records may hold ISO strings.
+  const asMillis = (value) => {
+    if (!value) return 0;
+    if (typeof value === "string") return Date.parse(value) || 0;
+    if (typeof value.toMillis === "function") return value.toMillis();
+    if (typeof value.seconds === "number") return value.seconds * 1000;
+    if (value instanceof Date) return value.getTime();
+    return 0;
+  };
+
+  const threadUnread = (claim) => {
+    const sent = asMillis(claim?.[otherStamp]);
+    if (!sent) return false;
+    return sent > asMillis(claim?.[seenField]);
+  };
+
+  // Called only when a thread is *chosen* — clicked, or arrived at via
+  // ?claim=. Not on the auto-select-first-thread path: landing on the
+  // page is not the same as reading the top conversation, and marking
+  // it read there silently cleared its unread alert.
+  const markThreadSeen = async (claimId) => {
+    if (!claimId) return;
+    // Clear the dot immediately; the snapshot confirms a moment later.
+    const local = claims.find((c) => c.id === claimId);
+    if (local) local[seenField] = new Date();
+    try {
+      await db.collection("cases").doc(claimId).set(
+        { [seenField]: window.firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    } catch {
+      // Read state is a convenience; if the write is refused the thread
+      // simply stays flagged rather than breaking the page.
+    }
+    // drop the superseded per-browser marker
+    try { window.localStorage.removeItem("claimsight.employee-thread-seen"); } catch { /* no storage */ }
+  };
+
   const renderThreads = () => {
     if (threadCount) {
       threadCount.textContent = `${claims.length} open`;
@@ -114,7 +163,7 @@
       return;
     }
     threadList.innerHTML = claims.map((c) => `
-      <button class="employee-thread ${c.id === activeClaimId ? "active" : ""}" type="button" data-thread-id="${esc(c.id)}">
+      <button class="employee-thread ${c.id === activeClaimId ? "active" : ""}${threadUnread(c) ? " unread" : ""}" type="button" data-thread-id="${esc(c.id)}">
         <span class="employee-thread-avatar">${esc(String(c.id).slice(-2))}</span>
         <span class="employee-thread-copy">
           <strong>${esc(c.claim_reference || c.id)}</strong>
@@ -169,6 +218,7 @@
   const selectClaim = (claimId) => {
     if (!claimId) return;
     activeClaimId = claimId;
+    markThreadSeen(claimId);
     renderThreads();
     subscribeMessages(claimId);
   };
@@ -203,6 +253,20 @@
         attachments,
         created_at: window.firebase.firestore.FieldValue.serverTimestamp(),
       });
+      // Stamp the case doc so the *other* side can raise a notification.
+      // Neither messaging script used to touch anything outside
+      // case_activity, so a message arriving was invisible unless you
+      // happened to have the thread open.
+      //
+      // Deliberately in its own try: the message is already committed
+      // above, so a rejected stamp must not report the send as failed.
+      // It only costs the unread indicator.
+      try {
+        await db.collection("cases").doc(activeClaimId).set(
+          { last_employee_message_at: window.firebase.firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      } catch { /* unread indicator only; the message itself went through */ }
       if (messageInput) messageInput.value = "";
       if (messageFiles) messageFiles.value = "";
       renderAttachmentPreview();

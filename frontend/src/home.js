@@ -2,6 +2,7 @@ const homeCard = document.querySelector(".claim-home-card");
 const landingShell = document.querySelector(".claim-home-sticky-zone");
 const proofSection = document.querySelector(".claim-proof-section");
 const proofCards = Array.from(document.querySelectorAll(".claim-proof-grid figure"));
+const heroPhotos = Array.from(document.querySelectorAll(".claim-home-photo"));
 const loginOpen = document.getElementById("home-login-open");
 const loginClose = document.getElementById("home-login-close");
 const loginModal = document.getElementById("home-login-modal");
@@ -18,11 +19,52 @@ const firebaseAuthEnabled = Boolean(
 );
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 const easeOut = (value) => 1 - Math.pow(1 - value, 3);
 let viewportHeight = window.innerHeight;
 let scrollFrameRequested = false;
 let lastHomeProgress = -1;
 let lastProofProgress = -1;
+
+
+/* ── hero carousel ────────────────────────────────────────────────
+   The three hero photos ride a circle. Scroll progress through the
+   sticky zone (0 -> 1) advances the whole ring by one full turn, so
+   each photo rotates to the front and away again. Everything the CSS
+   needs is written as custom properties; the transform itself lives
+   in styles.css.
+
+   The middle photo starts at the front: with three cards the angles
+   are -120deg / 0deg / +120deg at progress 0. */
+const CAROUSEL_TURN = Math.PI * 2;
+
+const layoutHeroCarousel = (progress) => {
+  const count = heroPhotos.length;
+  if (count === 0) {
+    return;
+  }
+
+  heroPhotos.forEach((photo, index) => {
+    const offset = (index - (count - 1) / 2) / count;
+    const angle = (offset + progress) * CAROUSEL_TURN;
+    const depth = Math.cos(angle);        // +1 at the front, -1 at the back
+    const lateral = Math.sin(angle);
+    const front = (depth + 1) / 2;        // 0 -> 1 as the card comes forward
+
+    photo.style.setProperty("--card-x", `${(lateral * 98).toFixed(2)}%`);
+    photo.style.setProperty("--card-z", `${((depth - 1) * 130).toFixed(1)}px`);
+    /* The ring is read from slightly above, so cards lift as they
+       travel to the back. Without this the rear card hides dead
+       centre behind the front one and the row looks like it has a
+       hole in it at the halfway point. */
+    photo.style.setProperty("--card-y", `${(((depth - 1) / 2) * 14).toFixed(2)}%`);
+    photo.style.setProperty("--card-turn", `${(lateral * -26).toFixed(2)}deg`);
+    photo.style.setProperty("--card-scale", (0.88 + front * 0.12).toFixed(4));
+    photo.style.setProperty("--card-fade", (0.64 + front * 0.36).toFixed(4));
+    photo.style.setProperty("--card-front", front.toFixed(4));
+    photo.style.zIndex = String(Math.round(front * 100));
+  });
+};
 
 const updateHomeScroll = () => {
   if (!homeCard || !landingShell) {
@@ -38,6 +80,11 @@ const updateHomeScroll = () => {
 
   lastHomeProgress = progress;
   homeCard.style.setProperty("--home-progress", progress.toFixed(4));
+
+  /* Under reduced motion the ring is laid out once and held: the
+     transform is the photos' layout here, not decoration, so it can
+     not simply be dropped the way the other scroll effects are. */
+  layoutHeroCarousel(reducedMotion?.matches ? 0 : progress);
 };
 
 const updateProofScroll = () => {

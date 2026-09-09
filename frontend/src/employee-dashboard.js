@@ -49,6 +49,13 @@ const elements = {
   internalNotes: document.getElementById("employee-internal-notes"),
   saveInternalNote: document.getElementById("employee-save-internal-note"),
   auditLog: document.getElementById("employee-audit-log"),
+  reviewSteps: document.getElementById("employee-review-steps"),
+  demoControls: document.getElementById("demo-review-controls"),
+  demoNext: document.getElementById("demo-review-next"),
+  demoNextLabel: document.getElementById("demo-review-next-label"),
+  demoReply: document.getElementById("demo-review-reply"),
+  demoStatus: document.getElementById("demo-review-status"),
+  demoProgress: document.getElementById("demo-review-progress"),
 };
 
 const escapeHtml = (value) =>
@@ -201,6 +208,10 @@ const normalizeCase = (id, payload = {}) => {
     requestedEvidence: payload.requested_evidence || review.requested_evidence || [],
     evidenceDueAt: timestampToIso(payload.evidence_due_at || review.evidence_due_at),
     appeal: payload.appeal || null,
+    // Step-by-step trail of the review. Written server-side, so unlike the
+    // localStorage audit log this survives a different browser and is the
+    // only record that shows what a reviewer actually did on this claim.
+    reviewSteps: Array.isArray(payload.review_steps) ? payload.review_steps : [],
     photos,
   };
 };
@@ -242,50 +253,12 @@ const readLocalCases = () => {
     }));
   });
 
-  const assignedCases = cases.filter(isAssignedToCurrentEmployee);
-  if (assignedCases.length) {
-    return assignedCases;
-  }
-
-  return [
-    normalizeCase("CLM-1048", {
-      claim_reference: "CLM-1048",
-      assigned_agent: fallbackAdjusters[0],
-      status: "submitted",
-      created_at: new Date().toISOString(),
-      customer_email: "maria.customer@example.com",
-      vehicle_type: "2022 Toyota RAV4",
-      mileage: 31840,
-      estimated_total_cost_usd: 5400,
-      recommended_action: "Review rear bumper, liftgate, and quarter-panel impact before adjustment.",
-      customer_statement: "Customer reports being rear-ended at a stop light and uploaded rear damage photos.",
-      photo_count: 6,
-      photo_urls: [
-        "https://www.claimpix.com/wp-content/uploads/2018/04/AdobeStock_144028969-300x225.jpeg",
-        "https://cdn.raw2k.co.uk/app/public/media/624/c/how-to-spot-hidden-structural-damage-on-a-salvage-car-567.jpg",
-        "https://www.qapter.com/wp-content/uploads/2024/02/Car-Service-Day-2.png",
-      ],
-      total_loss_reason: "AI sees moderate rear-end damage with possible hidden liftgate alignment issues.",
-    }),
-    normalizeCase("CLM-1047", {
-      claim_reference: "CLM-1047",
-      assigned_agent: fallbackAdjusters[1],
-      status: "in_review",
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      customer_email: "lee.customer@example.com",
-      vehicle_type: "2019 Honda Civic",
-      mileage: 64210,
-      estimated_total_cost_usd: 3200,
-      recommended_action: "Confirm headlight assembly, bumper cover, and paint blend.",
-      customer_statement: "Customer submitted front-right collision photos from a parking lot crash.",
-      photo_count: 5,
-      photo_urls: [
-        "https://www.claimpix.com/wp-content/uploads/2018/04/AdobeStock_144028969-300x225.jpeg",
-        "https://formsite.com/wp-content/uploads/2021/08/formsite-custom-pdf-results-doc-example-1024x576.jpg",
-      ],
-      total_loss_reason: "AI estimate is repairable, but employee should validate part availability and labor time.",
-    }),
-  ].filter(isAssignedToCurrentEmployee);
+  // No invented claims. This used to fall back to a hardcoded set (CLM-1048 and
+  // friends, with hotlinked stock photos from third-party sites), which meant a
+  // real adjuster saw claims that do not exist -- and a failed Firestore query
+  // was indistinguishable from an empty queue. An empty queue is the honest
+  // answer, and the caller surfaces the error instead.
+  return cases.filter(isAssignedToCurrentEmployee);
 };
 
 let claims = [];
@@ -466,10 +439,167 @@ const selectClaim = (claimId) => {
   if (elements.finalChecklist) elements.finalChecklist.checked = false;
   if (elements.actionStatus) elements.actionStatus.textContent = "Select an action after reviewing the case.";
   renderAuditLog(claim.id);
+  renderReviewSteps(claim.reviewSteps);
+  refreshDemoState(claim.id);
   renderPhotos(claim.photos);
   if (elements.adjustmentLink) {
     elements.adjustmentLink.href = `./adjustment.html?claim=${encodeURIComponent(claim.id)}`;
   }
+};
+
+/* Renders the reviewer's working trail: which checks were run, what was
+   challenged, what changed and why. On a demo deployment these steps come from
+   the model stand-in and are marked simulated; the renderer is identical either
+   way, so the portal shows one review process rather than two code paths. */
+const renderReviewSteps = (steps = []) => {
+  if (!elements.reviewSteps) return;
+
+  if (!steps.length) {
+    elements.reviewSteps.innerHTML =
+      '<article class="review-step empty">No review activity yet. Steps appear here as the claim is worked.</article>';
+    return;
+  }
+
+  const ordered = [...steps].sort((a, b) => (a.seq || 0) - (b.seq || 0));
+
+  elements.reviewSteps.innerHTML = ordered.map((step) => {
+    const who = step.actor_name || step.actor_email || "Reviewer";
+    const badge = step.simulated
+      ? '<span class="review-step-badge">Simulated reviewer</span>'
+      : "";
+    const findings = Array.isArray(step.findings) && step.findings.length
+      ? `<ul class="review-step-findings">${step.findings
+          .map((f) => `<li>${escapeHtml(String(f))}</li>`)
+          .join("")}</ul>`
+      : "";
+    return `
+      <article class="review-step">
+        <span class="review-step-seq" aria-hidden="true">${escapeHtml(String(step.seq || "•"))}</span>
+        <div class="review-step-body">
+          <strong>${escapeHtml(step.title || "Review step")}</strong>
+          <p>${escapeHtml(step.detail || "")}</p>
+          ${findings}
+          <span class="review-step-meta">${escapeHtml(who)}${badge} · ${formatDate(step.at)}</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+};
+
+/* ── demo review driver ────────────────────────────────────────────────────
+   Demo deployments have no staff on shift. These controls let a viewer advance
+   the simulated adjuster one step at a time and reply to the customer, so the
+   review reads as a process they can follow rather than a verdict that appears
+   from nowhere. Hidden unless the backend reports demo_mode, so the real
+   employee portal is untouched. */
+const demoApiBase = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
+let demoModeEnabled = false;
+
+const demoAuthHeaders = async () => {
+  const user = window.firebase?.auth?.()?.currentUser;
+  if (!user?.getIdToken) return null;
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${await user.getIdToken()}`,
+  };
+};
+
+const setDemoStatus = (message) => {
+  if (elements.demoStatus) elements.demoStatus.textContent = message || "";
+};
+
+const renderDemoControls = (state) => {
+  if (!demoModeEnabled || !elements.demoControls) return;
+
+  elements.demoControls.classList.toggle("hidden", !selectedClaim);
+  if (!selectedClaim) return;
+
+  const done = Boolean(state?.done);
+  const cursor = Number(state?.cursor || 0);
+  const total = Number(state?.total_steps || 0);
+
+  if (elements.demoProgress) {
+    elements.demoProgress.classList.toggle("hidden", !total);
+    elements.demoProgress.textContent = total ? `Step ${cursor} of ${total}` : "";
+  }
+  if (elements.demoNextLabel) {
+    elements.demoNextLabel.textContent = done
+      ? "Review complete"
+      : `Next: ${state?.next_step_title || "Advance review"}`;
+  }
+  if (elements.demoNext) elements.demoNext.disabled = done;
+};
+
+const demoPost = async (path, caseId) => {
+  if (!demoApiBase || !caseId) return null;
+  const headers = await demoAuthHeaders();
+  if (!headers) {
+    setDemoStatus("Sign in again to drive the demo review.");
+    return null;
+  }
+  const response = await fetch(`${demoApiBase}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ case_id: caseId }),
+  });
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      detail = (await response.json()).detail || detail;
+    } catch { /* non-JSON error body */ }
+    setDemoStatus(detail);
+    return null;
+  }
+  return response.json();
+};
+
+const refreshDemoState = async (caseId) => {
+  if (!demoModeEnabled || !caseId) return;
+  const state = await demoPost("/api/demo/review/status", caseId);
+  if (state) renderDemoControls(state);
+};
+
+const advanceDemoReview = async () => {
+  const caseId = selectedClaim?.id;
+  if (!caseId) return;
+  if (elements.demoNext) elements.demoNext.disabled = true;
+  setDemoStatus("Working…");
+  const state = await demoPost("/api/demo/review/step", caseId);
+  if (state) {
+    renderDemoControls(state);
+    renderReviewSteps(state.steps);
+    setDemoStatus(state.done
+      ? "Review complete. The customer can now accept or appeal."
+      : `Recorded: ${state.step?.title || "step"}.`);
+  } else if (elements.demoNext) {
+    elements.demoNext.disabled = false;
+  }
+};
+
+const replyToCustomer = async () => {
+  const caseId = selectedClaim?.id;
+  if (!caseId) return;
+  setDemoStatus("Composing a reply…");
+  const result = await demoPost("/api/demo/reply", caseId);
+  if (result) {
+    setDemoStatus(`Replied to: "${String(result.customer_question).slice(0, 60)}…"`);
+  }
+};
+
+const initDemoMode = async () => {
+  if (!demoApiBase) return;
+  try {
+    const response = await fetch(`${demoApiBase}/api/health`);
+    if (!response.ok) return;
+    demoModeEnabled = Boolean((await response.json()).demo_mode);
+  } catch {
+    return; // backend unreachable; leave the controls hidden
+  }
+  if (!demoModeEnabled) return;
+
+  elements.demoNext?.addEventListener("click", advanceDemoReview);
+  elements.demoReply?.addEventListener("click", replyToCustomer);
+  if (selectedClaim?.id) refreshDemoState(selectedClaim.id);
 };
 
 const renderAuditLog = (claimId) => {
@@ -573,8 +703,20 @@ const loadClaims = async () => {
 
   try {
     claims = firebaseEnabled ? await loadFirebaseCases() : readLocalCases();
-  } catch {
-    claims = readLocalCases();
+  } catch (error) {
+    // Previously fell back to local/fixture cases, so a broken query looked
+    // like a working queue. Fail loudly instead: a missing composite index or
+    // a rules rejection is something the adjuster needs to know about.
+    console.error("Claim queue failed to load:", error);
+    claims = [];
+    if (elements.table) {
+      elements.table.innerHTML = `
+        <tr class="claim-row empty">
+          <td colspan="5"><strong>Could not load the claim queue.</strong> ${escapeHtml(error?.message || "Unknown error")}</td>
+        </tr>
+      `;
+    }
+    return;
   }
 
   renderTable();
@@ -608,9 +750,26 @@ elements.requestEvidence?.addEventListener("click", async () => {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  if (!requestedEvidence.length) {
-    if (elements.actionStatus) elements.actionStatus.textContent = "List the exact evidence the customer needs to provide.";
-    elements.requestEvidenceItems?.focus();
+
+  // Which checklist sections the customer has to redo. Free text alone
+  // could not tell the customer's checklist *which* rows to reopen, so
+  // a row could sit green while this request asked for exactly that.
+  const requestedTypes = [...document.querySelectorAll('input[name="request-type"]:checked')]
+    .map((input) => input.value);
+  const requestNote = String(document.getElementById("employee-request-evidence-note")?.value || "").trim();
+
+  if (!requestedTypes.length) {
+    if (elements.actionStatus) {
+      elements.actionStatus.textContent = "Tick which sections the customer needs to redo.";
+    }
+    document.querySelector('input[name="request-type"]')?.focus();
+    return;
+  }
+  if (!requestNote) {
+    if (elements.actionStatus) {
+      elements.actionStatus.textContent = "Say what is wrong with the current evidence — the customer sees this note.";
+    }
+    document.getElementById("employee-request-evidence-note")?.focus();
     return;
   }
   const dueValue = elements.requestEvidenceDue?.value || "";
@@ -620,16 +779,23 @@ elements.requestEvidence?.addEventListener("click", async () => {
     status: "needs_info",
     status_label: "Needs more information",
     requested_evidence: requestedEvidence,
+    requested_evidence_types: requestedTypes,
+    reviewer_request_note: requestNote,
+    evidence_requested_at: new Date().toISOString(),
     evidence_due_at: evidenceDueAt,
     consumer_notifications: [
       {
         title: "More information needed",
-        message: `Please upload ${requestedEvidence.join(", ")}.`,
+        message: requestNote,
         created_at: new Date().toISOString(),
       },
     ],
   });
-  await appendFirebaseActivity(selectedClaim.id, "evidence_requested", `Requested evidence: ${requestedEvidence.join(", ")}.`);
+  await appendFirebaseActivity(
+    selectedClaim.id,
+    "evidence_requested",
+    `Requested ${requestedTypes.join(", ")}${requestedEvidence.length ? ` (${requestedEvidence.join(", ")})` : ""}: ${requestNote}`
+  );
   if (elements.actionStatus) {
     elements.actionStatus.textContent = "Evidence request sent to the customer action center.";
   }
@@ -721,4 +887,5 @@ const bootstrapClaims = () => {
 };
 
 bootstrapClaims();
+initDemoMode();
 })();

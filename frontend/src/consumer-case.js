@@ -138,8 +138,23 @@ const ensureDocumentPreview = () => {
   return modal;
 };
 
-const pdfJsModuleUrl = "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.min.mjs";
-const pdfJsWorkerUrl = "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
+// pdf.js is vendored under assets/vendor/pdfjs rather than pulled from a
+// CDN. The production CSP is `script-src 'self' https://www.gstatic.com`,
+// so the CDN import was blocked outright and every PDF fell through to
+// the "could not render" fallback. Self-hosting keeps the policy closed
+// to third-party origins.
+//
+// These are document-relative, not module-relative: consumer-case.js is
+// loaded as a classic script, so import() resolves against the page URL.
+// Every page that uses this sits at the site root.
+const pdfJsModuleUrl = "./assets/vendor/pdfjs/pdf.min.mjs";
+const pdfJsWorkerUrl = "./assets/vendor/pdfjs/pdf.worker.min.mjs";
+// pdf.js does not embed the 14 standard PDF fonts (Helvetica, Times,
+// Courier...). When a document references one and this path is not
+// supplied, page.render() never settles — it hangs rather than
+// throwing, which is why the modal used to sit on "Rendering PDF
+// pages..." forever. Must end in a slash.
+const pdfJsStandardFontsUrl = "./assets/vendor/pdfjs/standard_fonts/";
 
 const renderPdfPreview = async (fileUrl, body) => {
   body.innerHTML = `
@@ -152,7 +167,10 @@ const renderPdfPreview = async (fileUrl, body) => {
   try {
     const pdfjs = await import(pdfJsModuleUrl);
     pdfjs.GlobalWorkerOptions.workerSrc = pdfJsWorkerUrl;
-    const pdf = await pdfjs.getDocument({ url: fileUrl }).promise;
+    const pdf = await pdfjs.getDocument({
+      url: fileUrl,
+      standardFontDataUrl: pdfJsStandardFontsUrl,
+    }).promise;
     const pages = document.createElement("div");
     pages.className = "document-preview-pdf-pages";
 
@@ -342,9 +360,18 @@ const deriveStatusMeta = (payload = {}) => {
 };
 
 const buildNotifications = (item) => {
-  if (Array.isArray(item.consumer_notifications) && item.consumer_notifications.length) {
-    return item.consumer_notifications;
-  }
+  // Notifications the adjuster wrote explicitly (e.g. an evidence
+  // request) come first, then the ones derived from claim status.
+  //
+  // This used to `return` the adjuster's list and skip the derived ones
+  // entirely. Because employee-dashboard.js *replaces* the
+  // consumer_notifications array rather than appending to it, a claim
+  // that had ever had an evidence request would be stuck showing only
+  // that one line — the customer never saw "Final review" or "Claim
+  // finalized" after it. Merging keeps both, de-duplicated by title.
+  const explicit = Array.isArray(item.consumer_notifications)
+    ? item.consumer_notifications
+    : [];
 
   const notifications = [
     {
@@ -385,7 +412,23 @@ const buildNotifications = (item) => {
       message: item.adjuster_note || "The review team needs more information to continue.",
     });
   }
-  return notifications;
+
+  // An adjuster message the customer has not opened yet. The read
+  // marker is written to the case doc by customer-messages.js, so it
+  // follows the account rather than the browser.
+  if (item.last_employee_message_at) {
+    const sent = Date.parse(item.last_employee_message_at);
+    const seenAt = Date.parse(item.customer_thread_seen_at || 0) || 0;
+    if (sent > seenAt) {
+      notifications.unshift({
+        title: "New message from your adjuster",
+        message: `${item.claim_reference} has an unread reply in your message centre.`,
+      });
+    }
+  }
+
+  const seen = new Set(explicit.map((note) => note.title));
+  return [...explicit, ...notifications.filter((note) => !seen.has(note.title))];
 };
 
 const normalize = (docId, payload = {}) => {
@@ -415,7 +458,12 @@ const normalize = (docId, payload = {}) => {
     reviewer_evidence: payload.reviewer_evidence || payload.internal_reviewer_evidence || [],
     consumer_notifications: payload.consumer_notifications || [],
     requested_evidence: payload.requested_evidence || review.requested_evidence || [],
+    requested_evidence_types: payload.requested_evidence_types || review.requested_evidence_types || [],
+    reviewer_request_note: payload.reviewer_request_note || review.reviewer_request_note || "",
+    evidence_requested_at: firestoreTimestampToIso(payload.evidence_requested_at || review.evidence_requested_at),
     evidence_due_at: firestoreTimestampToIso(payload.evidence_due_at || review.evidence_due_at),
+    last_employee_message_at: firestoreTimestampToIso(payload.last_employee_message_at),
+    customer_thread_seen_at: firestoreTimestampToIso(payload.customer_thread_seen_at),
     estimate_line_items: review.estimate_line_items || payload.estimate_line_items || [],
     estimate_versions: payload.estimate_versions || [],
     appeal: payload.appeal || null,
@@ -513,39 +561,140 @@ const wrapReportText = (value, maxLength = 82) => {
 
 const buildReportPdf = (item = {}) => {
   const raw = item.raw || {};
-  const lineItems = item.estimate_line_items || raw.estimate_line_items || raw.reviewed_regions || raw.regions || [];
+  const lineItems = item.estimate_line_items
+    || raw.estimate_line_items || raw.reviewed_regions || raw.regions || [];
+
+  const money = (value) => formatCurrency(value);
+  const vehicleValue = item.estimated_vehicle_value_usd
+    ?? raw.estimated_vehicle_value_usd ?? 0;
+  const aiTotal = item.estimated_total_cost_usd ?? raw.estimated_total_cost_usd ?? 0;
+  const reviewedTotal = item.reviewed_total_cost_usd ?? raw.reviewed_total_cost_usd ?? 0;
+  const isTotalLoss = Boolean(item.total_loss ?? raw.total_loss);
+  // The backend abstains when it has no valuation. Printing "Repair" there
+  // would state an outcome nobody has decided yet.
+  const flagCodes = (raw.assessment_flags || item.assessment_flags || []).map((f) => f.code);
+  const outcomePending = flagCodes.includes("total_loss_undecidable_without_value");
+  const totalLossReason = item.total_loss_reason || raw.total_loss_reason || "";
+  const methodology = item.valuation_methodology || raw.valuation_methodology || "";
+  const comparables = item.valuation_comparable_prices_usd
+    || raw.valuation_comparable_prices_usd || [];
+  const sources = item.sources || raw.sources || [];
+
+  // Every line the report wants to print, in order. Pagination happens
+  // afterwards, so nothing is dropped to fit — the previous version
+  // capped at 44 lines and 12 line items and silently discarded the
+  // rest, which on a long total-loss write-up removed the whole
+  // itemisation section including its heading.
   const lines = [
     { text: "ClaimSight Final Report", size: 20, bold: true, gap: 26 },
     { text: `Claim: ${item.claim_reference || item.id || "Unavailable"}`, bold: true },
     { text: `Vehicle: ${item.vehicle_type || "Unavailable"}` },
     { text: `Status: ${item.status_label || "Finalized"}` },
     { text: `Adjuster: ${item.reviewer_name || item.assigned_agent?.name || "Unavailable"}` },
-    { text: `Reviewed total: ${formatCurrency(item.reviewed_total_cost_usd)}`, bold: true, gap: 22 },
-    { text: "Final action", bold: true },
-    ...wrapReportText(item.final_action).map((text) => ({ text })),
-    { text: "Adjuster note", bold: true, gap: 20 },
-    ...wrapReportText(item.adjuster_note).map((text) => ({ text })),
-    { text: "Claim reasoning", bold: true, gap: 20 },
-    ...wrapReportText(item.reasoning).map((text) => ({ text })),
-    { text: "Reviewed estimate items", bold: true, gap: 20 },
-    ...lineItems.slice(0, 12).map((entry) => ({
-      text: `${entry.description || entry.panel || entry.category || "Estimate item"} - ${formatCurrency(entry.total_usd ?? entry.estimated_repair_cost_usd)}`,
-    })),
-  ].slice(0, 44);
 
-  let y = 748;
-  const commands = lines.map((line, index) => {
-    if (index > 0) y -= line.gap || 16;
-    return `BT /${line.bold ? "F2" : "F1"} ${line.size || 10} Tf 54 ${y} Td (${pdfSafeText(line.text)}) Tj ET`;
-  }).join("\n");
+    // ── the settlement decision, and the numbers behind it ────────
+    { text: "Settlement", bold: true, gap: 22 },
+    {
+      text: `Outcome: ${outcomePending
+        ? "Pending - adjuster to set vehicle value"
+        : (isTotalLoss ? "Total loss" : "Repair")}`,
+      bold: true,
+    },
+    { text: `Assessed vehicle value: ${money(vehicleValue)}` },
+    { text: `AI first-pass estimate: ${money(aiTotal)}` },
+    { text: `Reviewed estimate: ${money(reviewedTotal)}`, bold: true },
+  ];
+
+  if (isTotalLoss) {
+    lines.push({ text: "Why this is a total loss", bold: true, gap: 20 });
+    lines.push(...wrapReportText(
+      totalLossReason
+      || (vehicleValue > 0
+        ? `Repair cost of ${money(reviewedTotal || aiTotal)} is uneconomic against an assessed vehicle value of ${money(vehicleValue)}.`
+        : "The vehicle was assessed as uneconomic to repair.")
+    ).map((text) => ({ text })));
+  }
+
+  // ── how the vehicle was valued ────────────────────────────────
+  if (methodology || comparables.length || sources.length) {
+    lines.push({ text: "How the vehicle was valued", bold: true, gap: 20 });
+    if (methodology) lines.push(...wrapReportText(methodology).map((text) => ({ text })));
+    if (comparables.length) {
+      lines.push({ text: `Comparable listings: ${comparables.map(money).join(", ")}` });
+    }
+    sources.slice(0, 6).forEach((source) => {
+      const label = source.title || source.name || source.uri || source.url || "";
+      if (label) lines.push(...wrapReportText(`Source: ${label}`).map((text) => ({ text })));
+    });
+  }
+
+  lines.push({ text: "Final action", bold: true, gap: 20 });
+  lines.push(...wrapReportText(item.final_action).map((text) => ({ text })));
+  lines.push({ text: "Adjuster note", bold: true, gap: 20 });
+  lines.push(...wrapReportText(item.adjuster_note).map((text) => ({ text })));
+  lines.push({ text: "Claim reasoning", bold: true, gap: 20 });
+  lines.push(...wrapReportText(item.reasoning).map((text) => ({ text })));
+
+  lines.push({ text: "Reviewed estimate items", bold: true, gap: 20 });
+  if (lineItems.length) {
+    lineItems.forEach((entry) => {
+      const label = entry.description || entry.panel || entry.category || "Estimate item";
+      lines.push({ text: `${label} - ${money(entry.total_usd ?? entry.estimated_repair_cost_usd)}` });
+    });
+  } else {
+    lines.push({ text: "No itemised estimate recorded." });
+  }
+
+  // ── paginate ──────────────────────────────────────────────────
+  const TOP = 748;
+  const BOTTOM = 56;
+  const pages = [];
+  let current = [];
+  let y = TOP;
+
+  lines.forEach((line, index) => {
+    const gap = index === 0 ? 0 : (line.gap || 16);
+    if (y - gap < BOTTOM && current.length) {
+      pages.push(current);
+      current = [];
+      y = TOP;
+      current.push({ ...line, y });
+      return;
+    }
+    y -= gap;
+    current.push({ ...line, y });
+  });
+  if (current.length) pages.push(current);
+
+  const pageCount = pages.length;
+  const contentStreams = pages.map((page, pageIndex) => {
+    const body = page
+      .map((line) => `BT /${line.bold ? "F2" : "F1"} ${line.size || 10} Tf 54 ${line.y} Td (${pdfSafeText(line.text)}) Tj ET`)
+      .join("\n");
+    const footer = `BT /F1 8 Tf 54 36 Td (${pdfSafeText(
+      `${item.claim_reference || item.id || "Claim"} - page ${pageIndex + 1} of ${pageCount}`
+    )}) Tj ET`;
+    return `${body}\n${footer}`;
+  });
+
+  // Object layout: 1 catalog, 2 pages, 3..(2+n) page objects,
+  // then n content streams, then the two fonts.
+  const firstPageObj = 3;
+  const firstContentObj = firstPageObj + pageCount;
+  const fontRegularObj = firstContentObj + pageCount;
+  const fontBoldObj = fontRegularObj + 1;
+
+  const kids = pages.map((_, i) => `${firstPageObj + i} 0 R`).join(" ");
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>",
-    `<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`,
+    `<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`,
+    ...pages.map((_, i) =>
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontRegularObj} 0 R /F2 ${fontBoldObj} 0 R >> >> /Contents ${firstContentObj + i} 0 R >>`),
+    ...contentStreams.map((stream) => `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`),
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
   ];
+
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -1381,6 +1530,9 @@ if (firebaseEnabled) {
     if (elements.detailAiAction) elements.detailAiAction.textContent = selected.ai_action;
     if (elements.detailFinalAction) elements.detailFinalAction.textContent = selected.final_action;
     renderDocuments(selected.supporting_documents, selected.reviewer_evidence);
+    // paints the "your adjuster needs changes" panel and reopens the
+    // checklist rows the adjuster flagged
+    window.ClaimSightReviewerRequest?.(selected);
     renderDecisionComparison(selected);
     renderActivity(selected);
     populateEditClaimFields(selected);
@@ -2095,3 +2247,284 @@ if (firebaseEnabled) {
     }
   });
 }
+
+// ══════════════════════════════════════════════════════════════════
+// EDIT CLAIM — live evidence checklist + upload tagging
+//
+// The checklist on edit-claim.html was static markup: "Clear damage
+// photos" and "Accurate vehicle details" carried a hardcoded `needed`
+// class, so they showed red permanently no matter what the claimant
+// filled in or attached. Nothing in this file ever touched them.
+//
+// This module is deliberately self-contained and DOM-driven. The page
+// has two population paths (the Firebase branch and the preview
+// branch), and both write the same element ids, so observing the DOM
+// covers each without editing either.
+// ══════════════════════════════════════════════════════════════════
+(() => {
+  const detail = document.getElementById("consumer-claim-detail");
+  const checkRows = document.querySelectorAll("[data-edit-check]");
+  if (!detail || checkRows.length === 0) return;
+
+  const docsInput = document.getElementById("consumer-supporting-documents");
+  const docLinks = document.getElementById("consumer-doc-links");
+  const existingDocs = document.getElementById("consumer-detail-documents");
+  const saveButton = document.getElementById("consumer-save-documents");
+  const updateStatus = document.getElementById("consumer-update-status");
+
+  const vehicleFields = [
+    "consumer-vehicle-make",
+    "consumer-vehicle-model",
+    "consumer-vehicle-year",
+    "consumer-vehicle-mileage",
+    "consumer-vehicle-usage",
+  ].map((id) => document.getElementById(id));
+
+  const evidenceTypes = [
+    { key: "photos", label: "Damage photo" },
+    { key: "estimate", label: "Repair estimate or invoice" },
+    { key: "documents", label: "Police, tow, or storage document" },
+  ];
+
+  // Object URLs for staged files, revoked whenever the list is rebuilt
+  // so picking new files repeatedly does not leak them.
+  let objectUrls = [];
+  const releaseObjectUrls = () => {
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    objectUrls = [];
+  };
+
+  const fileKindLabel = (file) => {
+    const name = file.name.toLowerCase();
+    if (file.type.includes("pdf") || name.endsWith(".pdf")) return "PDF";
+    if (file.type.includes("word") || /\.(docx?|rtf)$/.test(name)) return "DOC";
+    return "FILE";
+  };
+
+  // A staged upload is only a filename until you can look at it, so
+  // each row gets a thumbnail (real image preview where possible) and
+  // a View control that opens the existing document preview modal —
+  // the same one saved attachments use.
+  const stagedPreview = (file) => {
+    const url = URL.createObjectURL(file);
+    objectUrls.push(url);
+    const isImage = file.type.startsWith("image/");
+
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = `evidence-link-thumb${isImage ? " photo" : ""}`;
+    thumb.setAttribute("aria-label", `Preview ${file.name}`);
+    if (isImage) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      thumb.appendChild(img);
+    } else {
+      const chip = document.createElement("span");
+      chip.textContent = fileKindLabel(file);
+      thumb.appendChild(chip);
+    }
+
+    const view = document.createElement("button");
+    view.type = "button";
+    view.className = "evidence-link-view";
+    view.textContent = "View";
+
+    const open = () => openDocumentPreview({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      preview_url: url,
+    });
+    thumb.addEventListener("click", open);
+    view.addEventListener("click", open);
+
+    return { thumb, view };
+  };
+
+  // Parallel to docsInput.files; a FileList cannot be annotated and is
+  // replaced wholesale each time the claimant picks files.
+  let tags = [];
+
+  // What is already on the claim. The document cards mark image
+  // attachments with .supporting-doc-icon.photo, which is a real
+  // structural signal — unlike guessing from the filename. It does not
+  // distinguish an estimate from any other PDF, so "Repair estimate"
+  // is only satisfied by an upload the claimant tags as one.
+  const existingPhoto = () => Boolean(existingDocs?.querySelector(".supporting-doc-icon.photo"));
+  const existingOtherFile = () =>
+    [...(existingDocs?.querySelectorAll(".supporting-doc-card") || [])]
+      .some((card) => !card.querySelector(".supporting-doc-icon.photo"));
+
+  const staged = (key) => tags.some((tag) => tag === key);
+
+  const checks = {
+    submitted: () => true,
+    photos: () => existingPhoto() || staged("photos"),
+    vehicle: () => vehicleFields.every((el) => Boolean(el && String(el.value).trim())),
+    estimate: () => staged("estimate"),
+    documents: () => existingOtherFile() || staged("documents"),
+  };
+
+  // The adjuster can reopen specific sections. Evidence already on the
+  // claim does NOT satisfy a reopened row — the whole point is that
+  // what is there was not good enough — so a reopened row only clears
+  // once something *new* is staged for it in this session.
+  let reopened = new Set();
+
+  const satisfiedAfterRequest = (key) => {
+    if (key === "vehicle") return checks.vehicle();
+    return staged(key === "photos" ? "photos" : key);
+  };
+
+  const paintChecklist = () => {
+    checkRows.forEach((row) => {
+      const key = row.dataset.editCheck;
+      const optional = row.classList.contains("optional");
+      const isReopened = reopened.has(key);
+      const done = isReopened ? satisfiedAfterRequest(key) : (checks[key]?.() ?? false);
+
+      row.classList.toggle("complete", done);
+      // A reopened row reads red even when it is optional: the adjuster
+      // asked for it, so it is no longer merely nice to have.
+      row.classList.toggle("needed", !done && (!optional || isReopened));
+      row.classList.toggle("reopened", isReopened && !done);
+    });
+  };
+
+  // Reads the reviewer's request off the claim detail and paints the
+  // panel above the checklist.
+  const applyReviewerRequest = (claim) => {
+    const panel = document.getElementById("reviewer-request-panel");
+    const noteEl = document.getElementById("reviewer-request-note");
+    const itemsEl = document.getElementById("reviewer-request-items");
+    const dueEl = document.getElementById("reviewer-request-due");
+    if (!panel) return;
+
+    const types = Array.isArray(claim?.requested_evidence_types) ? claim.requested_evidence_types : [];
+    const note = claim?.reviewer_request_note || "";
+    const open = claim?.status_code === "needs_info" && (types.length > 0 || Boolean(note));
+
+    reopened = open ? new Set(types) : new Set();
+    panel.classList.toggle("hidden", !open);
+
+    if (open) {
+      if (noteEl) noteEl.textContent = note || "Your adjuster needs clearer evidence before the review can continue.";
+      const labels = {
+        photos: "Damage photos",
+        vin: "VIN / odometer photo",
+        estimate: "Repair estimate or invoice",
+        documents: "Police, tow, or storage documents",
+        vehicle: "Vehicle details",
+      };
+      if (itemsEl) {
+        const specifics = Array.isArray(claim.requested_evidence) ? claim.requested_evidence : [];
+        itemsEl.innerHTML = types.map((t) => `<li>${labels[t] || t}</li>`).join("")
+          + specifics.map((sItem) => `<li class="specific">${String(sItem).replace(/[&<>"']/g, (c) => (
+              { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+            ))}</li>`).join("");
+      }
+      if (dueEl) {
+        const due = Date.parse(claim.evidence_due_at || "");
+        dueEl.textContent = due ? `Due ${new Date(due).toLocaleDateString()}` : "";
+      }
+    }
+    paintChecklist();
+  };
+
+  window.ClaimSightReviewerRequest = applyReviewerRequest;
+
+  const untaggedCount = () =>
+    [...(docsInput?.files || [])].filter((_, i) => !tags[i]).length;
+
+  const renderDocLinks = () => {
+    if (!docLinks) return;
+    const files = [...(docsInput?.files || [])];
+    releaseObjectUrls();
+    docLinks.innerHTML = "";
+    docLinks.classList.toggle("hidden", files.length === 0);
+
+    files.forEach((file, index) => {
+      const row = document.createElement("div");
+      row.className = "evidence-link-row";
+
+      const { thumb, view } = stagedPreview(file);
+
+      const name = document.createElement("span");
+      name.className = "evidence-link-name";
+      name.textContent = file.name;
+
+      const select = document.createElement("select");
+      select.className = "evidence-link-select";
+      select.setAttribute("aria-label", `What ${file.name} shows`);
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select what this shows...";
+      select.appendChild(placeholder);
+      evidenceTypes.forEach(({ key, label }) => {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = label;
+        select.appendChild(option);
+      });
+      select.value = tags[index] || "";
+      select.addEventListener("change", () => {
+        tags[index] = select.value;
+        row.classList.toggle("untagged", !select.value);
+        if (select.value) row.classList.remove("field-invalid");
+        // stop the blocked-update warning showing once it is resolved
+        if (untaggedCount() === 0 && updateStatus?.classList.contains("status-error")) {
+          updateStatus.textContent = "Make changes, then press Update claim.";
+          updateStatus.classList.remove("status-error");
+        }
+        paintChecklist();
+      });
+
+      row.classList.toggle("untagged", !tags[index]);
+      row.append(thumb, name, select, view);
+      docLinks.appendChild(row);
+    });
+  };
+
+  docsInput?.addEventListener("change", () => {
+    tags = [...(docsInput.files || [])].map(() => "");
+    renderDocLinks();
+    paintChecklist();
+  });
+
+  vehicleFields.forEach((el) => {
+    el?.addEventListener("input", paintChecklist);
+    el?.addEventListener("change", paintChecklist);
+  });
+
+  // An untagged upload says nothing about what was supplied, so it
+  // blocks the update the same way a missing field blocks submit.
+  saveButton?.addEventListener(
+    "click",
+    (event) => {
+      const untagged = untaggedCount();
+      if (!untagged) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      docLinks?.querySelectorAll(".evidence-link-row.untagged")
+        .forEach((row) => row.classList.add("field-invalid"));
+      if (updateStatus) {
+        updateStatus.textContent = `${untagged} upload${untagged === 1 ? "" : "s"} ${
+          untagged === 1 ? "needs" : "need"
+        } an evidence type before you can update the claim.`;
+        updateStatus.classList.add("status-error");
+      }
+    },
+    true // capture, so this runs before the existing save handler
+  );
+
+  // The claim detail is filled in asynchronously by whichever branch is
+  // live, so repaint when it changes rather than once at load.
+  new MutationObserver(paintChecklist).observe(detail, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+
+  paintChecklist();
+})();

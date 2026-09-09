@@ -1,54 +1,71 @@
-/* ── tokens ──────────────────────────────────────────────────── */
+/* ── tokens ──────────────────────────────────────────────────────
+   Palette follows mainstream carrier design language (GEICO,
+   Allstate, Liberty Mutual, Progressive): a deep navy brand, one
+   strong action blue, neutral greys, white cards. Flat fills only —
+   the gradient tokens below are deliberately single-colour so every
+   rule that references them renders as a solid, and nothing in the
+   product reads as a gradient. Corners are tight, elevation is
+   minimal, and there is no tinted "ambient" colour anywhere.
+   ──────────────────────────────────────────────────────────────── */
 :root {
-  /* surfaces: cool-white canvas, white cards, tinted insets */
-  --bg:         #f4f5fb;
+  /* surfaces: neutral grey page, white cards, grey insets */
+  --bg:         #eff1f4;
   --surface:    #ffffff;
-  --surface-2:  #f0f1f9;
-  --surface-3:  #e7e8f5;
+  --surface-2:  #f4f6f8;
+  --surface-3:  #e6e9ee;
 
-  /* text: warm-black ink, violet cast in the softer tiers */
-  --ink:        #0d0d18;
-  --ink-soft:   #464663;
-  --muted:      #6b6b8a;
+  /* text: navy-black, no violet cast */
+  --ink:        #12233d;
+  --ink-soft:   #43506a;
+  --muted:      #68738a;
 
   /* hairlines */
-  --line:       #e5e6f2;
-  --line-strong:#cccee4;
+  --line:       #dde2e9;
+  --line-strong:#bfc7d3;
 
-  /* brand: indigo core, violet lift, cyan spark */
-  --accent:      #4f39f6;
-  --accent-hover:#3f27e3;
-  --accent-2:    #8b5cf6;
-  --accent-3:    #06b6d4;
-  --accent-dim:  rgba(79,57,246,.09);
-  --accent-line: rgba(79,57,246,.24);
+  /* brand: navy for identity, action blue for anything clickable */
+  --navy:        #14315e;
+  --navy-deep:   #0e2447;
+  --navy-soft:   #1d4278;
+  --accent:      #00549f;
+  --accent-hover:#013f79;
+  --accent-dim:  rgba(0,84,159,.08);
+  --accent-line: rgba(0,84,159,.26);
   --on-accent:   #ffffff;
-  --positive:    #0d9f6e;
-  --danger:      #dc2626;
-  --warning:     #d97706;
 
-  /* gradients carry most of the "modern" read */
-  --grad-accent:      linear-gradient(135deg, #4f39f6 0%, #7546ff 45%, #a855f7 100%);
-  --grad-accent-soft: linear-gradient(135deg, rgba(79,57,246,.13), rgba(168,85,247,.09));
-  --grad-ink:         linear-gradient(100deg, #0d0d18 0%, #1b1545 52%, #3a2ac0 100%);
-  --grad-hairline:    linear-gradient(90deg, transparent, var(--accent-line) 28%, rgba(6,182,212,.30) 72%, transparent);
+  --positive:   #12805c;
+  --danger:     #c62828;
+  --warning:    #b25e00;
 
-  /* elevation — violet-tinted so shadows stay inside the palette */
-  --shadow-sm:   0 1px 2px rgba(20,16,54,.06);
-  --shadow:      0 1px 3px rgba(20,16,54,.07), 0 10px 30px -14px rgba(20,16,54,.15);
-  --shadow-lg:   0 2px 6px rgba(20,16,54,.06), 0 30px 60px -24px rgba(20,16,54,.26);
-  --glow:        0 10px 26px -10px rgba(79,57,246,.55);
-  --glow-strong: 0 16px 40px -12px rgba(79,57,246,.60);
+  /* Flat by design. These stay named as gradients so the rules that
+     consume them keep working, but each resolves to one colour. */
+  --grad-accent:      linear-gradient(0deg, #00549f, #00549f);
+  --grad-accent-soft: linear-gradient(0deg, rgba(0,84,159,.07), rgba(0,84,159,.07));
+  --grad-ink:         linear-gradient(0deg, #14315e, #14315e);
+  --grad-hairline:    linear-gradient(0deg, #dde2e9, #dde2e9);
 
-  /* geometry — roomier corners */
-  --radius-sm:  10px;
-  --radius:     16px;
-  --radius-lg:  22px;
+  /* elevation: neutral and restrained */
+  --shadow-sm:   0 1px 2px rgba(18,35,61,.07);
+  --shadow:      0 1px 2px rgba(18,35,61,.06), 0 4px 12px -6px rgba(18,35,61,.13);
+  --shadow-lg:   0 2px 4px rgba(18,35,61,.06), 0 14px 32px -14px rgba(18,35,61,.20);
+  /* kept so glow-referencing rules stay valid — no coloured halo */
+  --glow:        0 1px 2px rgba(18,35,61,.10);
+  --glow-strong: 0 2px 6px rgba(18,35,61,.16);
 
-  --sidebar-w:  248px;
+  /* geometry: tight corners, the way carrier sites do it */
+  --radius-sm:  4px;
+  --radius:     8px;
+  --radius-lg:  12px;
 
-  --ease-out:    cubic-bezier(.22,.8,.3,1);
-  --ease-spring: cubic-bezier(.34,1.32,.5,1);
+  /* Collapsed rail width doubles as the page offset, so expanding the rail
+     overlays the content instead of reflowing it. */
+  --sidebar-w:      68px;
+  --sidebar-w-open: 252px;
+  --sidebar-icon:   22px;
+
+  --ease-out:    cubic-bezier(.3,.7,.4,1);
+  /* no spring — bouncy hovers were part of what read as "app demo" */
+  --ease-spring: cubic-bezier(.3,.7,.4,1);
 
   --font-sans:  "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -91,9 +108,7 @@ body {
   grid-template-rows: auto 1fr;
   gap: clamp(28px, 5vh, 64px);
   padding: 20px clamp(20px, 5vw, 64px) clamp(40px, 6vh, 72px);
-  background:
-    radial-gradient(120% 80% at 85% -10%, rgba(29,78,216,.07), transparent 60%),
-    var(--surface);
+  background: var(--surface);
   overflow: hidden;
   /* keeps the original scroll-linked settle, just gentler */
   transform: scale(calc(1 - (var(--home-progress) * .012)));
@@ -344,21 +359,42 @@ body {
   transform: rotate(-45deg);
 }
 
-/* ── hero imagery: keeps the original parallax drift ───────── */
+/* ── hero imagery: a scroll-driven carousel ──────────────────────
+   The three photos used to sit in a fixed overlapping stack, which
+   read as one clumped mass. They now ride a circle: home.js maps the
+   sticky-zone scroll progress to an angle per card and writes the
+   five custom properties below, so scrolling turns the carousel and
+   each photo takes its turn at the front. Layout is percentage-based
+   off the stage, so no per-breakpoint sizing is needed. */
 .claim-home-stage {
   position: relative;
   height: clamp(400px, 52vh, 560px);
+  perspective: 1400px;
+  perspective-origin: 50% 46%;
+  transform-style: preserve-3d;
 }
 
 .claim-home-photo {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46%;
+  height: 84%;
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface-2);
   box-shadow: var(--shadow-lg);
-  will-change: transform;
+  transform:
+    translate(-50%, -50%)
+    translateX(var(--card-x, 0%))
+    translateY(var(--card-y, 0%))
+    translateZ(var(--card-z, 0px))
+    rotateY(var(--card-turn, 0deg))
+    scale(var(--card-scale, 1));
+  opacity: var(--card-fade, 1);
+  will-change: transform, opacity;
   backface-visibility: hidden;
 }
 
@@ -366,46 +402,21 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
 }
 
-.claim-home-photo-left {
-  left: 0;
-  bottom: 6%;
-  width: 42%;
-  height: 62%;
-  z-index: 2;
-  transform:
-    translateX(calc(var(--home-progress) * 34px))
-    translateY(calc(var(--home-progress) * -18px));
+/* the card at the front reads sharpest; the ones behind sit back
+   under a light cool scrim so the ring has depth without turning the
+   trailing photos to mud. No transition — the value is rewritten
+   every frame, and easing it would only add lag. */
+.claim-home-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(18,35,61,.20);
+  opacity: calc((1 - var(--card-front, 1)) * .8);
 }
-
-.claim-home-photo-left img { object-position: 30% center; }
-
-.claim-home-photo-center {
-  left: 26%;
-  top: 0;
-  width: 48%;
-  height: 78%;
-  z-index: 3;
-  transform:
-    translateY(calc(var(--home-progress) * 22px))
-    scale(calc(1 + (var(--home-progress) * .022)));
-}
-
-.claim-home-photo-center img { object-position: center; }
-
-.claim-home-photo-right {
-  right: 0;
-  bottom: 14%;
-  width: 38%;
-  height: 54%;
-  z-index: 1;
-  transform:
-    translateX(calc(var(--home-progress) * -30px))
-    translateY(calc(var(--home-progress) * 14px));
-}
-
-.claim-home-photo-right img { object-position: center; }
 
 @media (max-width: 980px) {
   .claim-home-hero {
@@ -426,7 +437,7 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(15,23,42,.45);
+  background: rgba(18,35,61,.45);
   backdrop-filter: blur(14px);
 }
 
@@ -450,7 +461,7 @@ body {
   height: 34px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   cursor: pointer;
 }
@@ -495,7 +506,7 @@ body {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 12px 14px;
-  background: rgba(15,23,42,0.054);
+  background: rgba(18,35,61,0.054);
   color: var(--ink);
   font: inherit;
 }
@@ -556,7 +567,7 @@ body {
 
 .google-login-button {
   border: 1px solid var(--line-strong);
-  background: rgba(15,23,42,.04);
+  background: rgba(18,35,61,.04);
   color: var(--ink);
 }
 
@@ -573,9 +584,7 @@ body {
 
 .employee-login-page {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 18% 12%, rgba(29,78,216,.1), transparent 30%),
-    var(--bg);
+  background: var(--bg);
 }
 
 .employee-login-shell {
@@ -774,7 +783,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
-  box-shadow: 0 18px 46px rgba(15,23,42,0.084);
+  box-shadow: 0 18px 46px rgba(18,35,61,0.084);
   opacity: calc(.18 + (.82 * var(--proof-card-progress)));
   transform:
     translate3d(
@@ -824,7 +833,7 @@ body {
   bottom: calc(14px + (26px * var(--proof-card-inverse)));
   padding: 7px 10px;
   border-radius: 999px;
-  background: rgba(10,12,10,.82);
+  background: rgba(18,35,61,.82);
   color: var(--ink);
   font-size: .76rem;
   font-weight: 800;
@@ -889,7 +898,7 @@ body {
 .workflow-tab:focus-visible {
   outline: none;
   color: var(--ink);
-  background: rgba(15,23,42,.05);
+  background: rgba(18,35,61,.05);
 }
 
 .workflow-tab.active {
@@ -897,6 +906,148 @@ body {
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }
+
+/* ── demo review controls ───────────────────────────────────────
+   Only rendered when the backend reports demo_mode. Reads as a tool
+   strip above the trail, not as part of the real adjuster UI. */
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 11px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.demo-controls .primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 13px;
+  font-size: .8125rem;
+}
+
+.demo-controls .primary-button .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.demo-controls .primary-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.demo-controls-status {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: .75rem;
+  min-height: 1em;
+}
+
+.demo-progress {
+  color: var(--muted);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── review process trail ───────────────────────────────────────
+   Numbered steps down a connecting spine, so the reviewer's working
+   order is legible at a glance rather than reading as a flat list. */
+.review-step-list {
+  display: grid;
+  gap: 0;
+}
+
+.review-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 12px;
+  padding: 12px 0 14px;
+}
+
+/* the spine: drawn between markers, never below the last one */
+.review-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 34px;
+  bottom: -2px;
+  left: 12px;
+  width: 1px;
+  background: var(--line);
+}
+
+.review-step-seq {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: .75rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-step-body strong {
+  display: block;
+  color: var(--ink);
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.review-step-body p {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: .8125rem;
+  line-height: 1.5;
+}
+
+.review-step-findings {
+  margin: 7px 0 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: .78125rem;
+  line-height: 1.55;
+}
+
+.review-step-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+/* Marks a step the model performed. Deliberately visible: the product's
+   claim is that a review happened, so the record should never imply a
+   person did this when one did not. */
+.review-step-badge {
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: .6875rem;
+  font-weight: 550;
+  letter-spacing: .01em;
+}
+
+.review-step.empty {
+  grid-template-columns: 1fr;
+  color: var(--muted);
+  font-size: .8125rem;
+}
+
+.review-step.empty::before { display: none; }
 
 /* ── primary navigation ─────────────────────────────────────── */
 .employee-nav-menu {
@@ -1090,7 +1241,7 @@ body {
   height: 42px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   cursor: pointer;
 }
@@ -1108,7 +1259,7 @@ body {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 0 10px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   font: inherit;
   font-size: .72rem;
@@ -1209,7 +1360,7 @@ body {
 
 .notification-item:hover,
 .notification-item:focus-visible {
-  background: rgba(15,23,42,.028);
+  background: rgba(18,35,61,.028);
   outline: none;
 }
 
@@ -1258,8 +1409,8 @@ body {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(to right, rgba(10,12,10,.85) 0%, rgba(10,12,10,.4) 55%, rgba(10,12,10,.05) 100%),
-    linear-gradient(to top, rgba(10,12,10,.95) 0%, transparent 55%);
+    linear-gradient(to right, rgba(18,35,61,.85) 0%, rgba(18,35,61,.4) 55%, rgba(18,35,61,.05) 100%),
+    linear-gradient(to top, rgba(18,35,61,.95) 0%, transparent 55%);
 }
 
 .workflow-overview {
@@ -1273,7 +1424,7 @@ body {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(15,23,42,.024);
+  background: rgba(18,35,61,.024);
   box-shadow: var(--shadow);
 }
 
@@ -1387,7 +1538,7 @@ h1 {
   z-index: 2;
   width: 24px;
   height: 38px;
-  border: 2px solid rgba(15,23,42,.24);
+  border: 2px solid rgba(18,35,61,.24);
   border-radius: 14px;
   opacity: 0;
   animation: rise-in .9s ease 1s forwards;
@@ -1477,7 +1628,7 @@ h1 {
   padding: 22px;
   border: 1px dashed var(--line-strong);
   border-radius: 10px;
-  background: rgba(15,23,42,.016);
+  background: rgba(18,35,61,.016);
   cursor: pointer;
   transition: border-color .15s, background .15s;
 }
@@ -1533,7 +1684,7 @@ h1 {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .context-heading {
@@ -1589,7 +1740,7 @@ h1 {
 .vehicle-grid input:focus-visible,
 .vehicle-grid select:focus-visible,
 .vehicle-grid textarea:focus-visible {
-  outline: 2px solid rgba(29,78,216,.25);
+  outline: 2px solid rgba(0,84,159,.25);
   border-color: var(--accent);
 }
 
@@ -1645,8 +1796,8 @@ h1 {
   color: var(--muted);
   font-size: .9rem;
   background:
-    linear-gradient(90deg, rgba(15,23,42,.024) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15,23,42,.024) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(18,35,61,.024) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(18,35,61,.024) 1px, transparent 1px);
   background-size: 44px 44px;
 }
 
@@ -1668,8 +1819,8 @@ h1 {
   min-height: 34px;
   border: 2px solid var(--accent);
   box-shadow:
-    0 0 0 1px rgba(10,12,10,.8),
-    0 12px 32px rgba(15,23,42,0.105);
+    0 0 0 1px rgba(18,35,61,.8),
+    0 12px 32px rgba(18,35,61,0.105);
 }
 
 .damage-mask {
@@ -1698,7 +1849,7 @@ h1 {
   gap: 7px;
   padding: 5px 9px;
   border-radius: 999px;
-  background: rgba(10,12,10,.86);
+  background: rgba(18,35,61,.86);
   color: var(--ink);
   font-size: .74rem;
   font-weight: 800;
@@ -1728,7 +1879,7 @@ h1 {
   letter-spacing: .04em;
   opacity: 0;
   transition: opacity .6s ease;
-  text-shadow: 0 2px 14px rgba(15,23,42,0.22);
+  text-shadow: 0 2px 14px rgba(18,35,61,0.22);
   pointer-events: none;
 }
 
@@ -1803,7 +1954,7 @@ dd {
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.024);
+  background: rgba(18,35,61,.024);
 }
 
 .pricing-insight p {
@@ -1824,7 +1975,7 @@ dd {
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.024);
+  background: rgba(18,35,61,.024);
 }
 
 .chip-list,
@@ -1838,7 +1989,7 @@ dd {
   padding: 12px 13px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .signal-chip strong,
@@ -1857,18 +2008,18 @@ dd {
 }
 
 .signal-chip.high {
-  border-color: rgba(185,28,28,.35);
-  background: rgba(185,28,28,.08);
+  border-color: rgba(198,40,40,.35);
+  background: rgba(198,40,40,.08);
 }
 
 .signal-chip.warning {
-  border-color: rgba(180,83,9,.35);
-  background: rgba(180,83,9,.08);
+  border-color: rgba(178,94,0,.35);
+  background: rgba(178,94,0,.08);
 }
 
 .signal-chip.info {
-  border-color: rgba(29,78,216,.35);
-  background: rgba(29,78,216,.08);
+  border-color: rgba(0,84,159,.35);
+  background: rgba(0,84,159,.08);
 }
 
 .check-item.complete {
@@ -1946,7 +2097,7 @@ dd {
   padding: 0 18px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: rgba(15,23,42,.024);
+  background: rgba(18,35,61,.024);
   color: var(--ink);
   font-size: .88rem;
   font-weight: 700;
@@ -1976,7 +2127,7 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 10px 14px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   font-weight: 700;
   cursor: pointer;
@@ -1999,13 +2150,13 @@ dd {
   position: absolute;
   border: 2px solid var(--accent);
   border-radius: 4px;
-  background: rgba(29,78,216,.08);
+  background: rgba(0,84,159,.08);
 }
 
-.damage-box.high   { border-color: var(--danger);  background: rgba(185,28,28,.1); }
+.damage-box.high   { border-color: var(--danger);  background: rgba(198,40,40,.1); }
 .damage-box.medium,
-.damage-box.moderate { border-color: var(--warning); background: rgba(180,83,9,.08); }
-.damage-box.low    { border-color: var(--accent);  background: rgba(29,78,216,.07); }
+.damage-box.moderate { border-color: var(--warning); background: rgba(178,94,0,.08); }
+.damage-box.low    { border-color: var(--accent);  background: rgba(0,84,159,.07); }
 
 .damage-tag {
   position: absolute;
@@ -2101,7 +2252,7 @@ dd {
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  background: rgba(15,23,42,.10);
+  background: rgba(18,35,61,.10);
   font-size: 1.2rem;
   line-height: 1;
 }
@@ -2157,8 +2308,8 @@ dd {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  border-color: rgba(180,83,9,.55);
-  background: rgba(180,83,9,.08);
+  border-color: rgba(178,94,0,.55);
+  background: rgba(178,94,0,.08);
 }
 
 .claim-alert-card .material-symbols-outlined {
@@ -2177,9 +2328,9 @@ dd {
   grid-column: calc(var(--timeline-step, 2) + 1) / span 1;
   margin-top: 8px;
   padding: 8px 9px;
-  border: 1px solid rgba(29,78,216,.32);
+  border: 1px solid rgba(0,84,159,.32);
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(29,78,216,.14), rgba(15,23,42,.02));
+  background: linear-gradient(90deg, rgba(0,84,159,.14), rgba(18,35,61,.02));
   transform: translateX(-10px);
   opacity: 0;
   animation: timeline-next-slide .42s ease forwards;
@@ -2195,8 +2346,8 @@ dd {
 }
 
 .timeline-next-card.action-required {
-  border-color: rgba(180,83,9,.62);
-  background: linear-gradient(90deg, rgba(180,83,9,.16), rgba(15,23,42,.02));
+  border-color: rgba(178,94,0,.62);
+  background: linear-gradient(90deg, rgba(178,94,0,.16), rgba(18,35,61,.02));
 }
 
 .timeline-action-head {
@@ -2317,7 +2468,7 @@ dd {
 }
 
 .claim-timeline > li.active::before {
-  box-shadow: 0 0 0 5px rgba(29,78,216,.14);
+  box-shadow: 0 0 0 5px rgba(0,84,159,.14);
 }
 
 .claim-form-checklist {
@@ -2340,7 +2491,7 @@ dd {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .evidence-checklist strong {
@@ -2365,7 +2516,7 @@ dd {
 }
 
 .evidence-checklist li.complete {
-  border-color: rgba(29,78,216,.45);
+  border-color: rgba(0,84,159,.45);
 }
 
 .evidence-checklist li.complete .check-dot {
@@ -2373,7 +2524,7 @@ dd {
 }
 
 .evidence-checklist li.needed {
-  border-color: rgba(185,28,28,.48);
+  border-color: rgba(198,40,40,.48);
 }
 
 .evidence-checklist li.needed .check-dot {
@@ -2381,7 +2532,7 @@ dd {
 }
 
 .evidence-checklist li.optional {
-  border-color: rgba(180,83,9,.38);
+  border-color: rgba(178,94,0,.38);
 }
 
 .evidence-checklist li.optional .check-dot {
@@ -2491,7 +2642,7 @@ dd {
 }
 
 .claim-row.selected td {
-  background: rgba(29,78,216,.08);
+  background: rgba(0,84,159,.08);
 }
 
 .claim-row.selected td:first-child {
@@ -2580,7 +2731,7 @@ dd {
   background: var(--surface-2);
   border: 1px solid var(--accent);
   border-radius: 14px;
-  box-shadow: 0 20px 44px rgba(15,23,42,0.108);
+  box-shadow: 0 20px 44px rgba(18,35,61,0.108);
   display: grid;
   gap: 4px;
   min-width: 180px;
@@ -2607,7 +2758,7 @@ dd {
 
 .claim-action-item:hover,
 .claim-action-item:focus-visible {
-  background: rgba(29,78,216,.1);
+  background: rgba(0,84,159,.1);
   color: var(--accent-strong);
   outline: none;
 }
@@ -2655,7 +2806,7 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 7px 10px;
-  background: rgba(15,23,42,.028);
+  background: rgba(18,35,61,.028);
   color: var(--ink-soft);
   font: inherit;
   font-size: .78rem;
@@ -2680,17 +2831,17 @@ dd {
 }
 
 .priority-badge.urgent {
-  background: rgba(185,28,28,.14);
+  background: rgba(198,40,40,.14);
   color: var(--danger);
 }
 
 .priority-badge.review {
-  background: rgba(180,83,9,.14);
+  background: rgba(178,94,0,.14);
   color: var(--warning);
 }
 
 .priority-badge.routine {
-  background: rgba(29,78,216,.12);
+  background: rgba(0,84,159,.12);
   color: var(--accent);
 }
 
@@ -2726,7 +2877,7 @@ dd {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .employee-action-grid,
@@ -2779,7 +2930,7 @@ dd {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .estimate-workbench,
@@ -2832,9 +2983,9 @@ dd {
 .estimate-remove-line {
   width: 28px;
   height: 28px;
-  border: 1px solid rgba(185,28,28,.45);
+  border: 1px solid rgba(198,40,40,.45);
   border-radius: 999px;
-  background: rgba(185,28,28,.1);
+  background: rgba(198,40,40,.1);
   color: var(--danger);
   cursor: pointer;
 }
@@ -2862,7 +3013,7 @@ dd {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .decision-comparison-metrics {
@@ -2875,7 +3026,7 @@ dd {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .decision-comparison-metrics span {
@@ -2901,9 +3052,9 @@ dd {
 
 .appeal-builder {
   padding: 16px;
-  border: 1px solid rgba(180,83,9,.55);
+  border: 1px solid rgba(178,94,0,.55);
   border-radius: 14px;
-  background: rgba(180,83,9,.07);
+  background: rgba(178,94,0,.07);
 }
 
 .appeal-builder-grid {
@@ -2928,7 +3079,7 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   padding: 10px 11px;
-  background: rgba(15,23,42,0.048);
+  background: rgba(18,35,61,0.048);
   color: var(--ink);
   font: inherit;
   text-transform: none;
@@ -2975,7 +3126,7 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   padding: 12px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   font: inherit;
   resize: vertical;
@@ -2992,7 +3143,7 @@ dd {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .employee-review-header {
@@ -3035,7 +3186,7 @@ dd {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .employee-review-notes p {
@@ -3060,7 +3211,7 @@ dd {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .employee-submission-grid span {
@@ -3106,7 +3257,7 @@ dd {
   bottom: 8px;
   padding: 5px 8px;
   border-radius: 999px;
-  background: rgba(10,12,10,.78);
+  background: rgba(18,35,61,.78);
   color: var(--ink);
   font-size: .68rem;
   font-weight: 800;
@@ -3121,7 +3272,7 @@ dd {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .adjustment-submit-panel p {
@@ -3137,7 +3288,7 @@ dd {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .second-pass-result {
@@ -3167,7 +3318,7 @@ dd {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .adjustment-edit-field span {
@@ -3184,7 +3335,7 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   padding: 10px 11px;
-  background: rgba(15,23,42,0.048);
+  background: rgba(18,35,61,0.048);
   color: var(--ink);
   font: inherit;
 }
@@ -3239,7 +3390,7 @@ dd {
   display: grid;
   align-content: start;
   border-right: 1px solid var(--line);
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .employee-thread-head {
@@ -3290,7 +3441,7 @@ dd {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #3b6fe0);
+  background: linear-gradient(135deg, var(--accent), var(--navy-soft));
   color: var(--bg);
   font-size: .82rem;
   font-weight: 900;
@@ -3335,7 +3486,7 @@ dd {
   display: grid;
   grid-template-rows: auto 1fr auto;
   background:
-    radial-gradient(circle at 20% 0%, rgba(29,78,216,.08), transparent 28%),
+    radial-gradient(circle at 20% 0%, rgba(0,84,159,.08), transparent 28%),
     var(--surface);
 }
 
@@ -3378,7 +3529,7 @@ dd {
 .imessage-bubble.customer {
   align-self: flex-start;
   border-bottom-left-radius: 6px;
-  background: rgba(15,23,42,.06);
+  background: rgba(18,35,61,.06);
   color: var(--ink);
 }
 
@@ -3401,7 +3552,7 @@ dd {
   align-self: flex-start;
   border-bottom-left-radius: 6px;
   border-bottom-right-radius: 20px;
-  background: rgba(15,23,42,.06);
+  background: rgba(18,35,61,.06);
   color: var(--ink);
 }
 
@@ -3439,7 +3590,7 @@ dd {
 
 .message-attach-button {
   border: 1px solid var(--line-strong);
-  background: rgba(15,23,42,.042);
+  background: rgba(18,35,61,.042);
   color: var(--ink);
 }
 
@@ -3553,7 +3704,7 @@ dd {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .review-metric {
@@ -3590,7 +3741,7 @@ dd {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .review-region.empty p {
@@ -3647,7 +3798,7 @@ dd {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .ops-card-head {
@@ -3674,7 +3825,7 @@ dd {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15,23,42,.024);
+  background: rgba(18,35,61,.024);
 }
 
 .ops-item.urgent {
@@ -3813,7 +3964,7 @@ dd {
   padding: 12px 13px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(15,23,42,.024);
+  background: rgba(18,35,61,.024);
 }
 
 .consumer-detail-grid span,
@@ -3851,8 +4002,8 @@ dd {
   border: 1px solid var(--line);
   border-radius: 22px;
   background:
-    radial-gradient(circle at 88% 0%, rgba(29,78,216,.09), transparent 28%),
-    linear-gradient(145deg, rgba(15,23,42,.028), transparent 48%),
+    radial-gradient(circle at 88% 0%, rgba(0,84,159,.09), transparent 28%),
+    linear-gradient(145deg, rgba(18,35,61,.028), transparent 48%),
     var(--surface);
   box-shadow: var(--shadow);
   overflow: clip;
@@ -3875,13 +4026,13 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 50%;
   color: var(--ink-soft);
-  background: rgba(15,23,42,.028);
+  background: rgba(18,35,61,.028);
   transition: border-color .2s ease, color .2s ease, transform .2s ease;
 }
 
 .claim-review-back:hover,
 .claim-review-back:focus-visible {
-  border-color: rgba(29,78,216,.55);
+  border-color: rgba(0,84,159,.55);
   color: var(--accent);
   transform: translateX(-2px);
 }
@@ -3916,11 +4067,11 @@ dd {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid rgba(29,78,216,.32);
+  border: 1px solid rgba(0,84,159,.32);
   border-radius: 999px;
   padding: 7px 11px;
   color: var(--accent);
-  background: rgba(29,78,216,.09);
+  background: rgba(0,84,159,.09);
   font-size: .76rem;
   white-space: nowrap;
 }
@@ -3936,16 +4087,16 @@ dd {
 
 .claim-review-status[data-status="final_review"],
 .claim-review-status[data-status="appealed"] {
-  border-color: rgba(180,83,9,.35);
+  border-color: rgba(178,94,0,.35);
   color: var(--warning);
-  background: rgba(180,83,9,.08);
+  background: rgba(178,94,0,.08);
 }
 
 .claim-review-status[data-status="in_review"],
 .claim-review-status[data-status="submitted"] {
-  border-color: rgba(29,78,216,.35);
+  border-color: rgba(0,84,159,.35);
   color: var(--accent);
-  background: rgba(29,78,216,.08);
+  background: rgba(0,84,159,.08);
 }
 
 .claim-review-empty {
@@ -4083,7 +4234,7 @@ dd {
   align-content: center;
   padding: 16px 18px;
   border-radius: 14px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .decision-support-metrics strong {
@@ -4100,12 +4251,12 @@ dd {
   padding: 19px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgba(15,23,42,.017);
+  background: rgba(18,35,61,.017);
 }
 
 .decision-reasoning-card.emphasized {
-  border-color: rgba(29,78,216,.22);
-  background: linear-gradient(145deg, rgba(29,78,216,.075), rgba(15,23,42,.014));
+  border-color: rgba(0,84,159,.22);
+  background: linear-gradient(145deg, rgba(0,84,159,.075), rgba(18,35,61,.014));
 }
 
 .decision-reasoning-card strong,
@@ -4120,7 +4271,7 @@ dd {
 .estimate-disclosure {
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgba(15,23,42,.014);
+  background: rgba(18,35,61,.014);
   overflow: hidden;
 }
 
@@ -4207,7 +4358,7 @@ dd {
   border: 2px solid var(--surface);
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 2px rgba(29,78,216,.18);
+  box-shadow: 0 0 0 2px rgba(0,84,159,.18);
 }
 
 .claim-activity-timeline article strong {
@@ -4230,7 +4381,7 @@ dd {
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: rgba(255,255,255,.92);
-  box-shadow: 0 18px 46px rgba(15,23,42,0.114);
+  box-shadow: 0 18px 46px rgba(18,35,61,0.114);
   backdrop-filter: blur(18px);
 }
 
@@ -4243,7 +4394,7 @@ dd {
   border-radius: 999px;
   padding: 0 14px;
   color: var(--ink-soft);
-  background: rgba(15,23,42,.028);
+  background: rgba(18,35,61,.028);
   font: inherit;
   font-size: .78rem;
   font-weight: 850;
@@ -4311,7 +4462,7 @@ dd {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(15,23,42,.02);
+  background: rgba(18,35,61,.02);
 }
 
 .supporting-doc-editor label {
@@ -4367,7 +4518,7 @@ dd {
   padding: 10px 11px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(15,23,42,.028);
+  background: rgba(18,35,61,.028);
   color: var(--ink);
   text-decoration: none;
 }
@@ -4392,7 +4543,7 @@ dd {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: rgba(29,78,216,.12);
+  background: rgba(0,84,159,.12);
   color: var(--accent);
 }
 
@@ -4411,7 +4562,7 @@ dd {
 }
 
 .supporting-doc-icon.photo {
-  background: rgba(15,23,42,.045);
+  background: rgba(18,35,61,.045);
 }
 
 .supporting-doc-icon.photo img {
@@ -4452,7 +4603,7 @@ dd {
 }
 
 a.supporting-doc-card .supporting-doc-action {
-  border-color: rgba(29,78,216,.45);
+  border-color: rgba(0,84,159,.45);
   color: var(--accent);
 }
 
@@ -4463,7 +4614,7 @@ a.supporting-doc-card .supporting-doc-action {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(15,23,42,.50);
+  background: rgba(18,35,61,.50);
   backdrop-filter: blur(14px);
 }
 
@@ -4515,7 +4666,7 @@ a.supporting-doc-card .supporting-doc-action {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 0 12px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   font: inherit;
   font-size: .76rem;
@@ -4528,7 +4679,7 @@ a.supporting-doc-card .supporting-doc-action {
   display: grid;
   place-items: center;
   overflow: auto;
-  background: rgba(15,23,42,0.054);
+  background: rgba(18,35,61,0.054);
 }
 
 .document-preview-body img {
@@ -4570,7 +4721,7 @@ a.supporting-doc-card .supporting-doc-action {
   padding: 30px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(15,23,42,.035);
+  background: rgba(18,35,61,.035);
   text-align: center;
 }
 
@@ -4579,9 +4730,9 @@ a.supporting-doc-card .supporting-doc-action {
   place-items: center;
   width: 68px;
   height: 82px;
-  border: 1px solid rgba(29,78,216,.45);
+  border: 1px solid rgba(0,84,159,.45);
   border-radius: 12px;
-  background: rgba(29,78,216,.12);
+  background: rgba(0,84,159,.12);
   color: var(--accent);
   font-size: .9rem;
   font-weight: 950;
@@ -4607,8 +4758,8 @@ a.supporting-doc-card .supporting-doc-action {
   padding: 22px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(15,23,42,.06), rgba(15,23,42,.028));
-  box-shadow: 0 18px 46px rgba(15,23,42,0.084);
+  background: linear-gradient(180deg, rgba(18,35,61,.06), rgba(18,35,61,.028));
+  box-shadow: 0 18px 46px rgba(18,35,61,0.084);
 }
 
 .document-preview-pdf-top {
@@ -4662,7 +4813,7 @@ a.supporting-doc-card .supporting-doc-action {
   grid-template-columns: 130px 1fr;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(15,23,42,.14);
+  border-bottom: 1px solid rgba(18,35,61,.14);
 }
 
 .document-preview-pdf-content dt {
@@ -4720,7 +4871,7 @@ a.supporting-doc-card .supporting-doc-action {
   height: auto !important;
   border-radius: 4px;
   background: #fff;
-  box-shadow: 0 18px 48px rgba(15,23,42,0.108);
+  box-shadow: 0 18px 48px rgba(18,35,61,0.108);
 }
 
 .document-preview-pdf-pages figcaption {
@@ -4752,7 +4903,7 @@ a.supporting-doc-card .supporting-doc-action {
   font: inherit;
   font-size: .84rem;
   font-weight: 900;
-  box-shadow: 0 18px 36px rgba(15,23,42,0.084);
+  box-shadow: 0 18px 36px rgba(18,35,61,0.084);
   cursor: pointer;
 }
 
@@ -4765,7 +4916,7 @@ a.supporting-doc-card .supporting-doc-action {
   border: 1px solid var(--line-strong);
   border-radius: 18px;
   background: rgba(255,255,255,.98);
-  box-shadow: 0 24px 60px rgba(15,23,42,0.126);
+  box-shadow: 0 24px 60px rgba(18,35,61,0.126);
 }
 
 .claim-assistant-head {
@@ -4798,7 +4949,7 @@ a.supporting-doc-card .supporting-doc-action {
   height: 34px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink);
   cursor: pointer;
 }
@@ -4831,7 +4982,7 @@ a.supporting-doc-card .supporting-doc-action {
 .claim-assistant-message.assistant {
   justify-self: start;
   border: 1px solid var(--line);
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
 }
 
 .claim-assistant-message.user {
@@ -4852,7 +5003,7 @@ a.supporting-doc-card .supporting-doc-action {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 7px 10px;
-  background: rgba(15,23,42,.032);
+  background: rgba(18,35,61,.032);
   color: var(--ink-soft);
   font: inherit;
   font-size: .78rem;
@@ -4907,7 +5058,7 @@ a.supporting-doc-card .supporting-doc-action {
 }
 
 .region-row:last-child { border-bottom: 0; }
-.region-row:hover:not(.placeholder) { background: rgba(15,23,42,.024); }
+.region-row:hover:not(.placeholder) { background: rgba(18,35,61,.024); }
 
 .region-row span   { color: var(--muted); font-size: .88rem; }
 .region-row strong { color: var(--ink);   font-weight: 700; }
@@ -4948,7 +5099,7 @@ a.supporting-doc-card .supporting-doc-action {
 .reason-block {
   padding: 14px 16px;
   border-left: 3px solid var(--warning);
-  background: rgba(180,83,9,.06);
+  background: rgba(178,94,0,.06);
   border-radius: 8px;
 }
 .reason-block p { margin: 0; color: var(--ink-soft); }
@@ -5056,7 +5207,7 @@ a.supporting-doc-card .supporting-doc-action {
   border-radius: 9px;
   cursor: pointer;
   border: 1px solid var(--line);
-  background: rgba(15,23,42,.016);
+  background: rgba(18,35,61,.016);
   transition: background .15s, border-color .15s;
 }
 
@@ -5078,7 +5229,7 @@ a.supporting-doc-card .supporting-doc-action {
 }
 .queue-nav:hover { border-color: var(--accent); color: var(--accent); }
 .queue-nav[disabled] { opacity: .3; cursor: default; }
-.queue-item:hover { background: rgba(15,23,42,.04); }
+.queue-item:hover { background: rgba(18,35,61,.04); }
 .queue-item.active { border-color: var(--accent); background: var(--accent-dim); }
 
 .queue-thumb {
@@ -5162,7 +5313,7 @@ a.supporting-doc-card .supporting-doc-action {
   place-items: center;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(15,23,42,0.195);
+  background: rgba(18,35,61,0.195);
   color: var(--ink);
   font-size: .72rem;
   font-weight: 800;
@@ -5209,7 +5360,7 @@ a.supporting-doc-card .supporting-doc-action {
   cursor: pointer;
   transition: background .15s;
 }
-.regions-table tbody tr:hover { background: rgba(15,23,42,.024); }
+.regions-table tbody tr:hover { background: rgba(18,35,61,.024); }
 .regions-table td:first-child { font-weight: 800; color: var(--accent); }
 
 .regions-table td.sev-high     { color: var(--danger);  font-weight: 700; text-transform: capitalize; }
@@ -5266,23 +5417,6 @@ a.supporting-doc-card .supporting-doc-action {
 
   .claim-home-stage {
     min-height: 380px;
-  }
-
-  .claim-home-photo-left {
-    width: 170px;
-    height: 250px;
-  }
-
-  .claim-home-photo-center {
-    left: 50%;
-    width: 280px;
-    height: 340px;
-    transform: translateX(-50%);
-  }
-
-  .claim-home-photo-right {
-    width: 190px;
-    height: 270px;
   }
 
   .claim-home-bottom {
@@ -5366,23 +5500,6 @@ a.supporting-doc-card .supporting-doc-action {
 
   .claim-home-stage {
     min-height: 380px;
-  }
-
-  .claim-home-photo-left {
-    left: -18px;
-    width: 130px;
-    height: 230px;
-  }
-
-  .claim-home-photo-center {
-    width: 240px;
-    height: 330px;
-  }
-
-  .claim-home-photo-right {
-    right: -18px;
-    width: 145px;
-    height: 250px;
   }
 
   .claim-home-title h1 {
@@ -5646,7 +5763,6 @@ h1, h2, h3 {
 
   .claim-home-card,
   .claim-home-copy h1,
-  .claim-home-photo,
   .claim-proof-grid figure,
   .claim-proof-grid img {
     transform: none !important;
@@ -5674,21 +5790,70 @@ h1, h2, h3 {
     top: 0;
     left: 0;
     bottom: 0;
+    z-index: 140;
     width: var(--sidebar-w);
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 0;
-    padding: 18px 12px;
+    padding: 16px 10px;
     border-right: 1px solid var(--line);
     border-bottom: 0;
-    background: var(--surface);
+    /* Slightly recessed against the page so the rail reads as chrome, and
+       carries the same gradient language as the cards beside it. */
+    background:
+      linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
     backdrop-filter: none;
     overflow: visible;
+    transition: width .22s var(--ease-out), box-shadow .22s var(--ease-out);
   }
 
+  /* Expand on pointer hover and on keyboard focus, so the rail is not
+     mouse-only. Width is the only animated property, and because the page
+     offset stays at the collapsed width the content never reflows. */
+  body.app-shell > .topbar:hover,
+  body.app-shell > .topbar:focus-within {
+    width: var(--sidebar-w-open);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* ── brand ──────────────────────────────────────────────────── */
   body.app-shell > .topbar > .brand {
-    padding: 4px 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    margin-bottom: 18px;
+    padding: 0 9px;
+    overflow: hidden;
+    white-space: nowrap;
+    /* wordmark fades in with the rail; the mark below always shows */
+    color: transparent;
+    font-size: 1.0625rem;
+    font-weight: 650;
+    letter-spacing: -.02em;
+    transition: color .18s var(--ease-out);
+  }
+
+  body.app-shell > .topbar:hover > .brand,
+  body.app-shell > .topbar:focus-within > .brand {
+    color: var(--ink);
+  }
+
+  /* the mark: a rounded accent tile with the C, always visible */
+  body.app-shell > .topbar > .brand::before {
+    content: "C";
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: var(--accent);
+    color: #fff;
+    font-size: .9375rem;
+    font-weight: 700;
+    letter-spacing: 0;
   }
 
   /* nav fills the middle and pushes the action cluster to the floor */
@@ -5725,38 +5890,229 @@ h1, h2, h3 {
     box-shadow: none;
   }
 
+  body.app-shell .employee-menu-list,
+  body.app-shell .workflow-tabs {
+    gap: 3px;
+  }
+
   body.app-shell .employee-menu-list a,
   body.app-shell .workflow-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
     justify-content: flex-start;
-    min-height: 36px;
-    padding: 0 10px;
-    border-radius: var(--radius-sm);
+    gap: 13px;
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    /* Label is hidden by colour, not by display, so it stays in the
+       accessibility tree and screen readers still announce the link. */
+    color: transparent;
     font-size: .875rem;
     font-weight: 500;
     white-space: nowrap;
+    transition: color .18s var(--ease-out), background .15s var(--ease-out);
   }
 
+  body.app-shell > .topbar:hover .employee-menu-list a,
+  body.app-shell > .topbar:focus-within .employee-menu-list a,
+  body.app-shell > .topbar:hover .workflow-tab,
+  body.app-shell > .topbar:focus-within .workflow-tab {
+    color: var(--ink-soft);
+  }
+
+  /* ── icons ──────────────────────────────────────────────────────
+     Generated in CSS on purpose: these icons are decorative (every row
+     already has a text label), and doing it here keeps the redesign to
+     one file instead of editing the nav block in 12 HTML pages. */
+  body.app-shell .employee-menu-list a::before,
+  body.app-shell .workflow-tab::before {
+    content: "help";
+    flex: 0 0 auto;
+    width: var(--sidebar-icon);
+    font-family: "Material Symbols Outlined", sans-serif;
+    font-size: var(--sidebar-icon);
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    direction: ltr;
+    color: var(--muted);
+    text-align: center;
+    transition: color .15s var(--ease-out);
+  }
+
+  /* customer portal */
+  body.app-shell .employee-menu-list a[href*="dashboard"]::before      { content: "space_dashboard"; }
+  body.app-shell .employee-menu-list a[href*="new-claim"]::before      { content: "add_circle"; }
+  body.app-shell .employee-menu-list a[href*="messages"]::before       { content: "forum"; }
+  body.app-shell .employee-menu-list a[href*="final-report"]::before   { content: "description"; }
+  body.app-shell .employee-menu-list a[href*="notifications"]::before  { content: "notifications"; }
+  body.app-shell .employee-menu-list a[href*="edit-claim"]::before     { content: "edit_document"; }
+  body.app-shell .employee-menu-list a[href*="case-review"]::before    { content: "fact_check"; }
+
+  /* employee portal */
+  body.app-shell .employee-menu-list a[href*="employee-assessment"]::before { content: "assignment"; }
+  body.app-shell .employee-menu-list a[href*="further-reasoning"]::before   { content: "psychology"; }
+  body.app-shell .employee-menu-list a[href*="employee-messages"]::before   { content: "forum"; }
+  body.app-shell .employee-menu-list a[href*="adjustment"]::before          { content: "tune"; }
+  body.app-shell .employee-menu-list a[href*="report-generator"]::before    { content: "lab_profile"; }
+
+  body.app-shell .employee-menu-list a:hover,
+  body.app-shell .employee-menu-list a:focus-visible,
+  body.app-shell .workflow-tab:hover {
+    background: var(--surface-2);
+  }
+
+  body.app-shell .employee-menu-list a:hover::before,
+  body.app-shell .employee-menu-list a:focus-visible::before {
+    color: var(--ink-soft);
+  }
+
+  /* ── active row ─────────────────────────────────────────────────
+     A filled accent bar on the leading edge plus an accent icon, so the
+     current page is legible even when the rail is collapsed to icons.
+     Previously active and hover were both flat tints of similar weight. */
   body.app-shell .employee-menu-list a.active,
   body.app-shell .workflow-tab.active {
     background: var(--accent-dim);
-    color: var(--accent);
     font-weight: 600;
     box-shadow: none;
   }
 
-  /* account row pinned to the bottom, separated by a hairline */
+  body.app-shell > .topbar:hover .employee-menu-list a.active,
+  body.app-shell > .topbar:focus-within .employee-menu-list a.active,
+  body.app-shell > .topbar:hover .workflow-tab.active,
+  body.app-shell > .topbar:focus-within .workflow-tab.active {
+    color: var(--accent);
+  }
+
+  /* The page requests Material Symbols at wght@400 only, so the FILL axis
+     is not available — the active icon is distinguished by colour and the
+     leading bar below, not by a filled glyph. */
+  body.app-shell .employee-menu-list a.active::before,
+  body.app-shell .workflow-tab.active::before {
+    color: var(--accent);
+  }
+
+  body.app-shell .employee-menu-list a.active::after,
+  body.app-shell .workflow-tab.active::after {
+    content: "";
+    position: absolute;
+    top: 9px;
+    bottom: 9px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent);
+  }
+
+  /* ── account block, pinned to the floor ─────────────────────────
+     Laid out as the same icon rows as the nav so the rail reads as one
+     column at 68px wide, rather than a nav stack with a stray button
+     cluster under it. */
   body.app-shell > .topbar > .topbar-actions,
   body.app-shell > .topbar > .api-chip {
     justify-self: stretch;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
     max-width: none;
     margin-top: 14px;
-    padding-top: 14px;
+    padding-top: 12px;
     border-top: 1px solid var(--line);
     border-left: 0;
     border-right: 0;
     border-bottom: 0;
     border-radius: 0;
+  }
+
+  body.app-shell > .topbar > .topbar-actions > .notification-menu {
+    display: block;
+  }
+
+  body.app-shell > .topbar .topbar-actions .icon-button,
+  body.app-shell > .topbar .topbar-actions .logout-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 13px;
+    width: 100%;
+    min-height: 42px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius);
+    background: none;
+    overflow: hidden;
+    color: transparent;
+    font-size: .875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color .18s var(--ease-out), background .15s var(--ease-out);
+  }
+
+  body.app-shell > .topbar:hover .topbar-actions .icon-button,
+  body.app-shell > .topbar:focus-within .topbar-actions .icon-button,
+  body.app-shell > .topbar:hover .topbar-actions .logout-button,
+  body.app-shell > .topbar:focus-within .topbar-actions .logout-button {
+    color: var(--ink-soft);
+  }
+
+  body.app-shell > .topbar .topbar-actions .icon-button:hover,
+  body.app-shell > .topbar .topbar-actions .logout-button:hover {
+    background: var(--surface-2);
+  }
+
+  /* the bell already ships a Material Symbols glyph — align it to the
+     same 22px column as the generated nav icons */
+  body.app-shell > .topbar .topbar-actions .icon-button .material-symbols-outlined {
+    flex: 0 0 auto;
+    width: var(--sidebar-icon);
+    font-size: var(--sidebar-icon);
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* give the bell a visible label once the rail is open */
+  body.app-shell > .topbar .topbar-actions .icon-button::after {
+    content: "Notifications";
+  }
+
+  body.app-shell > .topbar .topbar-actions .logout-button::before {
+    content: "logout";
+    flex: 0 0 auto;
+    width: var(--sidebar-icon);
+    font-family: "Material Symbols Outlined", sans-serif;
+    font-size: var(--sidebar-icon);
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* unread badge floats over the glyph instead of sitting in the row */
+  body.app-shell > .topbar .topbar-actions .notification-count {
+    position: absolute;
+    top: 7px;
+    left: 24px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--danger, #c0392b);
+    color: #fff;
+    font-size: .625rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
   }
 
   /* dropdowns would be clipped by a 248px rail, so open them alongside it */
@@ -5773,10 +6129,11 @@ h1, h2, h3 {
   }
 }
 
-/* Wide screens: let the rail breathe a little */
+/* Wide screens: let the expanded rail breathe. The collapsed width stays
+   at 68px so the content offset is identical at every breakpoint. */
 @media (min-width: 1500px) {
   body.app-shell {
-    --sidebar-w: 268px;
+    --sidebar-w-open: 276px;
   }
 }
 
@@ -5800,9 +6157,9 @@ body::before {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(58% 44% at 12% -6%,  rgba(79,57,246,.16), transparent 62%),
-    radial-gradient(46% 38% at 92% 4%,   rgba(168,85,247,.13), transparent 60%),
-    radial-gradient(64% 46% at 74% 102%, rgba(6,182,212,.11),  transparent 64%),
+    radial-gradient(58% 44% at 12% -6%,  rgba(0,84,159,.16), transparent 62%),
+    radial-gradient(46% 38% at 92% 4%,   rgba(20,49,94,.13), transparent 60%),
+    radial-gradient(64% 46% at 74% 102%, rgba(20,49,94,.11),  transparent 64%),
     var(--bg);
 }
 
@@ -5814,7 +6171,7 @@ body.app-shell {
 }
 
 ::selection {
-  background: rgba(79,57,246,.18);
+  background: rgba(0,84,159,.18);
   color: var(--ink);
 }
 
@@ -6076,8 +6433,8 @@ summary:focus-visible,
 /* ── landing: hero ────────────────────────────────────────────── */
 .claim-home-card {
   background:
-    radial-gradient(110% 70% at 88% -14%, rgba(79,57,246,.10), transparent 58%),
-    radial-gradient(80% 60% at 4% 108%,   rgba(6,182,212,.08), transparent 60%),
+    radial-gradient(110% 70% at 88% -14%, rgba(0,84,159,.10), transparent 58%),
+    radial-gradient(80% 60% at 4% 108%,   rgba(20,49,94,.08), transparent 60%),
     var(--surface);
 }
 
@@ -6113,13 +6470,13 @@ summary:focus-visible,
   height: 6px;
   border-radius: 999px;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,57,246,.18);
+  box-shadow: 0 0 0 3px rgba(0,84,159,.18);
   animation: cs-pulse 2.4s ease-in-out infinite;
 }
 
 @keyframes cs-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(79,57,246,.18); }
-  50%      { box-shadow: 0 0 0 6px rgba(79,57,246,.05); }
+  0%, 100% { box-shadow: 0 0 0 3px rgba(0,84,159,.18); }
+  50%      { box-shadow: 0 0 0 6px rgba(0,84,159,.05); }
 }
 
 .claim-home-copy h1 {
@@ -6135,7 +6492,7 @@ summary:focus-visible,
 /* trust marks: gradient discs with a white tick */
 .claim-home-trust li::before {
   background: var(--grad-accent);
-  box-shadow: 0 2px 8px -3px rgba(79,57,246,.6);
+  box-shadow: 0 2px 8px -3px rgba(0,84,159,.6);
 }
 
 .claim-home-trust li::after {
@@ -6146,7 +6503,7 @@ summary:focus-visible,
 /* hero photos: deeper corners and a hairline ring */
 .claim-home-photo {
   border-radius: var(--radius-lg);
-  box-shadow: 0 2px 6px rgba(20,16,54,.08), 0 34px 60px -28px rgba(20,16,54,.42),
+  box-shadow: 0 2px 6px rgba(18,35,61,.08), 0 34px 60px -28px rgba(18,35,61,.42),
               inset 0 0 0 1px rgba(255,255,255,.5);
   transition: box-shadow .3s var(--ease-out);
 }
@@ -6158,7 +6515,7 @@ summary:focus-visible,
   overflow: hidden;
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(180deg, rgba(79,57,246,.05), transparent 40%),
+    linear-gradient(180deg, rgba(0,84,159,.05), transparent 40%),
     var(--surface);
   box-shadow: var(--shadow);
   transition: border-color .25s var(--ease-out), box-shadow .25s var(--ease-out);
@@ -6183,12 +6540,11 @@ summary:focus-visible,
 }
 
 /* ── landing: proof grid ─────────────────────────────────────── */
+/* the serif display stays solid ink — a gradient on 400-weight
+   Georgia just reads as washed-out grey */
 .claim-proof-copy h2 {
-  background: var(--grad-ink);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: -.03em;
+  color: var(--ink);
+  letter-spacing: -.015em;
 }
 
 .claim-proof-copy > span:first-child {
@@ -6200,7 +6556,7 @@ summary:focus-visible,
 
 .claim-proof-grid figure {
   border-radius: var(--radius-lg);
-  box-shadow: 0 2px 6px rgba(20,16,54,.06), 0 26px 54px -26px rgba(20,16,54,.30);
+  box-shadow: 0 2px 6px rgba(18,35,61,.06), 0 26px 54px -26px rgba(18,35,61,.30);
 }
 
 .claim-proof-grid figcaption {
@@ -6230,7 +6586,7 @@ summary:focus-visible,
 
 .notification-count {
   background: var(--grad-accent);
-  box-shadow: 0 2px 8px -2px rgba(79,57,246,.7);
+  box-shadow: 0 2px 8px -2px rgba(0,84,159,.7);
 }
 
 .notification-dropdown,
@@ -6256,7 +6612,7 @@ summary:focus-visible,
 @media (min-width: 900px) {
   body.app-shell > .topbar {
     background:
-      linear-gradient(180deg, rgba(79,57,246,.05), transparent 220px),
+      linear-gradient(180deg, rgba(0,84,159,.05), transparent 220px),
       rgba(255,255,255,.86);
     backdrop-filter: saturate(180%) blur(18px);
   }
@@ -6287,7 +6643,7 @@ summary:focus-visible,
 .claim-summary-card {
   border-color: var(--accent-line);
   background:
-    linear-gradient(135deg, rgba(79,57,246,.09), rgba(6,182,212,.04) 60%, transparent),
+    linear-gradient(135deg, rgba(0,84,159,.09), rgba(20,49,94,.04) 60%, transparent),
     var(--surface);
 }
 
@@ -6310,32 +6666,35 @@ summary:focus-visible,
 }
 
 .claim-timeline > li.active::before {
-  box-shadow: 0 0 0 5px rgba(79,57,246,.14), var(--glow);
+  box-shadow: 0 0 0 5px rgba(0,84,159,.14), var(--glow);
   animation: cs-halo 2.6s ease-in-out infinite;
 }
 
 @keyframes cs-halo {
-  0%, 100% { box-shadow: 0 0 0 5px rgba(79,57,246,.14), var(--glow); }
-  50%      { box-shadow: 0 0 0 9px rgba(79,57,246,.06), var(--glow); }
+  0%, 100% { box-shadow: 0 0 0 5px rgba(0,84,159,.14), var(--glow); }
+  50%      { box-shadow: 0 0 0 9px rgba(0,84,159,.06), var(--glow); }
 }
 
 .timeline-next-card {
   border-radius: var(--radius);
   background:
-    linear-gradient(135deg, rgba(79,57,246,.07), rgba(6,182,212,.04)),
+    linear-gradient(135deg, rgba(0,84,159,.07), rgba(20,49,94,.04)),
     var(--surface);
 }
 
 /* ── tables ─────────────────────────────────────────────────── */
+/* overflow stays visible — row action menus escape the table box —
+   so the corners are rounded per-cell instead of by clipping */
 .claim-table {
   border-radius: var(--radius);
-  overflow: hidden;
 }
+
+.claim-table thead tr:first-child th:first-child { border-top-left-radius: var(--radius); }
+.claim-table thead tr:first-child th:last-child  { border-top-right-radius: var(--radius); }
 
 .claim-table th {
   background: var(--surface-2);
   color: var(--muted);
-  letter-spacing: .08em;
 }
 
 .claim-table tbody tr {
@@ -6384,7 +6743,7 @@ summary:focus-visible,
 
 .damage-tag {
   border-radius: 999px;
-  box-shadow: 0 2px 8px -2px rgba(20,16,54,.4);
+  box-shadow: 0 2px 8px -2px rgba(18,35,61,.4);
 }
 
 /* ── assistant launcher ─────────────────────────────────────── */
@@ -6459,8 +6818,8 @@ summary:focus-visible,
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(79,57,246,.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(79,57,246,.055) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0,84,159,.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,84,159,.055) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: radial-gradient(90% 70% at 50% 0%, #000 0%, transparent 78%);
   -webkit-mask-image: radial-gradient(90% 70% at 50% 0%, #000 0%, transparent 78%);
@@ -6477,9 +6836,9 @@ summary:focus-visible,
   pointer-events: none;
   border-radius: 50%;
   background:
-    radial-gradient(48% 48% at 34% 38%, rgba(79,57,246,.40), transparent 72%),
-    radial-gradient(44% 44% at 74% 66%, rgba(6,182,212,.34), transparent 74%),
-    radial-gradient(40% 40% at 58% 92%, rgba(168,85,247,.28), transparent 76%);
+    radial-gradient(48% 48% at 34% 38%, rgba(0,84,159,.40), transparent 72%),
+    radial-gradient(44% 44% at 74% 66%, rgba(20,49,94,.34), transparent 74%),
+    radial-gradient(40% 40% at 58% 92%, rgba(20,49,94,.28), transparent 76%);
   filter: blur(52px);
 }
 
@@ -6490,3 +6849,2479 @@ summary:focus-visible,
 }
 
 .claim-home-sub { font-size: 1.0625rem; }
+
+/* ── notification rows ──────────────────────────────────────── */
+.notification-item {
+  transition: background .18s var(--ease-out);
+}
+
+.notification-item:not(.empty):hover {
+  background: var(--accent-dim);
+}
+
+/* ── narrow screens: the progress rail ──────────────────────────
+   The "what happens next" card is pinned to the single grid column
+   of the step it belongs to. That works at desktop widths but leaves
+   it around 70px wide on a phone, so below 700px it spans the full
+   rail instead and the step labels tighten up. */
+@media (max-width: 700px) {
+  .claim-timeline > li:not(.timeline-next-card) {
+    font-size: .6875rem;
+    letter-spacing: -.01em;
+  }
+
+  .claim-timeline {
+    padding-inline: 10px;
+  }
+
+  /* The claims table has four text columns, so its min-content width
+     was ~400px. In the shell's single-column grid that forced every
+     sibling card to 400px as well and pushed the whole page into
+     horizontal overflow. Tightening the cells brings the table back
+     under the viewport without an inner scroller, which matters here
+     because each row carries an "Actions" menu that has to overflow
+     the table box. */
+  .claim-table th,
+  .claim-table td {
+    padding: 9px 8px;
+  }
+
+  .claim-table th {
+    font-size: .66rem;
+    letter-spacing: .03em;
+  }
+
+  .claim-table td {
+    font-size: .82rem;
+  }
+}
+
+/* ── landing: contain the proof-grid drift ──────────────────────
+   The proof cards fly in from --proof-drift-x: -88vw, which put the
+   homepage into ~300px of horizontal scroll on a phone (body's
+   overflow-x: hidden does not clamp the document scroll width on its
+   own). overflow-x: clip contains it without creating a scroll
+   container, so the sticky columns inside keep working — plain
+   `hidden` would break them. */
+.claim-proof-section {
+  overflow-x: clip;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MAKEOVER 1 — the message board (customer + adjuster)
+
+   The shell was sound; what dated it was the flat slate-grey insets
+   (rgba(18,35,61,.0x)), hard 1px row dividers doing all the work, and
+   incoming bubbles that read as disabled rather than as someone else
+   talking. This section moves the whole surface onto the new palette
+   and gives the thread list, the log and the composer their own
+   distinct elevation.
+   ══════════════════════════════════════════════════════════════ */
+.employee-messenger {
+  min-height: 680px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── thread list ─────────────────────────────────────────────── */
+.employee-thread-sidebar {
+  background:
+    linear-gradient(180deg, rgba(0,84,159,.05), transparent 220px),
+    var(--surface-2);
+}
+
+.employee-thread-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  align-items: center;
+  background: rgba(255,255,255,.72);
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+.employee-thread-head span {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.employee-thread-head strong {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: .75rem;
+  font-weight: 650;
+}
+
+/* rows read as cards in a list, not as table rows: the divider is
+   gone and selection is carried by a tinted pill plus a left rail */
+.employee-thread {
+  position: relative;
+  border-bottom: 0;
+  border-radius: var(--radius-sm);
+  /* The base rule sets width: 100%, which with side margins overflowed
+     the sidebar to the right — hidden on desktop by the card's
+     overflow, plainly visible on a phone. width: auto is no good
+     either: these are <button>s, so they shrink to fit. Subtracting
+     the margins keeps the pill symmetric and full width. */
+  width: calc(100% - 16px);
+  margin: 4px 8px;
+  padding: 12px 14px;
+  transition: background .18s var(--ease-out), transform .18s var(--ease-out);
+}
+
+.employee-thread::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 999px;
+  background: var(--grad-accent);
+  transform: translateY(-50%);
+  transition: height .22s var(--ease-out);
+}
+
+.employee-thread:hover {
+  background: var(--surface-3);
+}
+
+.employee-thread.active {
+  background: var(--grad-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+.employee-thread.active::before { height: 26px; }
+
+.employee-thread.active .employee-thread-copy strong { color: var(--accent); }
+
+.employee-thread-avatar {
+  background: var(--grad-accent);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  box-shadow: var(--glow), inset 0 0 0 1px rgba(255,255,255,.22);
+}
+
+.employee-thread-copy small {
+  letter-spacing: .04em;
+  font-weight: 650;
+  font-size: .7rem;
+}
+
+/* ── conversation log ────────────────────────────────────────── */
+.employee-chat-panel {
+  min-height: 680px;
+  background:
+    radial-gradient(80% 40% at 50% 0%, rgba(0,84,159,.06), transparent 70%),
+    radial-gradient(60% 40% at 90% 100%, rgba(20,49,94,.05), transparent 70%),
+    var(--surface);
+}
+
+.employee-chat-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(255,255,255,.76);
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+.employee-chat-header span {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.employee-chat-header strong {
+  display: block;
+  font-size: 1.05rem;
+  letter-spacing: -.02em;
+}
+
+.employee-imessage-log {
+  gap: 6px;
+  padding: 26px 22px;
+  scroll-behavior: smooth;
+}
+
+/* bubbles: outgoing carries the brand gradient, incoming is a real
+   raised card so it reads as another person rather than as a
+   greyed-out field */
+.imessage-bubble {
+  max-width: min(560px, 76%);
+  padding: 11px 15px 8px;
+  border-radius: 22px;
+  animation: cs-bubble-in .32s var(--ease-out) both;
+}
+
+@keyframes cs-bubble-in {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.imessage-bubble span {
+  font-size: .68rem;
+  font-weight: 550;
+  letter-spacing: .01em;
+  opacity: .68;
+}
+
+.imessage-bubble.customer,
+.consumer-messenger .imessage-bubble.employee {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(18,35,61,.06), inset 0 0 0 1px var(--line);
+}
+
+.imessage-bubble.employee,
+.consumer-messenger .imessage-bubble.customer {
+  background: var(--grad-accent);
+  color: #fff;
+  box-shadow: var(--glow);
+}
+
+/* consecutive bubbles from the same side tuck together */
+.imessage-bubble.customer + .imessage-bubble.customer,
+.imessage-bubble.employee + .imessage-bubble.employee {
+  margin-top: -2px;
+}
+
+/* ── composer ───────────────────────────────────────────────── */
+.employee-imessage-compose {
+  align-items: center;
+  padding: 14px 16px 16px;
+  background: rgba(255,255,255,.82);
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+.employee-imessage-compose input[type="text"] {
+  min-height: 46px;
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+
+.employee-imessage-compose input[type="text"]:focus {
+  background: var(--surface);
+}
+
+.employee-imessage-compose button {
+  background: var(--grad-accent);
+  color: #fff;
+  box-shadow: var(--glow);
+  transition: transform .2s var(--ease-spring), box-shadow .2s var(--ease-out);
+}
+
+.employee-imessage-compose button:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: var(--glow-strong);
+}
+
+.message-attach-button {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  transition: transform .2s var(--ease-spring), border-color .2s var(--ease-out),
+              color .2s var(--ease-out), background .2s var(--ease-out);
+}
+
+.message-attach-button:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.message-attachment-preview span,
+.message-attachment-list span,
+.message-attachment-list a {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 550;
+}
+
+/* ── empty / loading states ─────────────────────────────────────
+   These were bare sentences sitting flush against the edge. They now
+   sit centred in their pane so an empty inbox looks intentional. */
+.employee-imessage-log .empty,
+.employee-thread-sidebar .empty {
+  margin: auto;
+  max-width: 34ch;
+  padding: 18px;
+  color: var(--muted);
+  font-size: .88rem;
+  text-align: center;
+}
+
+.employee-imessage-log .empty::before {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: var(--grad-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MAKEOVER 2 — the claim creation form
+
+   The intake screen is the first real thing a customer does, and it
+   was the flattest surface in the app: a small dashed box, a 2-up
+   hairline table for the AI summary, and a checklist of grey rows
+   with no sense of progress. This section gives the form a clear
+   primary target, turns the summary into tiles, and makes the
+   checklist show state.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── panel headings ─────────────────────────────────────────── */
+.panel-heading {
+  position: relative;
+  min-height: 58px;
+}
+
+.panel-heading span {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.panel-heading strong {
+  font-size: .9rem;
+  letter-spacing: -.01em;
+}
+
+/* ── the drop target: now the obvious primary action ─────────── */
+.dropzone {
+  position: relative;
+  min-height: 190px;
+  padding: 30px;
+  border: 1.5px dashed var(--accent-line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(70% 60% at 50% 0%, rgba(0,84,159,.10), transparent 70%),
+    var(--surface-2);
+  text-align: center;
+  justify-items: center;
+  transition: border-color .2s var(--ease-out), background .2s var(--ease-out),
+              transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+
+/* an upload glyph painted in the brand gradient, so the intake target
+   gets an icon without adding markup to the page */
+.dropzone::before {
+  content: "";
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  background: var(--grad-accent);
+  mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>');
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>');
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.dropzone:hover,
+.dropzone.dragging,
+.dropzone.dragover {
+  border-color: var(--accent);
+  border-style: solid;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.dropzone.dragging,
+.dropzone.dragover {
+  background:
+    radial-gradient(70% 70% at 50% 0%, rgba(0,84,159,.18), transparent 72%),
+    var(--surface-2);
+}
+
+.drop-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+/* ── the submit cluster reads as one decision block ──────────── */
+.intake-actions {
+  align-content: start;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(160deg, rgba(0,84,159,.05), transparent 60%),
+    var(--surface);
+}
+
+.status {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: .8rem;
+  font-weight: 550;
+}
+
+/* ── evidence checklist ─────────────────────────────────────────
+   The class semantics come from app.js: `needed` = required and not
+   yet supplied (danger), `complete` = supplied (accent), `optional`
+   = nice to have (warning). Those hue meanings are preserved exactly
+   here — only the presentation changes: each state now tints its own
+   row instead of colouring a 12px dot and a border nobody notices. */
+.evidence-checklist li {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  transition: border-color .18s var(--ease-out), background .18s var(--ease-out);
+}
+
+.evidence-checklist li p {
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.check-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+}
+
+/* still outstanding */
+.evidence-checklist li.needed {
+  border-color: rgba(220,38,38,.34);
+  background: linear-gradient(135deg, rgba(220,38,38,.08), transparent 66%), var(--surface);
+}
+
+.evidence-checklist li.needed .check-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(220,38,38,.14);
+}
+
+/* nice to have */
+.evidence-checklist li.optional {
+  border-color: rgba(217,119,6,.30);
+  background: linear-gradient(135deg, rgba(217,119,6,.07), transparent 66%), var(--surface);
+}
+
+.evidence-checklist li.optional .check-dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px rgba(217,119,6,.14);
+}
+
+/* supplied — `complete` wins over `optional` when both are present */
+.evidence-checklist li.complete {
+  border-color: var(--accent-line);
+  background: var(--grad-accent-soft);
+}
+
+.evidence-checklist li.complete .check-dot {
+  background: var(--grad-accent);
+  box-shadow: var(--glow);
+}
+
+/* ── AI summary: hairline table becomes a tile grid ──────────── */
+.summary-grid {
+  gap: 10px;
+  border-top: 0;
+  border-left: 0;
+}
+
+.summary-grid div {
+  min-height: 84px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  transition: border-color .2s var(--ease-out), background .2s var(--ease-out);
+}
+
+.summary-grid div:hover {
+  border-color: var(--accent-line);
+  background: var(--surface);
+}
+
+.summary-grid dt {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.summary-grid dd {
+  margin-top: 4px;
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+/* ── preview stage + queue thumbnails ───────────────────────── */
+.empty-preview {
+  border-radius: var(--radius);
+  border-color: var(--line);
+}
+
+.preview-image { border-radius: var(--radius); }
+
+.thumb {
+  border-radius: var(--radius-sm);
+  transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+
+.thumb:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.queue-nav {
+  background: rgba(255,255,255,.8);
+  backdrop-filter: blur(8px);
+  transition: transform .18s var(--ease-spring), border-color .18s var(--ease-out),
+              color .18s var(--ease-out);
+}
+
+.queue-nav:hover { transform: scale(1.08); }
+
+.queue-heading span {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+/* ── detected parts rows ────────────────────────────────────── */
+.region-row:hover:not(.placeholder) {
+  background: var(--accent-dim);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MAKEOVER 3 — the employee portal
+
+   This is where an adjuster spends the day, and it had the least
+   visual hierarchy: a queue whose filters looked like disabled
+   buttons, and a review panel where the decision controls, the
+   read-only case data and the audit log all shared one flat grey
+   treatment. This section separates them — the queue gets real
+   controls, and the review panel gets a ranked order where the
+   action zone is the brightest thing on screen.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── queue: search + filters ─────────────────────────────────── */
+.employee-queue-tools input {
+  min-height: 44px;
+  border-color: var(--line);
+  background: var(--surface-2);
+  /* leading magnifier, so the field reads as search at a glance */
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%236b6b8a" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>');
+  background-repeat: no-repeat;
+  background-position: 15px center;
+  background-size: 17px 17px;
+  padding-left: 42px;
+}
+
+.employee-queue-tools input:focus {
+  background-color: var(--surface);
+}
+
+.employee-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.queue-filter {
+  border-color: var(--line);
+  background: var(--surface-2);
+  font-size: .76rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 7px 13px;
+  transition: transform .18s var(--ease-spring), border-color .18s var(--ease-out),
+              background .18s var(--ease-out), color .18s var(--ease-out),
+              box-shadow .18s var(--ease-out);
+}
+
+.queue-filter:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.queue-filter.active {
+  border-color: transparent;
+  background: var(--grad-accent);
+  color: var(--on-accent);
+  box-shadow: var(--glow);
+}
+
+/* ── review panel shell ─────────────────────────────────────────
+   It is sticky and can run very long, so it gets its own scroll
+   rather than growing past the viewport and stranding the actions. */
+.employee-claim-detail {
+  padding: 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+/* The inner scroll only makes sense while the panel is sticky. Below
+   1040px the layout stacks and the panel goes static, where capping
+   its height would nest a scroller inside the page scroll. */
+@media (min-width: 1041px) {
+  .employee-claim-detail {
+    max-height: calc(100vh - 128px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
+.employee-claim-detail > .consumer-panel-head {
+  position: sticky;
+  /* Sticky offsets resolve against the scrollport's padding box, which
+     starts 20px in. The head is pulled flush to the panel edge with a
+     -20px margin, so it needs top: -20px to stay there — top: 0 would
+     push it back down by the padding and leave a 20px band of case
+     data scrolling past above it. */
+  top: -20px;
+  z-index: 2;
+  margin: -20px -20px 0;
+  padding: 20px 20px 14px;
+  background: rgba(255,255,255,.86);
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+.consumer-detail-empty {
+  padding: 28px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.consumer-detail-empty strong {
+  font-size: 1rem;
+  letter-spacing: -.01em;
+}
+
+.employee-review-header strong {
+  display: block;
+  font-size: 1.4rem;
+  letter-spacing: -.03em;
+  background: var(--grad-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── read-only case data: tinted tiles with accent labels ────── */
+.consumer-detail-grid div,
+.consumer-final-grid div,
+.employee-submission-grid div,
+.employee-comparison-grid div {
+  border-color: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  transition: border-color .18s var(--ease-out), background .18s var(--ease-out);
+}
+
+.consumer-detail-grid div:hover,
+.employee-submission-grid div:hover,
+.employee-comparison-grid div:hover {
+  border-color: var(--accent-line);
+  background: var(--surface);
+}
+
+.consumer-detail-grid div > span,
+.consumer-final-grid div > span,
+.employee-submission-grid div > span,
+.employee-comparison-grid div > span {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.consumer-detail-grid div > strong,
+.consumer-final-grid div > strong {
+  display: block;
+  margin-top: 3px;
+  letter-spacing: -.01em;
+}
+
+/* ── the action zone: the brightest block in the panel ───────── */
+.employee-action-panel {
+  padding: 18px;
+  border-color: var(--accent-line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(150deg, rgba(0,84,159,.09), rgba(20,49,94,.04) 60%, transparent),
+    var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.employee-action-panel .consumer-panel-head > span:first-child {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* the confirmation checkbox is the gate on finalizing, so it gets a
+   real control instead of the browser default */
+.employee-check-item {
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .18s var(--ease-out), background .18s var(--ease-out);
+}
+
+.employee-check-item:hover { border-color: var(--accent-line); }
+
+.employee-check-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .16s var(--ease-out), background .16s var(--ease-out),
+              box-shadow .16s var(--ease-out);
+}
+
+.employee-check-item input[type="checkbox"]:hover {
+  border-color: var(--accent);
+}
+
+.employee-check-item input[type="checkbox"]:checked {
+  border-color: transparent;
+  /* the tick is a layer on top of the gradient — a mask would not
+     work here, since black fill and white stroke are both opaque in
+     an alpha mask and the tick would disappear into the fill */
+  background:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10.4l3.2 3.2L15 6.8"/></svg>') center / 15px 15px no-repeat,
+    var(--grad-accent);
+  box-shadow: var(--glow);
+}
+
+.employee-check-item input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.employee-check-item:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--grad-accent-soft);
+}
+
+/* ── internal notes read as private, not as another input ────── */
+.employee-internal-notes {
+  border-color: rgba(217,119,6,.28);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(150deg, rgba(217,119,6,.07), transparent 60%), var(--surface);
+}
+
+.employee-internal-notes:focus {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 4px rgba(217,119,6,.12);
+}
+
+/* ── audit log: a rail makes it read as a sequence ───────────── */
+.audit-log-list article {
+  position: relative;
+  padding: 10px 12px 10px 22px;
+  border-color: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.audit-log-list article::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 15px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+/* ── submitted photos ───────────────────────────────────────── */
+.employee-photo-gallery figure {
+  border-radius: var(--radius-sm);
+  transition: transform .22s var(--ease-out), box-shadow .22s var(--ease-out);
+}
+
+.employee-photo-gallery figure:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.employee-photo-gallery img {
+  transition: transform .35s var(--ease-out);
+}
+
+.employee-photo-gallery figure:hover img {
+  transform: scale(1.05);
+}
+
+/* ── file inputs ────────────────────────────────────────────────
+   The supporting-documents and appeal fields were rendering the raw
+   platform control ("Choose Files / No file chosen"), which was the
+   one unstyled thing left on the intake form. */
+input[type="file"] {
+  width: 100%;
+  padding: 9px 12px;
+  color: var(--ink-soft);
+  font-size: .84rem;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--grad-accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--glow);
+  transition: transform .18s var(--ease-spring), box-shadow .18s var(--ease-out);
+}
+
+input[type="file"]::file-selector-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--glow-strong);
+}
+
+/* the attach control in the composer hides its own input, so it must
+   not pick up the block styling above */
+.message-attach-button input[type="file"] { display: none; }
+
+/* Attachment chips sit inside a bubble, so they have to invert on the
+   gradient side — accent-on-accent-tint was unreadable there. */
+.imessage-bubble.employee .message-attachment-list span,
+.imessage-bubble.employee .message-attachment-list a,
+.consumer-messenger .imessage-bubble.customer .message-attachment-list span,
+.consumer-messenger .imessage-bubble.customer .message-attachment-list a {
+  border-color: rgba(255,255,255,.34);
+  background: rgba(255,255,255,.18);
+  color: #fff;
+}
+
+.imessage-bubble .message-attachment-list {
+  margin-top: 7px;
+}
+
+.imessage-bubble .message-attachment-list a:hover {
+  text-decoration: underline;
+}
+
+/* ── queue table: eight columns in a 1.15fr slot ─────────────────
+   The adjuster queue carries eight columns but only gets ~55% of the
+   page next to the sticky review panel. Its min-content width is
+   ~760px against ~640px available at 1440px, so it was overflowing
+   its own panel and sliding underneath the detail card, with Status
+   clipped and Action hidden entirely.
+
+   Tightening the cells and letting the panel scroll horizontally
+   keeps every column reachable. On a wide monitor the table fits and
+   no scrollbar appears. This is safe here because the employee rows
+   end in a plain Review button — unlike the customer dashboard,
+   whose rows open an Actions menu that has to escape the table box,
+   which is why that one is tightened instead of scrolled. */
+.employee-dashboard-layout > .consumer-panel {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.employee-claim-table {
+  min-width: 700px;
+}
+
+.employee-claim-table th,
+.employee-claim-table td {
+  padding: 11px 10px;
+  white-space: nowrap;
+}
+
+/* the vehicle description is the one column worth wrapping */
+.employee-claim-table th:nth-child(3),
+.employee-claim-table td:nth-child(3) {
+  white-space: normal;
+  min-width: 130px;
+}
+
+.employee-claim-table td {
+  font-size: .84rem;
+}
+
+/* Review reads as a control rather than a link in a dense grid */
+.employee-review-button {
+  padding: 6px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--accent-dim);
+  font-size: .78rem;
+  transition: background .18s var(--ease-out), color .18s var(--ease-out),
+              transform .18s var(--ease-spring), box-shadow .18s var(--ease-out);
+}
+
+.employee-review-button::after { display: none; }
+
+.employee-review-button:hover {
+  background: var(--grad-accent);
+  color: var(--on-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--glow);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CARRIER OVERHAUL — final layer
+
+   The previous passes leaned on violet gradients, coloured glows,
+   glass blur and a tinted ambient background. That vocabulary reads
+   as generic AI-product, not as an insurance carrier. This layer is
+   the authority on look: it removes those effects outright and
+   replaces them with the flat, high-contrast, navy-led treatment
+   used across mainstream carrier sites.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 1. kill the ambient colour field ───────────────────────────
+   A fixed three-point violet/cyan mesh sat behind every page. Real
+   carrier sites use one flat neutral. */
+body::before { display: none; }
+
+body,
+.landing-shell,
+.page,
+body.app-shell {
+  background: var(--bg);
+}
+
+::selection {
+  background: rgba(0,84,159,.16);
+  color: var(--ink);
+}
+
+/* ── 2. no glass, no blur ───────────────────────────────────────
+   Frosted chrome was the other tell. Headers are solid white with a
+   hairline, which is also more legible over dense tables. */
+.topbar,
+.claim-home-nav,
+.employee-chat-header,
+.employee-thread-head,
+.employee-imessage-compose,
+.employee-claim-detail > .consumer-panel-head,
+.secondary-action,
+.claim-home-ghost,
+.back-button,
+.workflow-nav-button,
+.google-login-button,
+.queue-nav {
+  background: var(--surface);
+  backdrop-filter: none;
+}
+
+.topbar,
+.claim-home-nav {
+  border-bottom: 1px solid var(--line);
+}
+
+/* ── 3. flat buttons, no sweep, no lift ─────────────────────────
+   Solid fill, darker on hover, pressed state. That is the whole
+   interaction language on a carrier CTA. */
+.cta,
+.claim-home-cta,
+.claim-home-nav-cta,
+.claim-home-employee-link,
+.new-claim-button,
+.timeline-action-button,
+.claim-assistant-toggle,
+button[type="submit"],
+.workflow-nav-button.next {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: background .15s var(--ease-out);
+}
+
+/* the highlight sweep across primary buttons */
+.cta::after,
+.claim-home-cta::after,
+.new-claim-button::after,
+.timeline-action-button::after,
+button[type="submit"]::after {
+  display: none;
+}
+
+.cta:hover,
+.cta:focus-visible,
+.claim-home-cta:hover,
+.claim-home-cta:focus-visible,
+.claim-home-nav-cta:hover,
+.claim-home-nav-cta:focus-visible,
+.claim-home-employee-link:hover,
+.new-claim-button:hover,
+.timeline-action-button:hover,
+.claim-assistant-toggle:hover,
+button[type="submit"]:hover,
+.workflow-nav-button.next:hover {
+  background: var(--accent-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.cta:active,
+.claim-home-cta:active,
+.new-claim-button:active,
+.timeline-action-button:active,
+button[type="submit"]:active {
+  background: var(--navy-deep);
+  transform: none;
+}
+
+.new-claim-button,
+.claim-assistant-toggle {
+  border-radius: var(--radius-sm);
+}
+
+.new-claim-button span {
+  background: rgba(255,255,255,.18);
+  box-shadow: none;
+}
+
+/* secondary: white with a navy outline, the standard carrier pair */
+.secondary-action,
+.claim-home-ghost,
+.back-button,
+.workflow-nav-button {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.secondary-action:hover,
+.claim-home-ghost:hover,
+.back-button:hover,
+.workflow-nav-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  transform: none;
+  box-shadow: none;
+}
+
+/* links are blue and underlined on hover — no sliding rule */
+.text-action {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.text-action::after { display: none; }
+
+.text-action:hover,
+.text-action:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── 4. headings are solid navy, not clipped gradient ───────────
+   background-clip: text was doing nothing but making type look
+   like a marketing site. */
+.claim-home-brand,
+.brand,
+.claim-home-copy h1,
+.claim-proof-copy h2,
+.consumer-dashboard-header h1,
+.employee-review-header strong,
+.kicker,
+.panel-heading span,
+.employee-thread-head span,
+.employee-chat-header span,
+.consumer-panel-head > span:first-child,
+.claim-summary-card > span:first-child,
+.evidence-checklist-card > span:first-child,
+.claim-proof-copy > span:first-child,
+.claim-home-scroll-panels span,
+.queue-heading span,
+.employee-action-panel .consumer-panel-head > span:first-child {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+}
+
+.claim-home-brand,
+.brand,
+.claim-home-copy h1,
+.claim-proof-copy h2,
+.consumer-dashboard-header h1,
+.employee-review-header strong,
+.claim-home-scroll-panels span {
+  color: var(--ink);
+}
+
+/* eyebrows: plain grey caps, the way a carrier labels a section */
+.kicker,
+.panel-heading span,
+.employee-thread-head span,
+.employee-chat-header span,
+.consumer-panel-head > span:first-child,
+.claim-summary-card > span:first-child,
+.evidence-checklist-card > span:first-child,
+.claim-proof-copy > span:first-child,
+.queue-heading span,
+.employee-action-panel .consumer-panel-head > span:first-child {
+  color: var(--muted);
+  letter-spacing: .07em;
+}
+
+/* display type: normal tracking, not -.04em */
+h1, h2, h3,
+.claim-home-copy h1,
+.consumer-dashboard-header h1 {
+  letter-spacing: -.012em;
+}
+
+/* ── 5. cards: crisp border, almost no shadow ──────────────────── */
+.panel,
+.card,
+.claim-card,
+.ops-card,
+.consumer-panel,
+.review-panel,
+.claim-summary-card,
+.claim-alert-card,
+.claim-timeline-card,
+.evidence-checklist-card,
+.employee-messenger,
+.employee-claim-detail {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* the decorative gradient hairline across every card top */
+.panel::before,
+.card::before,
+.consumer-panel::before,
+.review-panel::before,
+.claim-summary-card::before,
+.claim-timeline-card::before {
+  display: none;
+}
+
+.claim-card:hover,
+.ops-card:hover {
+  transform: none;
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.claim-summary-card {
+  border-left: 3px solid var(--navy);
+  background: var(--surface);
+}
+
+/* ── 6. no decorative motion ────────────────────────────────────
+   The pulsing dot and the haloing progress step belonged to a demo. */
+.claim-home-eyebrow::before,
+.claim-timeline > li.active::before {
+  animation: none;
+}
+
+.claim-timeline > li.active::before {
+  box-shadow: 0 0 0 4px rgba(0,84,159,.16);
+}
+
+.imessage-bubble { animation: none; }
+
+.consumer-dashboard-shell > *,
+.page > .panel,
+.ops-shell > * {
+  animation: none;
+}
+
+/* ── 7. landing page: flat, no blobs, no grid ──────────────────── */
+.claim-home-card {
+  background: var(--surface);
+}
+
+.claim-home-card::after,
+.claim-home-stage::before {
+  display: none;
+}
+
+.claim-home-eyebrow {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.claim-home-eyebrow::before {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.claim-home-photo {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.claim-home-trust li::before {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.claim-home-scroll-panels article {
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.claim-home-scroll-panels article:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.claim-home-scroll-panels span {
+  color: var(--accent);
+  font-size: 1.4rem;
+}
+
+.claim-proof-grid figure {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.claim-proof-grid figcaption { backdrop-filter: none; }
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  background: none;
+}
+
+/* ── 8. the signed-in rail: solid navy ──────────────────────────
+   This is the single biggest change in character. Carrier portals
+   put navigation in a solid brand-colour rail rather than a white
+   panel with a tinted active pill. It also gives the app a strong
+   colour block without a single gradient. */
+@media (min-width: 900px) {
+  body.app-shell > .topbar {
+    border-right: 0;
+    background: var(--navy);
+    box-shadow: none;
+  }
+
+  body.app-shell > .topbar > .brand {
+    color: #fff;
+    font-size: 1.0625rem;
+  }
+
+  body.app-shell .employee-menu-list a,
+  body.app-shell .workflow-tab {
+    color: rgba(255,255,255,.76);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+  }
+
+  body.app-shell .employee-menu-list a:hover,
+  body.app-shell .workflow-tab:hover {
+    background: rgba(255,255,255,.10);
+    color: #fff;
+  }
+
+  body.app-shell .employee-menu-list a.active,
+  body.app-shell .workflow-tab.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: none;
+  }
+
+  /* the account row at the floor of the rail */
+  body.app-shell > .topbar > .topbar-actions,
+  body.app-shell > .topbar > .api-chip {
+    border-top: 1px solid rgba(255,255,255,.16);
+  }
+
+  body.app-shell .logout-button,
+  body.app-shell .icon-button {
+    border: 1px solid rgba(255,255,255,.22);
+    background: transparent;
+    color: rgba(255,255,255,.86);
+  }
+
+  body.app-shell .logout-button:hover,
+  body.app-shell .icon-button:hover {
+    border-color: rgba(255,255,255,.42);
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    transform: none;
+  }
+
+  body.app-shell .api-chip { color: rgba(255,255,255,.7); }
+}
+
+/* below 900px the rail becomes the horizontal topbar again, which
+   stays white so it does not swamp a small screen */
+@media (max-width: 899px) {
+  .topbar { background: var(--surface); }
+}
+
+/* ── 9. tables: plain, ruled, legible ───────────────────────────
+   Carrier tables are grey-header, white-body, thin rules. No tinted
+   row hover, no rounded clipping. */
+.claim-table {
+  border-radius: var(--radius);
+}
+
+.claim-table th {
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.claim-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.employee-review-button {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.employee-review-button:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── 10. status chips: flat tints, square-ish ──────────────────── */
+.priority-badge,
+.signal-chip,
+.api-chip {
+  border-radius: var(--radius-sm);
+}
+
+.priority-badge {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.priority-badge.urgent {
+  background: rgba(198,40,40,.10);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px rgba(198,40,40,.28);
+}
+
+.priority-badge.review {
+  background: rgba(178,94,0,.11);
+  color: var(--warning);
+  box-shadow: inset 0 0 0 1px rgba(178,94,0,.28);
+}
+
+.priority-badge.routine {
+  background: rgba(18,128,92,.10);
+  color: var(--positive);
+  box-shadow: inset 0 0 0 1px rgba(18,128,92,.26);
+}
+
+.signal-chip:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.damage-tag { box-shadow: none; }
+
+.notification-count { box-shadow: none; }
+
+/* ── 11. message board: flat bubbles ──────────────────────────── */
+.employee-thread-sidebar { background: var(--surface-2); }
+
+.employee-thread {
+  border-radius: var(--radius-sm);
+}
+
+.employee-thread-head strong {
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--ink-soft);
+}
+
+.employee-thread.active {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+.employee-thread.active::before { background: var(--accent); }
+
+.employee-thread.active .employee-thread-copy strong { color: var(--accent); }
+
+.employee-thread-avatar {
+  border-radius: var(--radius-sm);
+  background: var(--navy);
+  box-shadow: none;
+}
+
+.employee-chat-panel { background: var(--surface); }
+
+.imessage-bubble { border-radius: var(--radius); }
+
+.imessage-bubble.customer,
+.consumer-messenger .imessage-bubble.employee {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.imessage-bubble.employee,
+.consumer-messenger .imessage-bubble.customer {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+
+.employee-imessage-compose input[type="text"] { border-radius: var(--radius-sm); }
+
+.employee-imessage-compose button {
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.employee-imessage-compose button:hover {
+  background: var(--accent-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.message-attach-button {
+  border-radius: var(--radius-sm);
+  transform: none;
+}
+
+.message-attach-button:hover { transform: none; }
+
+.message-attachment-preview span,
+.message-attachment-list span,
+.message-attachment-list a {
+  border-radius: var(--radius-sm);
+}
+
+.employee-imessage-log .empty::before { display: none; }
+
+/* ── 12. intake form + review panel ───────────────────────────── */
+.dropzone {
+  border-color: var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.dropzone::before { background: var(--accent); }
+
+.dropzone:hover,
+.dropzone.dragging,
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  transform: none;
+  box-shadow: none;
+}
+
+.intake-actions {
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.status { border-radius: var(--radius-sm); }
+
+.summary-grid div,
+.consumer-detail-grid div,
+.consumer-final-grid div,
+.employee-submission-grid div,
+.employee-comparison-grid div,
+.evidence-checklist li,
+.audit-log-list article,
+.employee-check-item,
+.employee-internal-notes,
+.employee-photo-gallery figure,
+.thumb,
+.notification-dropdown,
+.claim-assistant-panel,
+.home-login-dialog {
+  border-radius: var(--radius-sm);
+}
+
+.summary-grid div:hover,
+.consumer-detail-grid div:hover,
+.employee-submission-grid div:hover,
+.employee-comparison-grid div:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+/* the action zone stays the most prominent block, but via a navy
+   edge and a plain tint rather than a coloured wash */
+.employee-action-panel {
+  border-color: var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.employee-check-item input[type="checkbox"] { border-radius: 3px; }
+
+.employee-check-item input[type="checkbox"]:checked {
+  box-shadow: none;
+}
+
+.employee-check-item:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.employee-photo-gallery figure:hover,
+.thumb:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
+.employee-photo-gallery figure:hover img { transform: none; }
+
+.queue-filter {
+  border-radius: var(--radius-sm);
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.queue-filter:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  transform: none;
+}
+
+.queue-filter.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: none;
+}
+
+.employee-queue-tools input { border-radius: var(--radius-sm); }
+
+input[type="file"]::file-selector-button {
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  box-shadow: none;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--accent-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.claim-assistant-message.user {
+  background: var(--accent);
+  color: #fff;
+}
+
+.claim-assistant-message.assistant { background: var(--surface-2); }
+
+.timeline-next-card {
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.claim-timeline > li.done::after,
+.claim-timeline > li.done::before,
+.claim-timeline > li.active::before {
+  background: var(--accent);
+}
+
+/* ── 13. remaining glass surfaces ───────────────────────────────
+   The blur on the navy rail was invisible work (the fill is opaque),
+   and the case-review sticky bars plus the two modal scrims were the
+   last frosted surfaces left. Modal scrims become a plain navy wash. */
+@media (min-width: 900px) {
+  body.app-shell > .topbar { backdrop-filter: none; }
+}
+
+.claim-review-tabs,
+.claim-review-action-bar {
+  background: var(--surface);
+  backdrop-filter: none;
+  border-color: var(--line);
+}
+
+.home-login-modal,
+.document-preview-modal {
+  background: rgba(18,35,61,.55);
+  backdrop-filter: none;
+}
+
+.home-login-dialog {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+/* the login page kept its own tinted radial wash */
+.employee-login-page {
+  background: var(--bg);
+}
+
+.employee-login-card {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BRAND MARK
+
+   The mark is attached to the existing brand links through a
+   pseudo-element rather than by adding an <svg> to fifteen pages.
+   Two files instead of one recolourable mask, because the mark is
+   three-tone (navy shield / white eye / blue pupil) and a mask can
+   only carry a single colour.
+   ══════════════════════════════════════════════════════════════ */
+.brand,
+.claim-home-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand::before,
+.claim-home-brand::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  background: url("assets/claimsight-mark.svg") center / contain no-repeat;
+}
+
+/* the wordmark: navy "Claim", blue "Sight" is not possible without
+   splitting the text node, so the whole word stays navy and the mark
+   carries the accent */
+.brand,
+.claim-home-brand {
+  color: var(--ink);
+}
+
+/* on the navy rail the mark inverts */
+@media (min-width: 900px) {
+  body.app-shell > .topbar > .brand::before {
+    background-image: url("assets/claimsight-mark-reversed.svg");
+  }
+}
+
+.claim-home-brand::before {
+  width: 26px;
+  height: 26px;
+}
+
+/* The employee login card brands with .employee-login-brand (an <a>,
+   not a heading), and the customer login modal has no brand element
+   at all — the mark becomes the dialog's first grid item there. */
+.employee-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--navy);
+}
+
+.employee-login-brand::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  background: url("assets/claimsight-mark.svg") center / contain no-repeat;
+}
+
+.home-login-dialog::before {
+  content: "";
+  width: 30px;
+  height: 30px;
+  background: url("assets/claimsight-mark.svg") center / contain no-repeat;
+}
+
+/* ── login modal: forgot-password is not a primary action ────────
+   `.home-login-form button` (0,1,1) outranks `.forgot-password-link`
+   (0,1,0), so inside the customer login modal the forgot-password
+   link rendered as a filled blue pill directly above the real Log in
+   button — two competing primary actions. Restated at matching
+   specificity. Also swaps `color: var(--bg)` for --on-accent, which
+   is what that fill actually needs. */
+.home-login-form button,
+.google-login-button {
+  color: var(--on-accent);
+  border-radius: var(--radius-sm);
+}
+
+.home-login-form button.forgot-password-link,
+.employee-login-form button.forgot-password-link {
+  min-height: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.home-login-form button.forgot-password-link:hover,
+.employee-login-form button.forgot-password-link:hover {
+  color: var(--navy);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.google-login-button {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.google-login-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ── claim progress: the "what happens next" strip ──────────────
+   This card carries the customer's primary action, but it was pinned
+   to the single grid column of the step it belongs to — 172px wide
+   inside an 894px rail, with ~720px of empty space beside it. It now
+   spans the full rail as a banner, with the copy on the left and the
+   action on the right, which is how carriers present "what's next".
+
+   Note: no `animation: none` here. The base rule sets opacity: 0 and
+   relies on timeline-next-slide to bring it in, so killing the
+   animation would leave the card invisible. */
+.timeline-next-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 24px;
+  margin-top: 18px;
+  padding: 14px 16px;
+}
+
+.timeline-next-card > .timeline-action-head {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.timeline-next-card > p {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.timeline-next-card > .timeline-action-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .timeline-next-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .timeline-next-card > .timeline-action-button {
+    grid-column: 1;
+    grid-row: 3;
+    margin-top: 10px;
+  }
+}
+
+/* action-required state: flat amber tint, and the button's text colour
+   was var(--bg) — near-white by luck rather than by intent */
+.timeline-next-card.action-required {
+  border-color: rgba(178,94,0,.45);
+  background: rgba(178,94,0,.09);
+}
+
+.timeline-next-card.action-required .timeline-action-button {
+  background: var(--warning);
+  color: var(--on-accent);
+}
+
+.timeline-next-card.action-required .timeline-action-button:hover {
+  background: #8f4c00;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INTAKE VALIDATION — show what is missing, on the field
+
+   Submit used to print one line ("Complete the required evidence
+   checklist: photos, vehicle, incident") and leave the claimant to
+   work out which box was empty. Each failing control is now marked
+   in place with its own message.
+
+   Both glyphs below are background layers over a coloured fill, not
+   masks: in an alpha mask a white glyph is exactly as opaque as the
+   disc behind it, so it disappears into the fill.
+   ══════════════════════════════════════════════════════════════ */
+.field-invalid > span:first-child {
+  color: var(--danger);
+}
+
+/* The base control rule is
+     input:not([type="checkbox"]):not([type="radio"]):not([type="range"])
+   at specificity (0,4,1). A shorter selector here loses to it no matter
+   how late it appears, so the invalid state has to carry the same
+   :not() chain — textarea and select need no such help, since their
+   base rules are bare type selectors. */
+.field-invalid input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.field-invalid select,
+.field-invalid textarea {
+  border-color: var(--danger);
+  background: rgba(198,40,40,.04);
+}
+
+.field-invalid input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+.field-invalid select:focus,
+.field-invalid textarea:focus {
+  border-color: var(--danger);
+  background: var(--surface);
+  box-shadow: 0 0 0 4px rgba(198,40,40,.14);
+}
+
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: .78rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.field-error::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 13 13"><rect x="5.8" y="2.9" width="1.4" height="4.6" rx="0.7" fill="white"/><circle cx="6.5" cy="9.6" r="0.85" fill="white"/></svg>') center / contain no-repeat, var(--danger);
+}
+
+/* the drop target when there are not enough photos */
+.dropzone.field-invalid {
+  border-color: var(--danger);
+  background: rgba(198,40,40,.05);
+}
+
+.dropzone.field-invalid::before {
+  background: var(--danger);
+}
+
+.dropzone .field-error {
+  justify-content: center;
+}
+
+/* the status line turns red when it is reporting a failure */
+.status.status-error {
+  background: rgba(198,40,40,.10);
+  color: var(--danger);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(198,40,40,.26);
+}
+
+/* ── evidence tagging ───────────────────────────────────────────
+   Every upload declares which checklist row it satisfies, replacing
+   the filename guessing the checklist used to rely on. */
+.evidence-link-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.evidence-link-list.hidden { display: none; }
+
+.evidence-link-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.evidence-link-name {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: .82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-link-select {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: .8rem;
+}
+
+/* amber while a tag is still owed — a nudge, not an error yet */
+.evidence-link-row.untagged,
+.queue-item.untagged {
+  border-color: rgba(178,94,0,.42);
+  background: rgba(178,94,0,.07);
+}
+
+/* red once submit has actually been attempted */
+.evidence-link-row.field-invalid,
+.queue-item.field-invalid {
+  border-color: var(--danger);
+  background: rgba(198,40,40,.06);
+}
+
+/* the queue card wraps so the tag select gets its own line */
+.queue-item {
+  flex: 0 0 232px;
+  flex-wrap: wrap;
+}
+
+.queue-item .evidence-link-select {
+  flex: 1 0 100%;
+  min-height: 30px;
+}
+
+/* ── checklist: satisfied rows go green ─────────────────────────
+   `complete` rendered in the brand blue, which read the same as every
+   other accent on the page. Green is the only state colour that says
+   "done" without a second look. */
+.evidence-checklist li.complete {
+  border-color: rgba(18,128,92,.38);
+  background: rgba(18,128,92,.08);
+}
+
+.evidence-checklist li.complete .check-dot {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.8 7.2 6 9.4 10.2 4.8"/></svg>') center / contain no-repeat, var(--positive);
+  box-shadow: 0 0 0 3px rgba(18,128,92,.16);
+}
+
+.evidence-checklist li.complete strong {
+  color: var(--positive);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   EDIT CLAIM
+   ══════════════════════════════════════════════════════════════ */
+
+/* `single-focus-grid` is on .ops-grid in edit-claim.html but had no
+   rule anywhere, so the page inherited the two-column ops layout.
+   Only the detail card carried grid-column: 1 / -1, which left the
+   "Your submissions" card stranded at 418px with 436px of dead space
+   beside it. One column is what the class name always meant. */
+.single-focus-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* the submissions list is a picker, so keep it compact and scrollable
+   rather than letting it push the edit form down the page */
+.single-focus-grid > .ops-card > .ops-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.edit-claim-form .vehicle-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* ── staged upload preview ───────────────────────────────────────
+   An upload the claimant has picked but not yet saved. The thumbnail
+   is a real image preview where the browser can produce one, and a
+   type chip otherwise. */
+.evidence-link-thumb {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .15s var(--ease-out);
+}
+
+.evidence-link-thumb:hover {
+  border-color: var(--accent);
+}
+
+.evidence-link-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.evidence-link-thumb span {
+  color: var(--muted);
+  font-size: .56rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.evidence-link-view {
+  border: 0;
+  padding: 4px 6px;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.evidence-link-view:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .evidence-link-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  /* the select drops to its own line rather than crushing the name */
+  .evidence-link-row .evidence-link-select {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── decision review: keep the action bar clear of the assistant ──
+   The action bar is sticky at bottom: 12px (z-index 14); the "Ask
+   ClaimSight" launcher is fixed at bottom: 22px (z-index 700). They
+   share the same corner, and on narrower screens the bar wraps to two
+   rows — which put "Open final report" completely underneath the
+   launcher, unreachable. That is the button that advances the claim to
+   the next stage.
+
+   Lifting the bar above the launcher's footprint (44px tall + 22px
+   offset = 66px) fixes it at every width without moving the launcher,
+   which sits in the same place on every other page. */
+body:has(.claim-assistant) .claim-review-action-bar {
+  bottom: 84px;
+}
+
+/* An empty status line has nothing to say, but the restyle gave .status
+   a padding and a fill — so pages that start with a blank status
+   (final-report's export line, the appeal panel's) rendered a stray
+   24x14 grey pill. */
+.status:empty {
+  display: none;
+}
+
+/* ── employee alerts ────────────────────────────────────────────
+   Tone bands so an adjuster can triage the list at a glance, matching
+   the status colours used in the claim queue. */
+.employee-alert {
+  position: relative;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.employee-alert strong {
+  display: block;
+  font-size: .92rem;
+  letter-spacing: -.01em;
+}
+
+.employee-alert p {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: .84rem;
+  line-height: 1.45;
+}
+
+.employee-alert span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 550;
+}
+
+.employee-alert.urgent  { border-left-color: var(--danger);   background: rgba(198,40,40,.04); }
+.employee-alert.action  { border-left-color: var(--accent);   background: var(--accent-dim); }
+.employee-alert.waiting { border-left-color: var(--warning);  background: rgba(178,94,0,.05); }
+.employee-alert.done    { border-left-color: var(--positive); background: rgba(18,128,92,.05); }
+
+.employee-alert.urgent strong  { color: var(--danger); }
+.employee-alert.waiting strong { color: var(--warning); }
+.employee-alert.done strong    { color: var(--positive); }
+
+.employee-notification-empty {
+  padding: 26px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.employee-notification-empty p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+/* ── reviewer request ────────────────────────────────────────────
+   When the adjuster reopens sections of a claim, the customer needs to
+   see exactly what is wrong and which parts to redo. This panel sits
+   directly above the evidence checklist, and the rows it names are
+   forced back to red by the `reopened` class below. */
+.reviewer-request-panel {
+  padding: 16px;
+  border: 1px solid rgba(198,40,40,.38);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius);
+  background: rgba(198,40,40,.05);
+}
+
+.reviewer-request-panel.hidden { display: none; }
+
+.reviewer-request-panel .consumer-panel-head > span:first-child {
+  color: var(--danger);
+}
+
+.reviewer-request-panel .consumer-panel-head strong {
+  color: var(--danger);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.reviewer-request-note {
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.reviewer-request-items {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewer-request-items li {
+  position: relative;
+  padding: 7px 10px 7px 26px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px rgba(198,40,40,.22);
+  color: var(--ink);
+  font-size: .84rem;
+  font-weight: 600;
+}
+
+.reviewer-request-items li::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  transform: translateY(-50%);
+}
+
+/* the adjuster's short free-text specifics read as detail, not sections */
+.reviewer-request-items li.specific {
+  font-weight: 500;
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.reviewer-request-items li.specific::before {
+  background: var(--muted);
+}
+
+/* a reopened checklist row: red regardless of what is already attached,
+   because what is attached is what the adjuster rejected */
+.evidence-checklist li.reopened {
+  border-color: var(--danger);
+  background: rgba(198,40,40,.07);
+}
+
+.evidence-checklist li.reopened strong {
+  color: var(--danger);
+}
+
+.evidence-checklist li.reopened strong::after {
+  content: "Requested again";
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+/* ── employee request form ───────────────────────────────────── */
+.employee-request-types {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.employee-request-types legend {
+  padding: 0 0 6px;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.employee-request-types label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: .85rem;
+  cursor: pointer;
+}
+
+.employee-request-types input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.employee-request-types input[type="checkbox"]:checked {
+  border-color: transparent;
+  background:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 17 17" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 8.8 7 11.6l5.8-6"/></svg>') center / 13px no-repeat,
+    var(--accent);
+}
+
+/* ── unread thread ──────────────────────────────────────────────
+   A thread with a message the other side has not opened. The dot sits
+   on the avatar so it survives the row's active state, and the claim
+   reference goes semibold — colour alone should not carry it. */
+.employee-thread.unread .employee-thread-copy strong {
+  font-weight: 750;
+}
+
+.employee-thread.unread .employee-thread-avatar {
+  position: relative;
+}
+
+.employee-thread.unread .employee-thread-avatar::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px
+;  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.employee-thread.unread .employee-thread-time::after {
+  content: "New";
+  display: block;
+  margin-top: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Collapsible icon rail
+
+   Appended last on purpose. Section 8 above establishes the solid
+   navy rail, and this keeps that character entirely -- it only adds
+   the collapse behaviour on top: 68px of icons at rest, expanding to
+   labels on hover or keyboard focus.
+
+   Because the page offset stays at the collapsed width, expanding
+   overlays the content rather than reflowing it.
+   ══════════════════════════════════════════════════════════════ */
+@media (min-width: 900px) {
+  /* Nothing inside may exceed the collapsed width, or rows spill onto
+     the page while the rail is closed. The rail itself keeps
+     overflow visible so the notification dropdown can escape it. */
+  body.app-shell > .topbar > .employee-nav-menu,
+  body.app-shell > .topbar > .workflow-tabs,
+  body.app-shell .employee-menu-list,
+  body.app-shell > .topbar > .topbar-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body.app-shell .employee-menu-list a,
+  body.app-shell .workflow-tab,
+  body.app-shell .topbar-actions .icon-button,
+  body.app-shell .topbar-actions .logout-button {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    /* Hidden by colour rather than display, so the label stays in the
+       accessibility tree and screen readers still announce the link. */
+    color: transparent;
+  }
+
+  body.app-shell > .topbar:hover .employee-menu-list a,
+  body.app-shell > .topbar:focus-within .employee-menu-list a,
+  body.app-shell > .topbar:hover .workflow-tab,
+  body.app-shell > .topbar:focus-within .workflow-tab,
+  body.app-shell > .topbar:hover .topbar-actions .icon-button,
+  body.app-shell > .topbar:focus-within .topbar-actions .icon-button,
+  body.app-shell > .topbar:hover .topbar-actions .logout-button,
+  body.app-shell > .topbar:focus-within .topbar-actions .logout-button {
+    color: rgba(255,255,255,.78);
+  }
+
+  body.app-shell > .topbar:hover .employee-menu-list a:hover,
+  body.app-shell > .topbar:hover .employee-menu-list a.active,
+  body.app-shell > .topbar:focus-within .employee-menu-list a.active {
+    color: #fff;
+  }
+
+  /* icons read against navy, and stay visible while collapsed */
+  body.app-shell .employee-menu-list a::before,
+  body.app-shell .workflow-tab::before,
+  body.app-shell .topbar-actions .logout-button::before,
+  body.app-shell .topbar-actions .icon-button .material-symbols-outlined {
+    color: rgba(255,255,255,.72);
+  }
+
+  body.app-shell .employee-menu-list a:hover::before,
+  body.app-shell .employee-menu-list a.active::before,
+  body.app-shell .topbar-actions .logout-button:hover::before {
+    color: #fff;
+  }
+
+  /* the account row loses its pill borders: at 68px they read as
+     boxes floating in the rail rather than as rows of the same list */
+  body.app-shell .topbar-actions .icon-button,
+  body.app-shell .topbar-actions .logout-button {
+    border: 0;
+    background: none;
+  }
+
+  body.app-shell .topbar-actions .icon-button:hover,
+  body.app-shell .topbar-actions .logout-button:hover {
+    border: 0;
+    background: rgba(255,255,255,.10);
+    color: #fff;
+    transform: none;
+  }
+
+  /* the bell's label only exists once there is room for it */
+  body.app-shell > .topbar .topbar-actions .icon-button::after {
+    content: "";
+  }
+
+  body.app-shell > .topbar:hover .topbar-actions .icon-button::after,
+  body.app-shell > .topbar:focus-within .topbar-actions .icon-button::after {
+    content: "Notifications";
+  }
+
+  /* brand wordmark follows the same reveal as the nav labels */
+  body.app-shell > .topbar > .brand { color: transparent; }
+
+  body.app-shell > .topbar:hover > .brand,
+  body.app-shell > .topbar:focus-within > .brand {
+    color: #fff;
+  }
+
+  /* active row: white leading bar reads against the accent fill */
+  body.app-shell .employee-menu-list a.active::after,
+  body.app-shell .workflow-tab.active::after {
+    background: #fff;
+  }
+}
+
+@media (min-width: 900px) {
+  /* The base rule pins this badge with `right: -5px`. Setting `left`
+     without clearing `right` leaves both edges anchored, which stretched
+     it into a full-width bar across the Notifications row. */
+  body.app-shell > .topbar .topbar-actions .notification-count {
+    right: auto;
+    left: 26px;
+    top: 6px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: .625rem;
+    line-height: 16px;
+  }
+}
