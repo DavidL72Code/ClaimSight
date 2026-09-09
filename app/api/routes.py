@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from hmac import compare_digest
 from io import BytesIO
@@ -18,6 +19,7 @@ from app.core.config import (
     MAX_IMAGE_PIXELS,
     MAX_UPLOAD_BYTES,
     RATE_LIMIT_MAX_REQUESTS,
+    DEMO_USER_TTL_HOURS,
     RATE_LIMIT_WINDOW_SECONDS,
     SECOND_PASS_MODEL,
     SEGMENTATION_PROVIDER,
@@ -43,6 +45,8 @@ from app.services.report_generation import ClaimReportService
 from app.services.segmentation import get_segmentation_service
 from app.services.supabase_auth import SupabaseAuth
 from app.services.supabase_data import SupabaseAdmin, SupabaseData, SupabaseDataError
+
+logger = logging.getLogger("claimsight.routes")
 
 router = APIRouter()
 
@@ -75,6 +79,10 @@ _request_log: dict[str, list[float]] = {}
 # schedule then reaches Supabase once per poll and no more.
 KEEPALIVE_MIN_INTERVAL_SECONDS = 240
 _keepalive_cache: dict[str, object] = {}
+# The uptime monitor is the only scheduler this deployment has, so the demo
+# prune rides along with it -- at most hourly, regardless of poll frequency.
+DEMO_PRUNE_MIN_INTERVAL_SECONDS = 3600
+_demo_prune_cache: dict[str, object] = {}
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
 _EMPTY_DAMAGE_VALUES = {"", "n/a", "na", "none", "no", "none reported", "no prior damage"}
 
@@ -357,6 +365,25 @@ def keepalive(request: Request) -> dict[str, object]:
         "supabase": detail,
         "cache": cache_state,
     }
+
+    # Prune stale demo visitors while we are here. This endpoint is
+    # unauthenticated, so the prune is deliberately narrow and idempotent: it
+    # only ever deletes anonymous users past their TTL, so calling it more
+    # often changes nothing. The hourly floor keeps a five-minute monitor from
+    # listing every user on every poll.
+    if reached and DEMO_USER_TTL_HOURS > 0:
+        last = _demo_prune_cache.get("at")
+        if last is None or (now - float(last)) >= DEMO_PRUNE_MIN_INTERVAL_SECONDS:
+            _demo_prune_cache["at"] = now
+            try:
+                result = supabase_admin.prune_anonymous_users(
+                    older_than_hours=DEMO_USER_TTL_HOURS
+                )
+                payload["demo_pruned"] = result["deleted"]
+            except SupabaseDataError as exc:
+                # Cleanup failing is not an outage; the monitor should not page.
+                logger.warning("Demo prune skipped: %s", exc)
+                payload["demo_pruned"] = "skipped"
 
     # Only alert once storage is actually configured: an unconfigured
     # deployment is a deliberate state, not an outage to page someone about.

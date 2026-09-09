@@ -94,3 +94,89 @@ def test_rate_limit_is_applied(monkeypatch):
     monkeypatch.setattr(routes, "_enforce_rate_limit", lambda *a, **k: calls.append(1))
     TestClient(app).get("/api/keepalive")
     assert calls, "keepalive must go through the rate limiter"
+
+
+# --- demo cleanup ---------------------------------------------------------
+
+
+class StubAdmin:
+    def __init__(self, deleted=0, fail=False):
+        self.deleted = deleted
+        self.fail = fail
+        self.calls = []
+
+    def prune_anonymous_users(self, older_than_hours=24, limit=200):
+        self.calls.append(older_than_hours)
+        if self.fail:
+            from app.services.supabase_data import SupabaseDataError
+
+            raise SupabaseDataError("listing refused")
+        return {"deleted": self.deleted, "examined": 5, "older_than_hours": older_than_hours}
+
+
+@pytest.fixture(autouse=True)
+def _clear_prune_cache():
+    routes._demo_prune_cache.clear()
+    yield
+    routes._demo_prune_cache.clear()
+
+
+def test_prune_runs_with_the_keepalive(monkeypatch):
+    admin = StubAdmin(deleted=3)
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
+    monkeypatch.setattr(routes, "supabase_admin", admin)
+    body = TestClient(app).get("/api/keepalive").json()
+    assert body["demo_pruned"] == 3
+    assert admin.calls == [routes.DEMO_USER_TTL_HOURS]
+
+
+def test_prune_is_at_most_hourly(monkeypatch):
+    """The monitor polls every five minutes; the prune must not."""
+    admin = StubAdmin()
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
+    monkeypatch.setattr(routes, "supabase_admin", admin)
+    client = TestClient(app)
+    client.get("/api/keepalive")
+    for _ in range(12):
+        routes._keepalive_cache.clear()  # force the reachability check to re-run
+        client.get("/api/keepalive")
+    assert len(admin.calls) == 1
+
+
+def test_prune_resumes_after_the_hour(monkeypatch):
+    admin = StubAdmin()
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
+    monkeypatch.setattr(routes, "supabase_admin", admin)
+    client = TestClient(app)
+    client.get("/api/keepalive")
+    routes._demo_prune_cache["at"] -= routes.DEMO_PRUNE_MIN_INTERVAL_SECONDS + 1
+    routes._keepalive_cache.clear()
+    client.get("/api/keepalive")
+    assert len(admin.calls) == 2
+
+
+def test_prune_failure_does_not_page_the_monitor(monkeypatch):
+    """Cleanup is housekeeping: if it fails the endpoint must still be 200."""
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
+    monkeypatch.setattr(routes, "supabase_admin", StubAdmin(fail=True))
+    response = TestClient(app).get("/api/keepalive")
+    assert response.status_code == 200
+    assert response.json()["demo_pruned"] == "skipped"
+
+
+def test_no_prune_when_supabase_is_unreachable(monkeypatch):
+    admin = StubAdmin()
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((False, "unreachable")))
+    monkeypatch.setattr(routes, "supabase_admin", admin)
+    TestClient(app).get("/api/keepalive")
+    assert admin.calls == []
+
+
+def test_ttl_of_zero_disables_pruning(monkeypatch):
+    admin = StubAdmin()
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
+    monkeypatch.setattr(routes, "supabase_admin", admin)
+    monkeypatch.setattr(routes, "DEMO_USER_TTL_HOURS", 0)
+    body = TestClient(app).get("/api/keepalive").json()
+    assert admin.calls == []
+    assert "demo_pruned" not in body

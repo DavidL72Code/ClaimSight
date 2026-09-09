@@ -155,3 +155,6 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
 # Signed download URLs expire; the frontend re-requests one when a link is opened.
 ATTACHMENT_URL_TTL_SECONDS = _env_int("ATTACHMENT_URL_TTL_SECONDS", 60 * 60 * 24 * 7)
+# How long an anonymous demo visitor and their claims are kept. Set to 0 to
+# stop pruning entirely.
+DEMO_USER_TTL_HOURS = _env_int("DEMO_USER_TTL_HOURS", 24)

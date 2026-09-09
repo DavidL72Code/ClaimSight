@@ -357,6 +357,76 @@ class SupabaseAdmin:
             return None
         return response.json()
 
+    def prune_anonymous_users(self, older_than_hours: int = 24, limit: int = 200) -> dict[str, Any]:
+        """Delete stale demo visitors.
+
+        The homepage demo signs people in anonymously, so every visitor leaves
+        a user row behind. Deleting the user is enough to remove everything
+        they created: cases.owner_uid cascades, and case_activity and
+        case_internal cascade from cases in turn -- verified rather than
+        assumed.
+
+        Only rows with is_anonymous set are touched, so a real signed-up
+        account can never be caught by this. The cutoff is on created_at
+        rather than last activity, because an anonymous session is not
+        resumable in any useful way once the browser has moved on.
+        """
+        if not self.ready:
+            raise SupabaseDataError("Supabase service credentials are not configured.")
+
+        import requests
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, older_than_hours))
+        deleted, examined, page = 0, 0, 1
+
+        while deleted < limit:
+            try:
+                response = requests.get(
+                    f"{self._url}/auth/v1/admin/users",
+                    headers=self._headers(),
+                    params={"page": page, "per_page": 200},
+                    timeout=25,
+                )
+            except Exception as exc:
+                logger.warning("Demo prune could not list users: %s", exc)
+                raise SupabaseDataError("Could not list users.") from exc
+            if response.status_code >= 400:
+                raise SupabaseDataError("Listing users was refused.")
+
+            users = (response.json() or {}).get("users", [])
+            if not users:
+                break
+
+            for user in users:
+                examined += 1
+                if not user.get("is_anonymous"):
+                    continue
+                created = str(user.get("created_at") or "")
+                try:
+                    when = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if when > cutoff:
+                    continue
+                try:
+                    requests.delete(
+                        f"{self._url}/auth/v1/admin/users/{user['id']}",
+                        headers=self._headers(),
+                        timeout=25,
+                    )
+                    deleted += 1
+                except Exception as exc:
+                    logger.warning("Demo prune could not delete %s: %s", user.get("id"), exc)
+                if deleted >= limit:
+                    break
+            page += 1
+
+        if deleted:
+            logger.info("Demo prune removed %s anonymous user(s)", deleted)
+        return {"deleted": deleted, "examined": examined,
+                "older_than_hours": max(1, older_than_hours)}
+
     def get_case(self, case_id: str) -> dict[str, Any] | None:
         rows = self._request(
             "GET", "cases", params={"id": f"eq.{case_id}", "select": "*", "limit": 1}
