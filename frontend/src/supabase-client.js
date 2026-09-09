@@ -48,21 +48,29 @@
     });
   }
 
+  // Declared as a function, not a property, so the callbacks below can call it
+  // without referring to `auth` from inside `auth`'s own initializer. Doing
+  // that left the const in its temporal dead zone whenever the SDK fired an
+  // auth-state change during module setup -- a token refresh on page load was
+  // enough -- and threw "ReferenceError: auth is not defined".
+  //
+  // Stands in for firebase.auth().currentUser: null until the session has
+  // loaded, then the user. Shape is normalised so callers keep using
+  // .uid and .email.
+  function readCurrentUser() {
+    if (!cachedUser) return null;
+    return {
+      uid: cachedUser.id,
+      email: cachedUser.email || "",
+      role: cachedUser.app_metadata?.role || "",
+      raw: cachedUser,
+    };
+  }
+
   const auth = {
     ready: () => ready,
 
-    // Stands in for firebase.auth().currentUser: null until the session has
-    // loaded, then the user object. Shape is normalised so callers can keep
-    // using .uid and .email.
-    currentUser: () => {
-      if (!cachedUser) return null;
-      return {
-        uid: cachedUser.id,
-        email: cachedUser.email || "",
-        role: cachedUser.app_metadata?.role || "",
-        raw: cachedUser,
-      };
-    },
+    currentUser: readCurrentUser,
 
     // Replaces user.getIdToken(). Reads the session rather than the cache so
     // an expired token is refreshed before it is handed to the backend.
@@ -83,12 +91,12 @@
       client.auth.getSession().then(({ data }) => {
         cachedUser = data?.session?.user || null;
         cachedToken = data?.session?.access_token || "";
-        callback(auth.currentUser());
+        callback(readCurrentUser());
       });
       const { data: sub } = client.auth.onAuthStateChange((_e, session) => {
         cachedUser = session?.user || null;
         cachedToken = session?.access_token || "";
-        callback(auth.currentUser());
+        callback(readCurrentUser());
       });
       return () => sub?.subscription?.unsubscribe();
     },
