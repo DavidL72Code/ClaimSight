@@ -163,6 +163,83 @@ class SupabaseData:
             "case": row,
         }
 
+    def list_cases_raw(
+        self,
+        access_token: str,
+        *,
+        columns: str = "*",
+        order: str = "updated_at.desc",
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Rows as the caller may see them, with an explicit column list.
+
+        list_cases selects everything, which is wasteful for the summary
+        endpoints -- a full case carries the whole assessment payload.
+        """
+        return self._get(
+            "cases",
+            access_token,
+            {"select": columns, "order": order, "limit": str(max(1, min(limit, 100)))},
+        )
+
+    def _write(self, method: str, path: str, access_token: str, *, params=None, json=None):
+        if not self.ready:
+            raise SupabaseDataError("Supabase is not configured.")
+
+        import requests
+
+        try:
+            response = requests.request(
+                method,
+                f"{self._url}/rest/v1/{path}",
+                headers={**self._headers(access_token), "Prefer": "return=representation"},
+                params=params or {},
+                json=json,
+                timeout=25,
+            )
+        except Exception as exc:
+            logger.warning("Supabase write failed for %s: %s", path, exc)
+            raise SupabaseDataError("Could not reach the database.") from exc
+
+        if response.status_code in (401, 403):
+            raise SupabaseDataError("The database refused the write.")
+        if response.status_code >= 400:
+            logger.warning(
+                "Supabase write rejected %s: %s %s", path, response.status_code, response.text[:200]
+            )
+            raise SupabaseDataError("The database rejected the write.")
+
+        rows = response.json() if response.content else []
+        return rows if isinstance(rows, list) else []
+
+    def insert_case(self, access_token: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Create a case as the caller.
+
+        Separate from update because the insert policy is much stricter: a
+        plain `employee` cannot create a case at all. Keeping them apart means
+        a refusal surfaces instead of turning into a silent no-op.
+        """
+        rows = self._write("POST", "cases", access_token, json=payload)
+        return rows[0] if rows else None
+
+    def update_case(
+        self, access_token: str, case_id: str, patch: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Update a case as the caller.
+
+        Returns None when the write touched no rows, which is how PostgREST
+        reports an RLS or trigger refusal -- 200 with an empty body rather
+        than an error. Callers must treat None as "refused", not "no change".
+        """
+        rows = self._write(
+            "PATCH",
+            "cases",
+            access_token,
+            params={"id": f"eq.{case_id}"},
+            json={**patch, "updated_at": _now_iso()},
+        )
+        return rows[0] if rows else None
+
     def get_owned_claim_context(
         self, access_token: str, claim_reference: str
     ) -> dict[str, Any] | None:

@@ -127,10 +127,44 @@ def _sample_case_payload() -> dict:
     }
 
 
-def test_case_api_round_trip_and_queue_order(tmp_path) -> None:
+class InMemoryData:
+    """Stands in for SupabaseData with a dict of rows.
+
+    The repository no longer owns storage -- it reads and writes public.cases
+    through the caller's token -- so the test substitutes the data layer
+    rather than a database file. Ordering and the summary shaping are still
+    exercised for real.
+    """
+
+    ready = True
+
+    def __init__(self) -> None:
+        self.rows: dict[str, dict] = {}
+
+    def get_case(self, access_token, case_id):
+        return self.rows.get(case_id)
+
+    def insert_case(self, access_token, payload):
+        self.rows[payload["id"]] = dict(payload)
+        return self.rows[payload["id"]]
+
+    def update_case(self, access_token, case_id, patch):
+        if case_id not in self.rows:
+            return None
+        self.rows[case_id].update(patch)
+        return self.rows[case_id]
+
+    def list_cases_raw(self, access_token, *, columns="*", order="updated_at.desc", limit=25):
+        rows = list(self.rows.values())
+        if order.startswith("priority_score"):
+            rows.sort(key=lambda r: r.get("priority_score", 0), reverse=True)
+        return rows[:limit]
+
+
+def test_case_api_round_trip_and_queue_order() -> None:
     original_repository = routes.case_repository
     original_verify = routes.supabase_auth.verify_bearer_token
-    routes.case_repository = CaseRepository(tmp_path / "claimsight-test.db")
+    routes.case_repository = CaseRepository(InMemoryData())
     routes.supabase_auth.verify_bearer_token = _employee_token
     try:
         first_payload = _sample_case_payload()
@@ -162,8 +196,9 @@ def test_case_api_round_trip_and_queue_order(tmp_path) -> None:
 
         detail_response = client.get("/api/cases/CLM-10248")
         assert detail_response.status_code == 200
-        assert detail_response.json()["review"]["reviewer_name"] == "Alex Morgan"
-        assert detail_response.json()["reviewed_regions"][0]["review_note"] == "Bumper replacement likely required."
+        detail = detail_response.json()
+        assert detail["review"]["reviewer_name"] == "Alex Morgan"
+        assert detail["reviewed_regions"][0]["review_note"] == "Bumper replacement likely required."
     finally:
         routes.case_repository = original_repository
         routes.supabase_auth.verify_bearer_token = original_verify

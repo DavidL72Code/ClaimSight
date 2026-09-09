@@ -1,186 +1,158 @@
+"""The case queue, backed by Supabase.
+
+This used to keep its own SQLite table alongside the Firestore documents,
+which meant /api/cases and /api/queue served a second, diverging copy of
+data that really lived elsewhere. Now there is one store: these endpoints
+read and write the same public.cases rows the frontend does.
+
+Queries run on the caller's access token, not the service key, so the select
+policy decides what an adjuster sees -- their own assigned cases, or
+everything if they are a manager. That replaces the old behaviour, where the
+endpoints returned every row in the local table regardless of who asked.
+
+_triage is unchanged: it is the one piece of real logic here, and it still
+computes the priority_score and queue_bucket columns the queue sorts on.
+"""
+
 from __future__ import annotations
 
-import json
-import sqlite3
-from pathlib import Path
+import logging
 from typing import Any
 from uuid import uuid4
 
-from app.core.config import CASE_DB_PATH
 from app.models.schemas import CaseSavePayload
+from app.services.supabase_data import SupabaseData, SupabaseDataError
+
+logger = logging.getLogger("claimsight.cases")
+
+# Columns the queue and list views return. Deliberately narrow: the full
+# assessment is large and these endpoints are summaries.
+SUMMARY_COLUMNS = (
+    "id,claim_reference,vehicle_type,final_action,repairability,overall_severity,"
+    "estimated_total_cost_usd,reviewed_total_cost_usd,priority_score,queue_bucket,"
+    "status,status_label,created_at,updated_at,review"
+)
 
 
 class CaseRepository:
-    def __init__(self, db_path: Path | None = None) -> None:
-        self._db_path = db_path or CASE_DB_PATH
-        self._initialize()
+    def __init__(self, data: SupabaseData | None = None) -> None:
+        self._data = data or SupabaseData()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path)
-        connection.row_factory = sqlite3.Row
-        return connection
+    @property
+    def ready(self) -> bool:
+        return self._data.ready
 
-    def _initialize(self) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cases (
-                    id TEXT PRIMARY KEY,
-                    claim_reference TEXT NOT NULL,
-                    reviewer_name TEXT NOT NULL,
-                    vehicle_type TEXT NOT NULL,
-                    final_action TEXT NOT NULL,
-                    repairability TEXT NOT NULL,
-                    overall_severity TEXT NOT NULL,
-                    estimated_total_cost_usd INTEGER NOT NULL,
-                    reviewed_total_cost_usd INTEGER NOT NULL,
-                    priority_score INTEGER NOT NULL,
-                    queue_bucket TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    assessment_json TEXT NOT NULL
-                )
-                """
-            )
+    # ── reads ───────────────────────────────────────────────────────────────
+    def list_cases(self, access_token: str, limit: int = 25) -> list[dict[str, Any]]:
+        rows = self._data.list_cases_raw(
+            access_token, columns=SUMMARY_COLUMNS, order="updated_at.desc", limit=limit
+        )
+        return [self._summary(row) for row in rows]
 
-    def save_case(self, payload: CaseSavePayload) -> dict[str, Any]:
+    def list_queue(self, access_token: str, limit: int = 25) -> list[dict[str, Any]]:
+        rows = self._data.list_cases_raw(
+            access_token,
+            columns=SUMMARY_COLUMNS,
+            order="priority_score.desc,updated_at.desc",
+            limit=limit,
+        )
+        return [self._summary(row) for row in rows]
+
+    def get_case(self, access_token: str, case_id: str) -> dict[str, Any] | None:
+        return self._data.get_case(access_token, case_id)
+
+    # ── write ───────────────────────────────────────────────────────────────
+    def save_case(self, access_token: str, payload: CaseSavePayload) -> dict[str, Any]:
+        """Persist a reviewed assessment.
+
+        Updates an existing case, and only inserts when there is none. The
+        two are separate because the insert policy is far stricter than the
+        update one -- a plain `employee` cannot create a case at all, only a
+        manager can -- so folding them into an upsert would turn a refused
+        insert into a silent no-op.
+        """
         assessment = payload.model_dump()
-        review = assessment.get("review", {})
-        timestamps = self._resolve_timestamps(review)
+        review = assessment.get("review") or {}
         case_id = self._resolve_case_id(review)
         queue_bucket, priority_score = self._triage(assessment)
-        summary = {
-            "id": case_id,
+
+        # Only the columns that exist on public.cases, and never status:
+        # the workflow status is owned by the review pages and gated by the
+        # update allowlist. The old SQLite table wrote a literal "open" here,
+        # which would now overwrite a real workflow state.
+        patch = {
             "claim_reference": review.get("claim_reference") or case_id,
-            "reviewer_name": review.get("reviewer_name", ""),
-            "vehicle_type": assessment.get("vehicle_type", ""),
-            "final_action": review.get("final_action") or assessment.get("recommended_action", ""),
-            "repairability": assessment.get("repairability", ""),
-            "overall_severity": assessment.get("overall_severity", ""),
-            "estimated_total_cost_usd": int(assessment.get("estimated_total_cost_usd", 0) or 0),
+            "vehicle_type": assessment.get("vehicle_type") or "",
+            "repairability": assessment.get("repairability") or "",
+            "overall_severity": assessment.get("overall_severity") or "",
+            "summary": assessment.get("summary") or "",
+            "recommended_action": assessment.get("recommended_action") or "",
+            "estimated_total_cost_usd": int(assessment.get("estimated_total_cost_usd") or 0),
             "reviewed_total_cost_usd": int(
                 review.get("reviewed_total_cost_usd")
-                or assessment.get("estimated_total_cost_usd", 0)
+                or assessment.get("estimated_total_cost_usd")
                 or 0
             ),
+            "final_action": review.get("final_action") or assessment.get("recommended_action") or "",
+            "review": review,
+            "regions": assessment.get("regions") or [],
+            "reviewed_regions": assessment.get("reviewed_regions") or [],
+            "assessment_flags": assessment.get("assessment_flags") or [],
+            "completeness_checks": assessment.get("completeness_checks") or [],
+            "evaluation": assessment.get("evaluation"),
+            "retry_attempts": assessment.get("retry_attempts") or [],
+            "sources": assessment.get("sources") or [],
+            "search_queries": assessment.get("search_queries") or [],
+            "pricing_factors": assessment.get("pricing_factors") or [],
+            "meta": assessment.get("meta") or {},
+            "total_loss": bool(assessment.get("total_loss")),
+            "total_loss_reason": assessment.get("total_loss_reason") or "",
+            "estimated_vehicle_value_usd": int(assessment.get("estimated_vehicle_value_usd") or 0),
+            "valuation_methodology": assessment.get("valuation_methodology") or "",
+            "valuation_comparable_prices_usd": assessment.get("valuation_comparable_prices_usd") or [],
             "priority_score": priority_score,
             "queue_bucket": queue_bucket,
-            "status": "open",
-            "created_at": timestamps["created_at"],
-            "updated_at": timestamps["updated_at"],
         }
 
-        with self._connect() as connection:
-            existing = connection.execute(
-                "SELECT created_at FROM cases WHERE id = ?",
-                (case_id,),
-            ).fetchone()
-            if existing:
-                summary["created_at"] = existing["created_at"]
-            connection.execute(
-                """
-                INSERT INTO cases (
-                    id, claim_reference, reviewer_name, vehicle_type, final_action,
-                    repairability, overall_severity, estimated_total_cost_usd,
-                    reviewed_total_cost_usd, priority_score, queue_bucket, status,
-                    created_at, updated_at, assessment_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    claim_reference = excluded.claim_reference,
-                    reviewer_name = excluded.reviewer_name,
-                    vehicle_type = excluded.vehicle_type,
-                    final_action = excluded.final_action,
-                    repairability = excluded.repairability,
-                    overall_severity = excluded.overall_severity,
-                    estimated_total_cost_usd = excluded.estimated_total_cost_usd,
-                    reviewed_total_cost_usd = excluded.reviewed_total_cost_usd,
-                    priority_score = excluded.priority_score,
-                    queue_bucket = excluded.queue_bucket,
-                    status = excluded.status,
-                    created_at = excluded.created_at,
-                    updated_at = excluded.updated_at,
-                    assessment_json = excluded.assessment_json
-                """,
-                (
-                    summary["id"],
-                    summary["claim_reference"],
-                    summary["reviewer_name"],
-                    summary["vehicle_type"],
-                    summary["final_action"],
-                    summary["repairability"],
-                    summary["overall_severity"],
-                    summary["estimated_total_cost_usd"],
-                    summary["reviewed_total_cost_usd"],
-                    summary["priority_score"],
-                    summary["queue_bucket"],
-                    summary["status"],
-                    summary["created_at"],
-                    summary["updated_at"],
-                    json.dumps(assessment),
-                ),
+        existing = self._data.get_case(access_token, case_id)
+        if existing is None:
+            row = self._data.insert_case(access_token, {"id": case_id, **patch})
+        else:
+            row = self._data.update_case(access_token, case_id, patch)
+
+        if row is None:
+            raise SupabaseDataError(
+                f"Saving case {case_id} affected no rows -- the write was refused."
             )
+        return self._summary(row)
 
-        return summary
-
-    def list_cases(self, limit: int = 25) -> list[dict[str, Any]]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, claim_reference, reviewer_name, vehicle_type, final_action,
-                       repairability, overall_severity, estimated_total_cost_usd,
-                       reviewed_total_cost_usd, priority_score, queue_bucket,
-                       status, created_at, updated_at
-                FROM cases
-                ORDER BY updated_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-        return [dict(row) for row in rows]
-
-    def list_queue(self, limit: int = 25) -> list[dict[str, Any]]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, claim_reference, reviewer_name, vehicle_type, final_action,
-                       repairability, overall_severity, estimated_total_cost_usd,
-                       reviewed_total_cost_usd, priority_score, queue_bucket,
-                       status, created_at, updated_at
-                FROM cases
-                ORDER BY priority_score DESC, updated_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-        return [dict(row) for row in rows]
-
-    def get_case(self, case_id: str) -> dict[str, Any] | None:
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT assessment_json FROM cases WHERE id = ?",
-                (case_id,),
-            ).fetchone()
-        if not row:
-            return None
-        return json.loads(row["assessment_json"])
+    # ── shaping ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def _summary(row: dict[str, Any]) -> dict[str, Any]:
+        review = row.get("review") or {}
+        return {
+            "id": row.get("id"),
+            "claim_reference": review.get("claim_reference") or row.get("claim_reference") or row.get("id"),
+            "reviewer_name": review.get("reviewer_name") or "",
+            "vehicle_type": row.get("vehicle_type") or "",
+            "final_action": review.get("final_action") or row.get("final_action") or "",
+            "repairability": row.get("repairability") or "",
+            "overall_severity": row.get("overall_severity") or "",
+            "estimated_total_cost_usd": int(row.get("estimated_total_cost_usd") or 0),
+            "reviewed_total_cost_usd": int(row.get("reviewed_total_cost_usd") or 0),
+            "priority_score": int(row.get("priority_score") or 0),
+            "queue_bucket": row.get("queue_bucket") or "routine",
+            "status": row.get("status") or "",
+            "status_label": row.get("status_label") or "",
+            "created_at": row.get("created_at") or "",
+            "updated_at": row.get("updated_at") or "",
+        }
 
     def _resolve_case_id(self, review: dict[str, Any]) -> str:
         raw_reference = str(review.get("claim_reference", "") or "").strip()
         if raw_reference:
             return self._normalize_reference(raw_reference)
         return f"case-{uuid4().hex[:10]}"
-
-    def _resolve_timestamps(self, review: dict[str, Any]) -> dict[str, str]:
-        completed_at = str(review.get("completed_at", "") or "").strip()
-        timestamp = completed_at or ""
-        if not timestamp:
-            from datetime import datetime, timezone
-
-            timestamp = (
-                datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat() + "Z"
-            )
-        return {"created_at": timestamp, "updated_at": timestamp}
 
     def _triage(self, assessment: dict[str, Any]) -> tuple[str, int]:
         flags = assessment.get("assessment_flags", [])

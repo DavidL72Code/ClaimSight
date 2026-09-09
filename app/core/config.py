@@ -23,7 +23,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 def _env_str(name: str, default: str = "") -> str:
     """A variable present but blank means "unset", not "empty string".
 
-    .env files habitually carry blank placeholders (CASE_DB_PATH=), and
+    .env files habitually carry blank placeholders, and
     os.getenv would hand back "" and skip the default -- which turned
     Path("") into a broken database path.
     """
@@ -47,10 +47,8 @@ def _env_int(name: str, default: int) -> int:
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
-CASE_DB_PATH = Path(_env_str("CASE_DB_PATH", str(DATA_DIR / "claimsight.db"))).expanduser()
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-CASE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 APP_ENV = _env_str("APP_ENV", "development").lower()
 DEBUG = _env_bool("DEBUG", False)

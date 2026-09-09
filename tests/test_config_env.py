@@ -1,8 +1,8 @@
 """Environment parsing: a variable that is present but blank means "unset".
 
-.env files habitually carry blank placeholders (CASE_DB_PATH=), and the
-plain os.getenv(name, default) form hands back "" instead of the default.
-That turned Path("") into an unopenable sqlite path and would raise on
+.env files habitually carry blank placeholders (SUPABASE_ATTACHMENT_BUCKET=),
+and the plain os.getenv(name, default) form hands back "" instead of the
+default. That would send an empty bucket name to Supabase and would raise on
 int("") for the numeric limits.
 """
 
@@ -30,10 +30,9 @@ def _restore():
     importlib.reload(config)
 
 
-def test_blank_path_falls_back_to_default(monkeypatch) -> None:
-    cfg = _reload(monkeypatch, CASE_DB_PATH="")
-    assert cfg.CASE_DB_PATH.name == "claimsight.db"
-    assert str(cfg.CASE_DB_PATH) != ""
+def test_blank_string_falls_back_to_default(monkeypatch) -> None:
+    cfg = _reload(monkeypatch, SUPABASE_ATTACHMENT_BUCKET="")
+    assert cfg.SUPABASE_ATTACHMENT_BUCKET == "claim-attachments"
 
 
 @pytest.mark.parametrize(

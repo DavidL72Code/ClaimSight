@@ -48,12 +48,14 @@ router = APIRouter()
 
 segmentation_service = get_segmentation_service()
 report_service = ClaimReportService()
-case_repository = CaseRepository()
 claim_assistant = GeminiClaimNarrator()
 attachment_storage = SupabaseAttachmentStorage()
 supabase_auth = SupabaseAuth()
 supabase_data = SupabaseData()
 supabase_admin = SupabaseAdmin()
+# Shares the one SupabaseData instance so every read runs on the caller's own
+# token, and so tests that stub supabase_data reach this too.
+case_repository = CaseRepository(supabase_data)
 assessment_evaluator = AssessmentEvaluator(
     narrator=getattr(segmentation_service, "narrator", None) or claim_assistant
 )
@@ -186,21 +188,31 @@ async def assess_damage(
 @router.post("/api/cases")
 def save_case(request: Request, payload: CaseSavePayload) -> dict[str, object]:
     _require_employee(request)
-    return case_repository.save_case(payload)
+    try:
+        return case_repository.save_case(_bearer_token(request), payload)
+    except SupabaseDataError as exc:
+        # A refused write is the policy working, not a server fault: a plain
+        # employee may not create a case, only update one assigned to them.
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @router.get("/api/cases")
 def list_cases(request: Request, limit: int = 25) -> dict[str, object]:
     _require_employee(request)
     normalized_limit = min(max(limit, 1), 100)
-    return {"cases": case_repository.list_cases(normalized_limit)}
+    # Scoped by the select policy to the caller's assigned cases, or to
+    # everything for a manager. The old SQLite version returned every row in
+    # the local table regardless of who asked.
+    return {"cases": case_repository.list_cases(_bearer_token(request), normalized_limit)}
 
 
 @router.get("/api/cases/{case_id}")
 def get_case(request: Request, case_id: str) -> dict[str, object]:
     _require_employee(request)
-    payload = case_repository.get_case(case_id)
+    payload = case_repository.get_case(_bearer_token(request), case_id)
     if payload is None:
+        # Invisible and absent are the same answer, so this cannot be used to
+        # probe which case ids exist.
         raise HTTPException(status_code=404, detail="Case not found.")
     return payload
 
@@ -209,7 +221,7 @@ def get_case(request: Request, case_id: str) -> dict[str, object]:
 def triage_queue(request: Request, limit: int = 25) -> dict[str, object]:
     _require_employee(request)
     normalized_limit = min(max(limit, 1), 100)
-    return {"cases": case_repository.list_queue(normalized_limit)}
+    return {"cases": case_repository.list_queue(_bearer_token(request), normalized_limit)}
 
 
 @router.post("/api/claim-assistant", response_model=ClaimAssistantResponse)
