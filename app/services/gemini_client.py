@@ -15,6 +15,7 @@ from app.core.config import (
     GROUNDING_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    DEMO_REVIEWER_MODEL,
     SECOND_PASS_MODEL,
     SUMMARY_MODEL,
     TAVILY_API_KEY,
@@ -206,7 +207,9 @@ class GeminiClaimNarrator:
             from google.genai import types
 
             response = self._client.models.generate_content(
-                model=SECOND_PASS_MODEL,
+                # The simulated adjuster's own model, so its quota can be moved
+                # off the second-pass budget without touching that feature.
+                model=DEMO_REVIEWER_MODEL,
                 contents=[prompt],
                 config=_det_config(types),
             )
@@ -359,7 +362,13 @@ class GeminiClaimNarrator:
             logger.warning("Assessment evaluation failed: %s", exc)
             return None
 
-    def second_pass_review(self, payload: dict) -> dict | None:
+    def second_pass_review(self, payload: dict, model: str | None = None) -> dict | None:
+        """Adversarial re-read of an assessment.
+
+        `model` lets a caller bill a different quota. The demo reviewer passes
+        DEMO_REVIEWER_MODEL so simulated reviews and the real /api/second-pass
+        endpoint draw on separate per-model limits.
+        """
         """Re-reason over an assessment given an adjuster's specific challenge."""
         if not self._client:
             return None
@@ -394,7 +403,7 @@ class GeminiClaimNarrator:
             from google.genai import types
 
             response = self._client.models.generate_content(
-                model=SECOND_PASS_MODEL,
+                model=model or SECOND_PASS_MODEL,
                 contents=[prompt],
                 config=_det_config(
                     types,

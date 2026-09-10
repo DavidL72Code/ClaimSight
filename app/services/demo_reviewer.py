@@ -26,6 +26,7 @@ from typing import Any, Callable
 
 from app.core.config import (
     DEMO_REVIEWER_EMAIL,
+    DEMO_REVIEWER_MODEL,
     DEMO_REVIEWER_NAME,
 )
 
@@ -695,7 +696,9 @@ class DemoReviewer:
         result = None
         try:
             if self._narrator is not None:
-                result = self._narrator.second_pass_review(payload)
+                result = self._narrator.second_pass_review(
+                    payload, model=DEMO_REVIEWER_MODEL
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Demo reviewer second pass failed: %s", exc)
 
