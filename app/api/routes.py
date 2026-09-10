@@ -108,12 +108,15 @@ def _health_payload() -> dict[str, object]:
     return payload
 
 
-@router.get("/health")
+# HEAD as well as GET: uptime monitors default to HEAD, and FastAPI does not
+# add it to a GET route the way plain Starlette does -- so a HEAD probe was
+# answered with 405 and read as downtime.
+@router.api_route("/health", methods=["GET", "HEAD"])
 def health_check() -> dict[str, object]:
     return _health_payload()
 
 
-@router.get("/api/health")
+@router.api_route("/api/health", methods=["GET", "HEAD"])
 def api_health_check() -> dict[str, object]:
     return _health_payload()
 
@@ -332,7 +335,10 @@ def _demo_error(exc: DemoReviewerError) -> HTTPException:
     return HTTPException(status_code=409, detail=message)
 
 
-@router.get("/api/keepalive")
+# HEAD does the same work, deliberately: a HEAD-only monitor still has to
+# reach through to Supabase, or the project it is meant to keep awake would
+# pause anyway.
+@router.api_route("/api/keepalive", methods=["GET", "HEAD"])
 def keepalive(request: Request) -> dict[str, object]:
     """Reach through to Supabase so an uptime monitor keeps it from pausing.
 

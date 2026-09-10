@@ -180,3 +180,37 @@ def test_ttl_of_zero_disables_pruning(monkeypatch):
     body = TestClient(app).get("/api/keepalive").json()
     assert admin.calls == []
     assert "demo_pruned" not in body
+
+
+# --- uptime monitors probe with HEAD --------------------------------------
+
+
+@pytest.mark.parametrize("path", ["/health", "/api/health", "/api/keepalive"])
+def test_head_is_accepted_on_monitored_endpoints(monkeypatch, path):
+    """UptimeRobot's HTTP(s) monitor sends HEAD by default.
+
+    FastAPI does not add HEAD to a GET route the way plain Starlette does, so
+    these answered 405 and every check was recorded as downtime.
+    """
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
+    monkeypatch.setattr(routes, "supabase_admin", StubAdmin())
+    assert TestClient(app).head(path).status_code == 200
+
+
+def test_head_keepalive_still_reaches_supabase(monkeypatch):
+    """A HEAD-only monitor must still touch the project.
+
+    The point of the endpoint is keeping Supabase from pausing, so answering
+    HEAD without doing the work would defeat it.
+    """
+    stub = StubStorage((True, "reachable"))
+    monkeypatch.setattr(routes, "attachment_storage", stub)
+    monkeypatch.setattr(routes, "supabase_admin", StubAdmin())
+    TestClient(app).head("/api/keepalive")
+    assert stub.calls == 1
+
+
+def test_head_keepalive_reports_a_degraded_project(monkeypatch):
+    monkeypatch.setattr(routes, "attachment_storage", StubStorage((False, "unreachable")))
+    monkeypatch.setattr(routes, "supabase_admin", StubAdmin())
+    assert TestClient(app).head("/api/keepalive").status_code == 503
