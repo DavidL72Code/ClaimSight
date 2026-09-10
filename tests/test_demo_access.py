@@ -109,3 +109,46 @@ def test_owner_cannot_drive_someone_elses_case(client_for):
     client, reviewer = client_for(OWNER)
     assert _post(client, "review/step", case_id="SOMEONE-ELSE").status_code == 404
     assert reviewer.advanced == []
+
+
+# --- rate limiting is bucketed -------------------------------------------
+
+
+def test_demo_steps_do_not_spend_the_assess_budget(monkeypatch):
+    """A whole review is eight calls.
+
+    When demo stepping shared the /api/assess bucket, a visitor was cut off
+    with a 429 partway through their own demo -- which is how this was found.
+    Separate buckets also mean the generous demo allowance cannot be spent to
+    get extra assessments.
+    """
+    routes._request_log.clear()
+    monkeypatch.setattr(routes, "supabase_auth", StubAuth(OWNER))
+    monkeypatch.setattr(routes, "demo_reviewer", StubReviewer())
+    monkeypatch.setattr(routes, "DEMO_MODE", True)
+    monkeypatch.setattr(routes, "_demo_guard", lambda request: None)
+    monkeypatch.setattr(routes, "RATE_LIMIT_MAX_REQUESTS", 5)
+    monkeypatch.setattr(routes, "DEMO_RATE_LIMIT_MAX_REQUESTS", 30)
+    client = TestClient(app)
+
+    # Ten demo steps must all succeed on the demo budget.
+    codes = [_post(client, "review/step").status_code for _ in range(10)]
+    assert codes == [200] * 10, codes
+
+    # And the assess bucket is untouched by them.
+    assess_bucket = [k for k in routes._request_log if k.startswith("assess|")]
+    demo_bucket = [k for k in routes._request_log if k.startswith("demo|")]
+    assert demo_bucket and not assess_bucket
+
+
+def test_the_demo_bucket_still_has_a_ceiling(monkeypatch):
+    routes._request_log.clear()
+    monkeypatch.setattr(routes, "supabase_auth", StubAuth(OWNER))
+    monkeypatch.setattr(routes, "demo_reviewer", StubReviewer())
+    monkeypatch.setattr(routes, "DEMO_MODE", True)
+    monkeypatch.setattr(routes, "_demo_guard", lambda request: None)
+    monkeypatch.setattr(routes, "DEMO_RATE_LIMIT_MAX_REQUESTS", 3)
+    client = TestClient(app)
+    codes = [_post(client, "review/step").status_code for _ in range(5)]
+    assert codes[:3] == [200, 200, 200]
+    assert codes[3] == 429

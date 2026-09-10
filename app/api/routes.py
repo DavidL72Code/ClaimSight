@@ -19,6 +19,7 @@ from app.core.config import (
     MAX_IMAGE_PIXELS,
     MAX_UPLOAD_BYTES,
     RATE_LIMIT_MAX_REQUESTS,
+    DEMO_RATE_LIMIT_MAX_REQUESTS,
     DEMO_USER_TTL_HOURS,
     RATE_LIMIT_WINDOW_SECONDS,
     SECOND_PASS_MODEL,
@@ -324,7 +325,9 @@ def _require_demo_actor(request: Request, case_id: str) -> dict[str, object]:
     """
     decoded_token = _require_user(request)
     uid = str(decoded_token.get("uid") or "")
-    _enforce_rate_limit(request, identity=uid)
+    _enforce_rate_limit(
+        request, identity=uid, bucket="demo", max_requests=DEMO_RATE_LIMIT_MAX_REQUESTS
+    )
 
     if decoded_token.get("role") in {"employee", "manager", "admin"}:
         return decoded_token
@@ -516,7 +519,9 @@ def demo_enroll(request: Request, payload: DemoReviewRequest) -> DemoReviewRespo
     _demo_guard(request)
     decoded_token = _require_user(request)
     uid = str(decoded_token.get("uid") or "")
-    _enforce_rate_limit(request, identity=uid)
+    _enforce_rate_limit(
+        request, identity=uid, bucket="demo", max_requests=DEMO_RATE_LIMIT_MAX_REQUESTS
+    )
 
     try:
         return DemoReviewResponse(**demo_reviewer.enroll(case_id=payload.case_id, owner_uid=uid))
@@ -675,8 +680,23 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _enforce_rate_limit(request: Request, identity: str = "") -> None:
-    client_host = f"uid:{identity}" if identity else f"ip:{_client_ip(request)}"
+def _enforce_rate_limit(
+    request: Request,
+    identity: str = "",
+    *,
+    bucket: str = "assess",
+    max_requests: int | None = None,
+) -> None:
+    """Token-bucket limiter, keyed on the caller and a named bucket.
+
+    The bucket matters: walking the simulated review is eight calls, and when
+    it shared the /api/assess budget a visitor was cut off with a 429 partway
+    through their own demo. Separate buckets mean a generous demo allowance
+    cannot be spent to get extra assessments.
+    """
+    limit = RATE_LIMIT_MAX_REQUESTS if max_requests is None else max_requests
+    who = f"uid:{identity}" if identity else f"ip:{_client_ip(request)}"
+    client_host = f"{bucket}|{who}"
     now = monotonic()
     window_start = now - RATE_LIMIT_WINDOW_SECONDS
 
@@ -686,8 +706,15 @@ def _enforce_rate_limit(request: Request, identity: str = "") -> None:
 
     recent = [timestamp for timestamp in _request_log.get(client_host, []) if timestamp >= window_start]
 
-    if len(recent) >= RATE_LIMIT_MAX_REQUESTS:
-        raise HTTPException(status_code=429, detail="Too many assessment requests. Try again shortly.")
+    if len(recent) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Too many demo steps. Try again shortly."
+                if bucket == "demo"
+                else "Too many assessment requests. Try again shortly."
+            ),
+        )
 
     recent.append(now)
     _request_log[client_host] = recent

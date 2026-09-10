@@ -129,6 +129,11 @@ MAX_UPLOAD_BYTES = _env_int("MAX_UPLOAD_BYTES", 8 * 1024 * 1024)
 MAX_IMAGE_PIXELS = _env_int("MAX_IMAGE_PIXELS", 12_000_000)
 RATE_LIMIT_WINDOW_SECONDS = _env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
 RATE_LIMIT_MAX_REQUESTS = _env_int("RATE_LIMIT_MAX_REQUESTS", 5)
+# Stepping through the simulated review is seven calls plus enrolment, so it
+# cannot share the /api/assess budget -- a visitor got a 429 halfway through
+# their own demo. Separate bucket, sized to let one visitor finish a review
+# and still bound how fast they can start another.
+DEMO_RATE_LIMIT_MAX_REQUESTS = _env_int("DEMO_RATE_LIMIT_MAX_REQUESTS", 30)
 # Reject /api/assess requests whose Origin/Referer isn't in ALLOWED_ORIGINS.
 # Opt-in (default off) so it can't break the live site until the real domain is allowlisted.
 ENFORCE_ORIGIN = _env_bool("ENFORCE_ORIGIN", False)
