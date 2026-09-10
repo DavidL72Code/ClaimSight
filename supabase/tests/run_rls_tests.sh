@@ -38,6 +38,8 @@ psqlq -f "$ROOT/supabase/migrations/0006_assessment_columns.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0007_internal_note.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0008_demo_review.sql" || exit 1
 psqlq -f "$ROOT/supabase/migrations/0009_demo_claim_limit.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0010_service_role_bypasses_trigger.sql" || exit 1
+psqlq -f "$ROOT/supabase/migrations/0011_demo_review_completed.sql" || exit 1
 
 # Claim payloads. app_metadata.role is where Supabase keeps custom claims.
 A='{"sub":"11111111-1111-1111-1111-111111111111","email":"alice@example.com","app_metadata":{}}'

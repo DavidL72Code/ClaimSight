@@ -124,7 +124,7 @@ class DemoReviewer:
     def status(self, case_id: str) -> dict[str, Any]:
         if not self.ready:
             raise DemoReviewerError("Firebase Admin is not configured.")
-        _, case = self._load(case_id)
+        case = self._load(case_id)
         return self._status_payload(case_id, case)
 
     def _status_payload(self, case_id: str, case: dict[str, Any]) -> dict[str, Any]:
@@ -209,19 +209,25 @@ class DemoReviewer:
         if message:
             self._post_activity(case_id, "reviewer_message", message)
 
-        _, refreshed = self._load(case_id)
+        refreshed = self._load(case_id)
         payload = self._status_payload(case_id, refreshed)
         payload["step"] = step
         return payload
 
     def _post_activity(self, case_id: str, kind: str, label: str) -> None:
         try:
+            # Only the columns case_activity actually has. _actor() also
+            # carries actor_email and simulated, which live in the
+            # review_steps jsonb where there is no schema to violate; sending
+            # them here fails with PGRST204.
+            actor = self._actor()
             self._admin.add_activity(
                 {
                     "case_id": case_id,
                     "type": kind,
                     "label": label,
-                    **self._actor(),
+                    "actor_role": actor["actor_role"],
+                    "actor_name": actor["actor_name"],
                 }
             )
         except Exception as exc:  # noqa: BLE001
