@@ -9,7 +9,7 @@ const assetsDir = path.join(srcDir, "assets");
 await fs.rm(distDir, { recursive: true, force: true });
 await fs.mkdir(distDir, { recursive: true });
 
-for (const file of [
+const copyFiles = [
   "index.html",
   "dashboard.html",
   "new-claim.html",
@@ -41,37 +41,63 @@ for (const file of [
   "customer-messages.js",
   "reasoning.js",
   "consumer-case.js",
-]) {
+];
+for (const file of copyFiles) {
   await fs.copyFile(path.join(srcDir, file), path.join(distDir, file));
 }
+const scriptFiles = copyFiles.filter((f) => f.endsWith(".js"));
 
-// On Vercel (or when REQUIRE_ENV=1) a missing variable means the deployed site
-// would silently ship blank Firebase/API config and every page would fail to
-// sign in. Fail the build instead of publishing a dead frontend.
-const strictEnv =
-  process.env.REQUIRE_ENV === "1" ||
-  (process.env.VERCEL === "1" && process.env.REQUIRE_ENV !== "0");
-// Only what the app actually reads at runtime. Firebase here does Auth
-// (apiKey + authDomain) and Firestore (projectId) and nothing else:
-// attachments moved to Supabase behind /api/attachments, so storageBucket is
-// unused; there is no Cloud Messaging, so messagingSenderId is unused; and
-// there is no Analytics, so appId is unused. They stay in the emitted config
-// below as optional pass-throughs, but a missing one no longer fails a build
-// that would have worked.
-const requiredEnv = [
-  "VITE_API_BASE_URL",
-  "VITE_SUPABASE_URL",
-  "VITE_SUPABASE_ANON_KEY",
-];
+// Fail the build on a leftover Firebase handle.
+//
+// Removing Firebase left several identifiers referenced but never declared --
+// `auth`, `db`, `casesCollection`. Each threw a ReferenceError at runtime and
+// each one shipped: node --check only parses, and the unit tests never load
+// these files. Greps missed them repeatedly too, because `auth?.x` hides from
+// a pattern expecting a dot and one filter skipped every line mentioning
+// sbAuth.
+//
+// The rule is deliberately blunt rather than clever. An earlier version tried
+// to work out whether the name was declared in the file and accepted
+// `if (auth && ...)` as a parameter list, so it caught nothing. Instead: these
+// names are banned as bare identifiers everywhere except the one file that
+// legitimately owns them.
+const BANNED_IDENTIFIERS = {
+  auth: ["supabase-client.js"],
+  db: [],
+  casesCollection: [],
+  firestore: [],
+  firebaseAuth: [],
+  firebaseApp: [],
+  firebaseStorage: [],
+  firebaseConfig: [],
+};
 
-if (strictEnv) {
-  const missing = requiredEnv.filter((name) => !(process.env[name] || "").trim());
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing required build environment variables: ${missing.join(", ")}. ` +
-        "Set them in the Vercel project settings (or run with REQUIRE_ENV=0 for a local build)."
-    );
+const stripCommentsAndStrings = (code) =>
+  code
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")
+    .replace(/`(?:\\.|[^`\\])*`/g, '""')
+    .replace(/'(?:\\.|[^'\\\n])*'/g, '""')
+    .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+
+const leftovers = [];
+for (const file of scriptFiles) {
+  const raw = await fs.readFile(path.join(srcDir, file), "utf8");
+  const code = stripCommentsAndStrings(raw);
+  for (const [name, allowed] of Object.entries(BANNED_IDENTIFIERS)) {
+    if (allowed.includes(file)) continue;
+    const re = new RegExp(`(?<![\\w.$])${name}(?![\\w$])`, "g");
+    let match;
+    while ((match = re.exec(code)) !== null) {
+      const line = code.slice(0, match.index).split("\n").length;
+      leftovers.push(`${file}:${line} uses '${name}', a Firebase handle that no longer exists`);
+    }
   }
+}
+if (leftovers.length > 0) {
+  throw new Error(
+    "Leftover Firebase references would throw at runtime:\n  " + leftovers.join("\n  ")
+  );
 }
 
 const apiBaseUrl = process.env.VITE_API_BASE_URL || "";

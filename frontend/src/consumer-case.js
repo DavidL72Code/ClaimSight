@@ -1640,7 +1640,7 @@ if (dataEnabled) {
   };
 
   const refreshPortal = async () => {
-    if (auth && !currentCustomer) {
+    if (authAvailable && !currentCustomer) {
       ownClaims = [];
       renderCounts();
       renderDashboardClaims();
