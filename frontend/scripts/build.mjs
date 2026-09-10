@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const root = process.cwd();
 const srcDir = path.join(root, "src");
@@ -120,3 +121,61 @@ try {
     throw error;
   }
 }
+
+// Cache-bust from file content, not by hand.
+//
+// Every page used to pin its scripts with a literal marker --
+// consumer-case.js?v=pdf-export-fix-3 -- which only worked if someone
+// remembered to change it. During the Supabase migration nobody did, so
+// browsers that had already loaded the site kept serving the old JavaScript
+// and threw ReferenceErrors against handles that no longer existed. A correct
+// fix looked broken for several rounds because of it.
+//
+// The hash makes the URL change exactly when the bytes change: unchanged
+// files keep their URL and stay cached, changed files are refetched once.
+const hashOf = (contents) =>
+  crypto.createHash("sha256").update(contents).digest("hex").slice(0, 10);
+
+const distJs = (await fs.readdir(distDir)).filter((f) => f.endsWith(".js"));
+const hashes = new Map();
+for (const file of distJs) {
+  hashes.set(file, hashOf(await fs.readFile(path.join(distDir, file))));
+}
+
+const distHtml = (await fs.readdir(distDir)).filter((f) => f.endsWith(".html"));
+let rewritten = 0;
+for (const page of distHtml) {
+  const target = path.join(distDir, page);
+  let html = await fs.readFile(target, "utf8");
+  const before = html;
+  // Only local scripts. The vendored SDK is versioned by its own directory
+  // and the CDN fonts are not ours to fingerprint.
+  html = html.replace(/src="\.\/([A-Za-z0-9._-]+\.js)(\?[^"]*)?"/g, (whole, file) => {
+    const hash = hashes.get(file);
+    return hash ? `src="./${file}?v=${hash}"` : whole;
+  });
+  if (html !== before) {
+    await fs.writeFile(target, html);
+    rewritten += 1;
+  }
+}
+
+// A page referencing a script that was never copied would 404 in the browser
+// but build fine, so check rather than trust.
+//
+// The check has to look at every local script reference, not only the ones
+// that came out fingerprinted: an unknown file is precisely the one the
+// rewrite above leaves alone, so scanning for `?v=` would skip it. That was
+// the first version of this guard, and it caught nothing.
+const missing = [];
+for (const page of distHtml) {
+  const html = await fs.readFile(path.join(distDir, page), "utf8");
+  for (const m of html.matchAll(/src="\.\/([A-Za-z0-9._-]+\.js)(?:\?[^"]*)?"/g)) {
+    if (!hashes.has(m[1])) missing.push(`${page} -> ${m[1]}`);
+  }
+}
+if (missing.length > 0) {
+  throw new Error("Pages reference scripts that were not built:\n  " + missing.join("\n  "));
+}
+
+console.log(`Fingerprinted ${hashes.size} scripts across ${rewritten} pages.`);

@@ -310,6 +310,29 @@ def second_pass_review(request: Request, payload: SecondPassRequest) -> SecondPa
     )
 
 
+def _require_demo_actor(request: Request, case_id: str) -> dict[str, object]:
+    """Identify a caller allowed to drive the simulated reviewer on one case.
+
+    An adjuster may drive any case. A visitor may drive their own, which is
+    what makes the demo work without a second person in it: someone arriving
+    from the homepage signs in anonymously and is the only participant.
+
+    Ownership is read from the row, not the request. The service key bypasses
+    RLS, so there is no policy standing behind these endpoints and the check
+    has to be explicit here. A case the caller does not own answers 404, the
+    same as one that does not exist, so this cannot enumerate ids.
+    """
+    decoded_token = _require_user(request)
+    uid = str(decoded_token.get("uid") or "")
+    _enforce_rate_limit(request, identity=uid)
+
+    if decoded_token.get("role") in {"employee", "manager", "admin"}:
+        return decoded_token
+    if not demo_reviewer.owns(case_id, uid):
+        raise HTTPException(status_code=404, detail="Case not found.")
+    return decoded_token
+
+
 def _demo_guard(request: Request) -> None:
     """Shared gate for every demo route.
 
@@ -505,13 +528,22 @@ def demo_enroll(request: Request, payload: DemoReviewRequest) -> DemoReviewRespo
 def demo_review_step(request: Request, payload: DemoReviewRequest) -> DemoReviewResponse:
     """Advance the simulated adjuster by exactly one step. Demo only.
 
-    Driven from the employee portal so a viewer can walk the review one click at
-    a time and watch the customer side react to each step. Employee-gated: this
-    is the adjuster's side of the workflow, and it writes employee-only fields.
+    Callable by an employee, or by the owner of the case.
+
+    The owner branch exists because the demo has no second person in it. A
+    visitor arriving from the homepage signs in anonymously, submits a claim,
+    and would otherwise watch nothing happen: this endpoint used to require an
+    adjuster account, and there is no adjuster. Letting them drive their own
+    simulated review is what makes the demo a demo.
+
+    It stays narrow. The caller must own the case, checked against the row
+    rather than taken from the request, and the writes are the simulated
+    reviewer's own -- the visitor cannot choose what it decides, only ask it
+    to take the next step. On someone else's case this answers 404, the same
+    as a case that does not exist, so it cannot be used to enumerate ids.
     """
     _demo_guard(request)
-    decoded_token = _require_employee(request)
-    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
+    _require_demo_actor(request, payload.case_id)
 
     try:
         return DemoReviewResponse(**demo_reviewer.advance(case_id=payload.case_id))
@@ -521,9 +553,13 @@ def demo_review_step(request: Request, payload: DemoReviewRequest) -> DemoReview
 
 @router.post("/api/demo/review/status", response_model=DemoReviewResponse)
 def demo_review_status(request: Request, payload: DemoReviewRequest) -> DemoReviewResponse:
-    """Where the step-through has got to, for rendering the next-step control."""
+    """Where the step-through has got to, for rendering the next-step control.
+
+    Owner-callable as well as employee-callable, since the customer side needs
+    it to know whether to offer the next step.
+    """
     _demo_guard(request)
-    _require_employee(request)
+    _require_demo_actor(request, payload.case_id)
 
     try:
         return DemoReviewResponse(**demo_reviewer.status(case_id=payload.case_id))
@@ -535,13 +571,15 @@ def demo_review_status(request: Request, payload: DemoReviewRequest) -> DemoRevi
 def demo_reply(request: Request, payload: DemoReviewRequest) -> DemoReplyResponse:
     """Answer the customer's latest message in character. Demo only.
 
-    Completes the loop the other way: the viewer writes as the customer in one
-    tab, triggers this from the employee tab, and a real reply lands in the
-    thread with a notification.
+    Completes the loop the other way: a message written as the customer gets a
+    real reply in the thread, with a notification.
+
+    Owner-callable too, so a lone visitor can hold both halves of the
+    conversation. They choose when the adjuster answers, not what it says --
+    the reply is composed server-side from the claim.
     """
     _demo_guard(request)
-    decoded_token = _require_employee(request)
-    _enforce_rate_limit(request, identity=str(decoded_token.get("uid") or ""))
+    _require_demo_actor(request, payload.case_id)
 
     try:
         return DemoReplyResponse(**demo_reviewer.reply_to_customer(case_id=payload.case_id))

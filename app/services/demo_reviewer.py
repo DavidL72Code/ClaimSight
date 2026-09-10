@@ -141,6 +141,17 @@ class DemoReviewer:
         }
 
     # ── stepping ────────────────────────────────────────────────────────────
+    def owns(self, case_id: str, owner_uid: str) -> bool:
+        """Whether this uid owns the case.
+
+        Used by the step endpoint so a demo visitor may advance the review on
+        their own claim without an adjuster account. The service key bypasses
+        RLS, so the check cannot be delegated to a policy here -- it has to be
+        explicit.
+        """
+        row = self._admin.get_case(case_id)
+        return bool(row) and str(row.get("owner_uid") or "") == owner_uid
+
     def advance(self, case_id: str) -> dict[str, Any]:
         """Run exactly one step of the review and persist it."""
         if not self.ready:
