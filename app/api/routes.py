@@ -20,6 +20,7 @@ from app.core.config import (
     MAX_UPLOAD_BYTES,
     RATE_LIMIT_MAX_REQUESTS,
     DEMO_RATE_LIMIT_MAX_REQUESTS,
+    HEARTBEAT_INTERVAL_SECONDS,
     DEMO_USER_TTL_HOURS,
     RATE_LIMIT_WINDOW_SECONDS,
     SECOND_PASS_MODEL,
@@ -42,6 +43,7 @@ from app.services.case_repository import CaseRepository
 from app.services.demo_reviewer import DemoReviewer, DemoReviewerError
 from app.services.evaluation import AssessmentEvaluator
 from app.services.gemini_client import GeminiClaimNarrator
+from app.services.heartbeat import Heartbeat
 from app.services.report_generation import ClaimReportService
 from app.services.segmentation import get_segmentation_service
 from app.services.supabase_auth import SupabaseAuth
@@ -58,6 +60,14 @@ attachment_storage = SupabaseAttachmentStorage()
 supabase_auth = SupabaseAuth()
 supabase_data = SupabaseData()
 supabase_admin = SupabaseAdmin()
+# Touches Supabase on its own schedule so the project never goes cold enough
+# to need a manual resume, independent of whether a request arrives.
+heartbeat = Heartbeat(
+    attachment_storage,
+    supabase_admin,
+    interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
+    demo_user_ttl_hours=DEMO_USER_TTL_HOURS,
+)
 # Shares the one SupabaseData instance so every read runs on the caller's own
 # token, and so tests that stub supabase_data reach this too.
 case_repository = CaseRepository(supabase_data)
@@ -78,12 +88,6 @@ Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 _request_log: dict[str, list[float]] = {}
 # Cheapest useful keepalive cadence: an uptime monitor on a 5 minute
 # schedule then reaches Supabase once per poll and no more.
-KEEPALIVE_MIN_INTERVAL_SECONDS = 240
-_keepalive_cache: dict[str, object] = {}
-# The uptime monitor is the only scheduler this deployment has, so the demo
-# prune rides along with it -- at most hourly, regardless of poll frequency.
-DEMO_PRUNE_MIN_INTERVAL_SECONDS = 3600
-_demo_prune_cache: dict[str, object] = {}
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
 _EMPTY_DAMAGE_VALUES = {"", "n/a", "na", "none", "no", "none reported", "no prior damage"}
 
@@ -366,61 +370,41 @@ def _demo_error(exc: DemoReviewerError) -> HTTPException:
 # pause anyway.
 @router.api_route("/api/keepalive", methods=["GET", "HEAD"])
 def keepalive(request: Request) -> dict[str, object]:
-    """Reach through to Supabase so an uptime monitor keeps it from pausing.
+    """What the uptime monitor polls.
 
-    Supabase pauses free projects after roughly a week of inactivity and
-    restoring one is a manual click in their dashboard, so a monitor has to
-    touch the project rather than just this app. /api/health deliberately
-    does not make any outbound calls, which is why this is a separate route:
-    pinging health would keep the Space warm but let Supabase pause anyway.
+    Answers from the heartbeat's last result rather than making its own call.
+    That is the point: a cold Supabase takes roughly twenty seconds to
+    respond, and doing that inline meant the monitor's timeout fired and
+    logged an outage while the service was healthy. This returns in
+    milliseconds.
 
-    Unauthenticated, because an uptime monitor cannot hold a Firebase token.
-    That makes it a small outbound-request amplifier, so the result is cached
-    and Supabase is touched at most once per KEEPALIVE_MIN_INTERVAL_SECONDS
-    no matter how often this is called.
+    The polling still matters -- it is what keeps the Space itself from
+    sleeping, which nothing inside the container can do -- but the database is
+    kept warm by the loop, not by the poll.
+
+    503 when the last successful touch has gone stale, so a genuinely
+    unreachable project is still reported. Unconfigured is not an outage: a
+    deployment without Supabase credentials is a deliberate state.
     """
     _enforce_rate_limit(request)
 
-    now = monotonic()
-    cached = _keepalive_cache.get("checked_at")
-    if cached is not None and (now - cached) < KEEPALIVE_MIN_INTERVAL_SECONDS:
-        reached = bool(_keepalive_cache.get("reached"))
-        detail = str(_keepalive_cache.get("detail") or "")
-        cache_state = "hit"
-    else:
+    state = heartbeat.state
+    healthy = heartbeat.healthy
+
+    # With the loop disabled, fall back to the old inline behaviour so the
+    # endpoint still means something.
+    if HEARTBEAT_INTERVAL_SECONDS <= 0:
         reached, detail = attachment_storage.ping()
-        _keepalive_cache.update({"checked_at": now, "reached": reached, "detail": detail})
-        cache_state = "miss"
+        state = {"supabase": detail, "heartbeat": "disabled"}
+        healthy = reached or detail == "not_configured"
 
-    payload: dict[str, object] = {
-        "status": "ok" if (reached or detail == "not_configured") else "degraded",
-        "supabase": detail,
-        "cache": cache_state,
-    }
+    payload: dict[str, object] = {"status": "ok" if healthy else "degraded", **state}
 
-    # Prune stale demo visitors while we are here. This endpoint is
-    # unauthenticated, so the prune is deliberately narrow and idempotent: it
-    # only ever deletes anonymous users past their TTL, so calling it more
-    # often changes nothing. The hourly floor keeps a five-minute monitor from
-    # listing every user on every poll.
-    if reached and DEMO_USER_TTL_HOURS > 0:
-        last = _demo_prune_cache.get("at")
-        if last is None or (now - float(last)) >= DEMO_PRUNE_MIN_INTERVAL_SECONDS:
-            _demo_prune_cache["at"] = now
-            try:
-                result = supabase_admin.prune_anonymous_users(
-                    older_than_hours=DEMO_USER_TTL_HOURS
-                )
-                payload["demo_pruned"] = result["deleted"]
-            except SupabaseDataError as exc:
-                # Cleanup failing is not an outage; the monitor should not page.
-                logger.warning("Demo prune skipped: %s", exc)
-                payload["demo_pruned"] = "skipped"
-
-    # Only alert once storage is actually configured: an unconfigured
-    # deployment is a deliberate state, not an outage to page someone about.
-    if not reached and detail != "not_configured":
-        raise HTTPException(status_code=503, detail=f"Supabase {detail}.")
+    if not healthy:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Supabase heartbeat is stale: {state.get('supabase')}.",
+        )
     return payload
 
 

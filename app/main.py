@@ -7,11 +7,31 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.routes import router
+from contextlib import asynccontextmanager
+
+from app.api.routes import heartbeat, router
 from app.core.config import ALLOWED_HOSTS, ALLOWED_ORIGINS, DEBUG, ENABLE_API_DOCS
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Run the Supabase heartbeat for as long as the container lives.
+
+    Keeping the database warm cannot be left to the uptime monitor: its
+    interval and timeout are not ours, and a cold Supabase takes about twenty
+    seconds to answer, which the monitor was reading as downtime. The Space
+    still needs outside traffic to stay awake -- nothing in here can help with
+    that -- but the database no longer depends on a request arriving.
+    """
+    heartbeat.start()
+    try:
+        yield
+    finally:
+        await heartbeat.stop()
+
 
 app = FastAPI(
     title="Insurance Damage Assessment Tool",
+    lifespan=lifespan,
     debug=DEBUG,
     docs_url="/docs" if ENABLE_API_DOCS else None,
     redoc_url="/redoc" if ENABLE_API_DOCS else None,

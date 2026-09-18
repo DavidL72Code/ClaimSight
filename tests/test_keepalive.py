@@ -1,216 +1,206 @@
-"""Tests for /api/keepalive, the endpoint an uptime monitor polls.
+"""The endpoint an uptime monitor polls, and the loop behind it.
 
-It is unauthenticated and makes an outbound request, so the caching floor
-matters as much as the happy path: without it, anyone hitting this route in
-a loop would hammer Supabase through us.
+Two things are being kept alive and only one of them a monitor can help with.
+The Space sleeps without inbound HTTP, so the polling itself is what keeps it
+up. Supabase goes cold, and eventually paused, on its own clock -- and a cold
+project takes about twenty seconds to answer, which is longer than a monitor's
+timeout. Touching it inline therefore turned a healthy service into a logged
+outage, so the loop does the touching and the endpoint only reports what it
+last saw.
 """
+
+import asyncio
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.api import routes
+from app.services.heartbeat import Heartbeat
 
 
 class StubStorage:
-    def __init__(self, result, ready=True):
+    def __init__(self, result=(True, "reachable"), delay=0.0):
         self.result = result
-        self.ready = ready
+        self.delay = delay
         self.calls = 0
 
     def ping(self):
         self.calls += 1
+        if self.delay:
+            time.sleep(self.delay)
         return self.result
-
-
-@pytest.fixture(autouse=True)
-def clear_state(monkeypatch):
-    routes._keepalive_cache.clear()
-    monkeypatch.setattr(routes, "_enforce_rate_limit", lambda *a, **k: None)
-    yield
-    routes._keepalive_cache.clear()
-
-
-def test_reports_ok_when_supabase_is_reachable(monkeypatch):
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    body = TestClient(app).get("/api/keepalive").json()
-    assert body["status"] == "ok"
-    assert body["supabase"] == "reachable"
-
-
-def test_returns_503_when_configured_but_unreachable(monkeypatch):
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((False, "unreachable")))
-    response = TestClient(app).get("/api/keepalive")
-    # A monitor should page on this: the project is probably paused.
-    assert response.status_code == 503
-
-
-def test_unconfigured_storage_is_not_an_outage(monkeypatch):
-    # No credentials yet is a deliberate state, not something to alert on,
-    # otherwise the monitor pages continuously during setup.
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((False, "not_configured")))
-    response = TestClient(app).get("/api/keepalive")
-    assert response.status_code == 200
-    assert response.json()["supabase"] == "not_configured"
-
-
-def test_supabase_is_touched_at_most_once_per_interval(monkeypatch):
-    stub = StubStorage((True, "reachable"))
-    monkeypatch.setattr(routes, "attachment_storage", stub)
-    client = TestClient(app)
-
-    first = client.get("/api/keepalive").json()
-    assert first["cache"] == "miss"
-
-    # Twenty more polls in the same window must not become twenty more
-    # outbound requests.
-    for _ in range(20):
-        assert client.get("/api/keepalive").json()["cache"] == "hit"
-    assert stub.calls == 1
-
-
-def test_cache_expires_so_a_paused_project_is_noticed(monkeypatch):
-    stub = StubStorage((True, "reachable"))
-    monkeypatch.setattr(routes, "attachment_storage", stub)
-    client = TestClient(app)
-    client.get("/api/keepalive")
-    assert stub.calls == 1
-
-    # Age the cached entry past the floor.
-    routes._keepalive_cache["checked_at"] -= routes.KEEPALIVE_MIN_INTERVAL_SECONDS + 1
-    assert client.get("/api/keepalive").json()["cache"] == "miss"
-    assert stub.calls == 2
-
-
-def test_keepalive_needs_no_authentication(monkeypatch):
-    # An uptime monitor cannot hold a Firebase ID token.
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    assert TestClient(app).get("/api/keepalive").status_code == 200
-
-
-def test_rate_limit_is_applied(monkeypatch):
-    calls = []
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "_enforce_rate_limit", lambda *a, **k: calls.append(1))
-    TestClient(app).get("/api/keepalive")
-    assert calls, "keepalive must go through the rate limiter"
-
-
-# --- demo cleanup ---------------------------------------------------------
 
 
 class StubAdmin:
     def __init__(self, deleted=0, fail=False):
         self.deleted = deleted
         self.fail = fail
-        self.calls = []
+        self.calls = 0
 
     def prune_anonymous_users(self, older_than_hours=24, limit=200):
-        self.calls.append(older_than_hours)
+        self.calls += 1
         if self.fail:
-            from app.services.supabase_data import SupabaseDataError
-
-            raise SupabaseDataError("listing refused")
-        return {"deleted": self.deleted, "examined": 5, "older_than_hours": older_than_hours}
+            raise RuntimeError("listing refused")
+        return {"deleted": self.deleted, "examined": 3, "older_than_hours": older_than_hours}
 
 
-@pytest.fixture(autouse=True)
-def _clear_prune_cache():
-    routes._demo_prune_cache.clear()
-    yield
-    routes._demo_prune_cache.clear()
+def _install(monkeypatch, hb):
+    monkeypatch.setattr(routes, "heartbeat", hb)
+    monkeypatch.setattr(routes, "_enforce_rate_limit", lambda *a, **k: None)
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL_SECONDS", 600)
+    return TestClient(app)
 
 
-def test_prune_runs_with_the_keepalive(monkeypatch):
-    admin = StubAdmin(deleted=3)
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "supabase_admin", admin)
-    body = TestClient(app).get("/api/keepalive").json()
-    assert body["demo_pruned"] == 3
-    assert admin.calls == [routes.DEMO_USER_TTL_HOURS]
+# --- the endpoint ---------------------------------------------------------
 
 
-def test_prune_is_at_most_hourly(monkeypatch):
-    """The monitor polls every five minutes; the prune must not."""
-    admin = StubAdmin()
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "supabase_admin", admin)
-    client = TestClient(app)
+def test_reports_ok_from_a_recent_beat(monkeypatch):
+    hb = Heartbeat(StubStorage())
+    asyncio.run(hb._beat())
+    body = _install(monkeypatch, hb).get("/api/keepalive").json()
+    assert body["status"] == "ok"
+    assert body["supabase"] == "reachable"
+    assert body["beats"] == 1
+
+
+def test_answers_without_touching_supabase(monkeypatch):
+    """The whole point: the poll must not pay the cold-start cost."""
+    storage = StubStorage()
+    hb = Heartbeat(storage)
+    asyncio.run(hb._beat())
+    before = storage.calls
+    client = _install(monkeypatch, hb)
+    for _ in range(20):
+        assert client.get("/api/keepalive").status_code == 200
+    assert storage.calls == before, "the endpoint made its own Supabase call"
+
+
+def test_a_cold_supabase_does_not_slow_the_endpoint(monkeypatch):
+    """A twenty-second wake must not become a twenty-second response."""
+    hb = Heartbeat(StubStorage(delay=2.0))
+    asyncio.run(hb._beat())          # pays the cost once, in the loop
+    client = _install(monkeypatch, hb)
+    started = time.monotonic()
     client.get("/api/keepalive")
-    for _ in range(12):
-        routes._keepalive_cache.clear()  # force the reachability check to re-run
-        client.get("/api/keepalive")
-    assert len(admin.calls) == 1
+    assert time.monotonic() - started < 0.5
 
 
-def test_prune_resumes_after_the_hour(monkeypatch):
-    admin = StubAdmin()
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "supabase_admin", admin)
-    client = TestClient(app)
-    client.get("/api/keepalive")
-    routes._demo_prune_cache["at"] -= routes.DEMO_PRUNE_MIN_INTERVAL_SECONDS + 1
-    routes._keepalive_cache.clear()
-    client.get("/api/keepalive")
-    assert len(admin.calls) == 2
+def test_503_once_the_last_success_goes_stale(monkeypatch):
+    hb = Heartbeat(StubStorage(), stale_after_seconds=60)
+    asyncio.run(hb._beat())
+    hb._last_ok_at -= 10_000        # age it well past the window
+    assert _install(monkeypatch, hb).get("/api/keepalive").status_code == 503
 
 
-def test_prune_failure_does_not_page_the_monitor(monkeypatch):
-    """Cleanup is housekeeping: if it fails the endpoint must still be 200."""
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "supabase_admin", StubAdmin(fail=True))
-    response = TestClient(app).get("/api/keepalive")
+def test_unconfigured_is_not_an_outage(monkeypatch):
+    hb = Heartbeat(StubStorage((False, "not_configured")))
+    asyncio.run(hb._beat())
+    response = _install(monkeypatch, hb).get("/api/keepalive")
     assert response.status_code == 200
-    assert response.json()["demo_pruned"] == "skipped"
+    assert response.json()["supabase"] == "not_configured"
 
 
-def test_no_prune_when_supabase_is_unreachable(monkeypatch):
-    admin = StubAdmin()
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((False, "unreachable")))
-    monkeypatch.setattr(routes, "supabase_admin", admin)
-    TestClient(app).get("/api/keepalive")
-    assert admin.calls == []
+def test_a_fresh_container_is_not_red_before_its_first_beat(monkeypatch):
+    hb = Heartbeat(StubStorage())
+    assert _install(monkeypatch, hb).get("/api/keepalive").status_code == 200
 
 
-def test_ttl_of_zero_disables_pruning(monkeypatch):
-    admin = StubAdmin()
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "supabase_admin", admin)
-    monkeypatch.setattr(routes, "DEMO_USER_TTL_HOURS", 0)
-    body = TestClient(app).get("/api/keepalive").json()
-    assert admin.calls == []
-    assert "demo_pruned" not in body
-
-
-# --- uptime monitors probe with HEAD --------------------------------------
+def test_one_failed_beat_does_not_page(monkeypatch):
+    """Staleness pages, a single blip does not."""
+    hb = Heartbeat(StubStorage(), stale_after_seconds=3600)
+    asyncio.run(hb._beat())
+    hb._storage.result = (False, "unreachable")
+    asyncio.run(hb._beat())
+    assert _install(monkeypatch, hb).get("/api/keepalive").status_code == 200
 
 
 @pytest.mark.parametrize("path", ["/health", "/api/health", "/api/keepalive"])
-def test_head_is_accepted_on_monitored_endpoints(monkeypatch, path):
-    """UptimeRobot's HTTP(s) monitor sends HEAD by default.
-
-    FastAPI does not add HEAD to a GET route the way plain Starlette does, so
-    these answered 405 and every check was recorded as downtime.
-    """
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((True, "reachable")))
-    monkeypatch.setattr(routes, "supabase_admin", StubAdmin())
-    assert TestClient(app).head(path).status_code == 200
+def test_head_is_accepted(monkeypatch, path):
+    """Uptime monitors send HEAD by default; FastAPI registers GET only."""
+    hb = Heartbeat(StubStorage())
+    asyncio.run(hb._beat())
+    assert _install(monkeypatch, hb).head(path).status_code == 200
 
 
-def test_head_keepalive_still_reaches_supabase(monkeypatch):
-    """A HEAD-only monitor must still touch the project.
+def test_falls_back_to_an_inline_touch_when_the_loop_is_off(monkeypatch):
+    storage = StubStorage()
+    hb = Heartbeat(storage)
+    monkeypatch.setattr(routes, "heartbeat", hb)
+    monkeypatch.setattr(routes, "attachment_storage", storage)
+    monkeypatch.setattr(routes, "_enforce_rate_limit", lambda *a, **k: None)
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL_SECONDS", 0)
+    body = TestClient(app).get("/api/keepalive").json()
+    assert body["heartbeat"] == "disabled"
+    assert storage.calls == 1
 
-    The point of the endpoint is keeping Supabase from pausing, so answering
-    HEAD without doing the work would defeat it.
-    """
-    stub = StubStorage((True, "reachable"))
-    monkeypatch.setattr(routes, "attachment_storage", stub)
-    monkeypatch.setattr(routes, "supabase_admin", StubAdmin())
-    TestClient(app).head("/api/keepalive")
-    assert stub.calls == 1
+
+# --- the loop ------------------------------------------------------------
 
 
-def test_head_keepalive_reports_a_degraded_project(monkeypatch):
-    monkeypatch.setattr(routes, "attachment_storage", StubStorage((False, "unreachable")))
-    monkeypatch.setattr(routes, "supabase_admin", StubAdmin())
-    assert TestClient(app).head("/api/keepalive").status_code == 503
+def test_the_loop_beats_repeatedly():
+    async def run():
+        storage = StubStorage()
+        hb = Heartbeat(storage, interval_seconds=60)
+        hb._interval = 0.05                     # keep the test quick
+        hb.start()
+        await asyncio.sleep(0.3)
+        await hb.stop()
+        return storage.calls
+
+    assert asyncio.run(run()) >= 3
+
+
+def test_the_loop_survives_a_failing_ping():
+    """A loop that dies on one error would let the project pause silently."""
+    class Exploding(StubStorage):
+        def ping(self):
+            self.calls += 1
+            raise RuntimeError("network gone")
+
+    async def run():
+        storage = Exploding()
+        hb = Heartbeat(storage, interval_seconds=60)
+        hb._interval = 0.05
+        hb.start()
+        await asyncio.sleep(0.3)
+        running = hb.state["running"]
+        await hb.stop()
+        return storage.calls, running
+
+    calls, running = asyncio.run(run())
+    assert calls >= 3 and running
+
+
+def test_the_loop_prunes_on_its_own_slower_schedule():
+    async def run():
+        admin = StubAdmin(deleted=2)
+        hb = Heartbeat(StubStorage(), admin, interval_seconds=60, prune_interval_seconds=300)
+        hb._interval = 0.05
+        hb._prune_interval = 10_000             # once, then never again in this window
+        hb.start()
+        await asyncio.sleep(0.3)
+        await hb.stop()
+        return admin.calls, hb.state["demo_pruned_last"]
+
+    calls, pruned = asyncio.run(run())
+    assert calls == 1 and pruned == 2
+
+
+def test_a_failing_prune_does_not_stop_the_beats():
+    async def run():
+        storage = StubStorage()
+        hb = Heartbeat(storage, StubAdmin(fail=True), interval_seconds=60)
+        hb._interval = 0.05
+        hb._prune_interval = 0
+        hb.start()
+        await asyncio.sleep(0.3)
+        await hb.stop()
+        return storage.calls
+
+    assert asyncio.run(run()) >= 3
+
+
+def test_stop_is_safe_when_never_started():
+    asyncio.run(Heartbeat(StubStorage()).stop())

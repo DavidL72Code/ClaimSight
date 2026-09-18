@@ -163,3 +163,8 @@ ATTACHMENT_URL_TTL_SECONDS = _env_int("ATTACHMENT_URL_TTL_SECONDS", 60 * 60 * 24
 # How long an anonymous demo visitor and their claims are kept. Set to 0 to
 # stop pruning entirely.
 DEMO_USER_TTL_HOURS = _env_int("DEMO_USER_TTL_HOURS", 24)
+# How often the container touches Supabase to keep the project from going
+# cold, and eventually paused. Ten minutes is far inside any pause window and
+# also keeps the first real request off a ~20s wake. 0 disables the loop, in
+# which case /api/keepalive falls back to touching Supabase per request.
+HEARTBEAT_INTERVAL_SECONDS = _env_int("HEARTBEAT_INTERVAL_SECONDS", 600)
