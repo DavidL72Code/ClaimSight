@@ -1,0 +1,62 @@
+name: Keep the Space awake
+
+# A "hugging pinger": outside traffic is the only thing that stops the
+# Hugging Face Space from sleeping -- nothing inside the container can do it
+# (see app/main.py). UptimeRobot was meant to be that traffic, but a cold
+# Space can take well past its 30s giveup window to boot, so the wake request
+# was aborted and logged as an outage while the Space was still coming up.
+#
+# This holds the connection open through the whole cold boot and retries until
+# the app's real JSON comes back, so it both keeps the Space warm and actually
+# completes a wake instead of giving up early.
+
+on:
+  schedule:
+    # Every 10 minutes -- matches the in-container Supabase heartbeat and is
+    # far inside HF's sleep window, so the Space should never go cold. GitHub
+    # cron is best-effort and may run late; that is fine here.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+# Never let a slow wake stack up behind the next scheduled run.
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Ping keepalive, waking the Space if it is cold
+        env:
+          # Override in repo Settings -> Secrets and variables -> Actions ->
+          # Variables if the Space URL ever changes.
+          URL: ${{ vars.KEEPALIVE_URL || 'https://davidl72code-claimsight.hf.space/api/keepalive' }}
+        run: |
+          set -u
+          attempts=8
+          gap=20
+          echo "Pinging $URL"
+          for i in $(seq 1 "$attempts"); do
+            # --max-time is per attempt: hold each request open long enough for
+            # a cold container to finish booting rather than giving up at 30s.
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' \
+              --connect-timeout 30 --max-time 120 "$URL") || code=000
+
+            # A healthy answer is 200 *and* our JSON -- a bare 200 during boot
+            # is HF's own "Space is starting" holding page, which we treat as
+            # not-yet-awake and keep waiting on.
+            if [ "$code" = "200" ] && grep -q '"status"' /tmp/body; then
+              echo "Awake on attempt $i:"
+              cat /tmp/body; echo
+              exit 0
+            fi
+
+            echo "Attempt $i/$attempts: HTTP $code, not ready yet"
+            head -c 300 /tmp/body 2>/dev/null; echo
+            [ "$i" -lt "$attempts" ] && sleep "$gap"
+          done
+
+          echo "::error::Space did not return healthy JSON after $attempts attempts"
+          exit 1
