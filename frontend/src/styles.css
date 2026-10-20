@@ -1709,6 +1709,37 @@ h1 {
   color: var(--muted);
 }
 
+/* Explicit upload button inside the dropzone, so people who don't realise the
+   whole zone is clickable still have an obvious control. */
+.upload-trigger {
+  justify-self: center;
+  margin-top: 4px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.upload-trigger:hover { background: var(--accent-hover); }
+
+/* A dropped document shows as a typed chip (PDF / DOC / TXT) rather than an
+   image thumbnail, and links to a preview in a new tab. */
+.queue-thumb.doc {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.queue-item.queue-doc { cursor: default; }
+
 .intake-actions {
   display: flex;
   flex-direction: column;

@@ -5,6 +5,16 @@ const consumerMode = portalMode === "consumer";
 const maxClientUploadBytes = 8 * 1024 * 1024;
 const maxImages = 8;
 const allowedClientMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+// Non-image attachments (estimates, police reports, receipts) share the one
+// dropzone now. Images go to the AI assessment; these are kept as supporting
+// documents. Matched by MIME when the browser gives one, else by extension.
+const allowedDocMimeTypes = new Set([
+  "application/pdf",
+  "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const allowedDocExtensions = /\.(pdf|txt|doc|docx)$/i;
 const dataEnabled = Boolean(window.sbAuth?.ready() && window.claimData);
 const consumerClaimIdsStorageKey = "claimsight.consumer-claim-ids";
 const consumerCurrentClaimStorageKey = "claimsight.consumer-current-claim";
@@ -32,7 +42,7 @@ const elements = {
   preExistingDamageInput: document.getElementById("pre-existing-damage-input"),
   incidentDateInput: document.getElementById("incident-date-input"),
   incidentDescriptionInput: document.getElementById("incident-description-input"),
-  supportingDocumentsInput: document.getElementById("supporting-documents"),
+  uploadTrigger: document.getElementById("upload-trigger"),
   saveDraft: document.getElementById("save-draft"),
   emptyPreview: document.getElementById("empty-preview"),
   previewImage: document.getElementById("preview-image"),
@@ -105,6 +115,10 @@ let queueCases = [];
 // backend uses for each detected region.
 let selectedImages = [];
 let activeImageIndex = 0;
+// Non-image uploads from the same dropzone: { file, tag }. Kept out of
+// selectedImages so the assessment still only receives images, but shown in
+// the same upload list and carried into supporting_documents on submit.
+let supportingDocs = [];
 
 const setStatus = (message) => {
   elements.status.textContent = message;
@@ -220,7 +234,7 @@ const getDraftPayload = () => ({
   pre_existing_damage: elements.preExistingDamageInput?.value?.trim?.() || "",
   incident_date: elements.incidentDateInput?.value || "",
   incident_description: elements.incidentDescriptionInput?.value?.trim?.() || "",
-  supporting_documents: Array.from(elements.supportingDocumentsInput?.files || []).map((file) => ({
+  supporting_documents: supportingDocs.map(({ file }) => ({
     name: file.name,
     size: file.size,
     type: file.type || "application/octet-stream",
@@ -374,8 +388,7 @@ const buildConsumerNotifications = (payload, statusMeta, claimReference) => {
 };
 
 const collectSupportingDocuments = async (claimReference) => {
-  const files = Array.from(elements.supportingDocumentsInput?.files || []);
-  if (!files.length) {
+  if (!supportingDocs.length) {
     return [];
   }
 
@@ -384,17 +397,18 @@ const collectSupportingDocuments = async (claimReference) => {
   // isn't configured, record the file metadata without a download URL
   // rather than failing the whole claim submission.
   if (!(await window.attachmentsEnabled())) {
-    return files.map((file) => ({
+    return supportingDocs.map(({ file, tag }) => ({
       name: file.name,
       size: file.size,
       type: file.type || "application/octet-stream",
+      evidence_type: tag || "",
       uploaded_at: uploadedAt,
     }));
   }
 
   // Supporting documents go through POST /api/attachments instead of
   // Firebase Storage, which cannot provision a bucket on the free plan.
-  const uploads = files.map(async (file) => {
+  const uploads = supportingDocs.map(async ({ file, tag }) => {
     const stored = await window.uploadClaimAttachment(
       claimReference,
       file,
@@ -404,6 +418,7 @@ const collectSupportingDocuments = async (claimReference) => {
       name: file.name,
       size: file.size,
       type: file.type || "application/octet-stream",
+      evidence_type: tag || "",
       uploaded_at: uploadedAt,
       download_url: stored.download_url,
     };
@@ -607,14 +622,15 @@ const readFileAsDataUrl = (file) =>
 const updateDropLabel = () => {
   const title = elements.dropzone.querySelector(".drop-title");
   const subtitle = elements.dropzone.querySelector(".drop-subtitle");
-  if (selectedImages.length === 0) {
-    title.textContent = "Drop claim photos here";
-    subtitle.textContent = `JPG, PNG, or WebP · up to ${maxImages} images`;
+  const total = selectedImages.length + supportingDocs.length;
+  if (total === 0) {
+    title.textContent = "Drop claim files here";
+    subtitle.textContent = `Photos, PDFs, estimates or documents · up to ${maxImages} files`;
     return;
   }
-  title.textContent = `${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} selected`;
+  title.textContent = `${total} file${total === 1 ? "" : "s"} selected`;
   subtitle.textContent =
-    selectedImages.length < maxImages ? "Click to add more · ready to assess" : "Max images reached";
+    selectedImages.length < maxImages ? "Drop or use the button to add more" : "Max images reached";
 };
 
 const formatBytes = (bytes) => {
@@ -635,11 +651,6 @@ const evidenceTypes = [
   { key: "estimate", label: "Repair estimate or invoice" },
   { key: "documents", label: "Police, tow, or storage document" },
 ];
-
-// Parallel to elements.supportingDocumentsInput.files. A FileList cannot
-// be annotated, and picking new files replaces it wholesale, so the tags
-// are reset whenever the input changes.
-let supportingDocTags = [];
 
 const evidenceTagSelect = (value, onChange) => {
   const select = document.createElement("select");
@@ -722,45 +733,13 @@ const stagedDocPreview = (file) => {
   return { thumb, view };
 };
 
-const renderSupportingDocLinks = () => {
-  const list = document.getElementById("supporting-doc-links");
-  if (!list) return;
-  const files = Array.from(elements.supportingDocumentsInput?.files || []);
-  releaseSupportingDocUrls();
-  list.innerHTML = "";
-  list.classList.toggle("hidden", files.length === 0);
-
-  files.forEach((file, index) => {
-    const row = document.createElement("div");
-    row.className = "evidence-link-row";
-
-    const { thumb, view } = stagedDocPreview(file);
-
-    const name = document.createElement("span");
-    name.className = "evidence-link-name";
-    name.textContent = file.name;
-
-    const select = evidenceTagSelect(supportingDocTags[index], (value) => {
-      supportingDocTags[index] = value;
-      row.classList.toggle("untagged", !value);
-      // field-invalid is the post-submit red state; drop it once tagged
-      if (value) row.classList.remove("field-invalid");
-      updateEvidenceChecklist();
-    });
-
-    row.classList.toggle("untagged", !supportingDocTags[index]);
-    row.append(thumb, name, select, view);
-    list.appendChild(row);
-  });
-};
-
 const getEvidenceState = () => {
   const tagged = {};
   const count = (tag) => {
     if (tag) tagged[tag] = (tagged[tag] || 0) + 1;
   };
   selectedImages.forEach((item) => count(item.evidenceTag));
-  supportingDocTags.forEach((tag) => count(tag));
+  supportingDocs.forEach((doc) => count(doc.tag));
 
   return {
     photos: (tagged.photos || 0) >= 2,
@@ -924,16 +903,22 @@ const updateEvidenceChecklist = () => {
 // The upload queue is the primary "what have I added" view, shown under the dropzone.
 const renderQueue = () => {
   elements.queueList.innerHTML = "";
+  releaseSupportingDocUrls();
   updateEvidenceChecklist();
-  if (selectedImages.length === 0) {
+
+  const total = selectedImages.length + supportingDocs.length;
+  if (total === 0) {
     elements.uploadQueue.classList.add("hidden");
     return;
   }
   elements.uploadQueue.classList.remove("hidden");
-  elements.queueCount.textContent = `${selectedImages.length} of ${maxImages} image${
-    selectedImages.length === 1 ? "" : "s"
-  }`;
+  const imgPart = `${selectedImages.length} photo${selectedImages.length === 1 ? "" : "s"}`;
+  const docPart = supportingDocs.length
+    ? ` · ${supportingDocs.length} document${supportingDocs.length === 1 ? "" : "s"}`
+    : "";
+  elements.queueCount.textContent = `${imgPart}${docPart}`;
 
+  // Images first: each previews in the main stage and feeds the AI assessment.
   selectedImages.forEach((item, index) => {
     const li = document.createElement("li");
     li.className = `queue-item${index === activeImageIndex ? " active" : ""}`;
@@ -974,7 +959,55 @@ const renderQueue = () => {
     elements.queueList.appendChild(li);
   });
 
-  // Smoothly bring the active card into view within the horizontal carousel.
+  // Documents next: shown as a typed chip with a View link, categorized the
+  // same way, but never sent to the image assessment.
+  supportingDocs.forEach((doc, index) => {
+    const li = document.createElement("li");
+    li.className = "queue-item queue-doc";
+
+    const url = URL.createObjectURL(doc.file);
+    supportingDocUrls.push(url);
+
+    const thumb = document.createElement("a");
+    thumb.className = "queue-thumb doc";
+    thumb.href = url;
+    thumb.target = "_blank";
+    thumb.rel = "noopener noreferrer";
+    thumb.textContent = supportingDocKind(doc.file);
+    thumb.setAttribute("aria-label", `View ${doc.file.name}`);
+    thumb.addEventListener("click", (event) => event.stopPropagation());
+
+    const meta = document.createElement("span");
+    meta.className = "queue-meta";
+    const name = document.createElement("strong");
+    name.textContent = doc.file.name;
+    const size = document.createElement("small");
+    size.textContent = formatBytes(doc.file.size);
+    meta.append(name, size);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "queue-remove";
+    remove.setAttribute("aria-label", `Remove ${doc.file.name}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeDoc(index);
+    });
+
+    const tag = evidenceTagSelect(doc.tag, (value) => {
+      doc.tag = value;
+      li.classList.toggle("untagged", !value);
+      if (value) li.classList.remove("field-invalid");
+      updateEvidenceChecklist();
+    });
+    li.classList.toggle("untagged", !doc.tag);
+
+    li.append(thumb, meta, tag, remove);
+    elements.queueList.appendChild(li);
+  });
+
+  // Smoothly bring the active image card into view within the carousel.
   const activeCard = elements.queueList.children[activeImageIndex];
   if (activeCard) {
     activeCard.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
@@ -983,46 +1016,71 @@ const renderQueue = () => {
 
 const addFiles = async (fileList) => {
   const incoming = Array.from(fileList);
-  let added = 0;
+  let addedImages = 0;
+  let addedDocs = 0;
   for (const file of incoming) {
-    if (selectedImages.length >= maxImages) {
-      setStatus(`You can upload up to ${maxImages} images per assessment.`);
-      break;
+    const isImage = file.type.startsWith("image/");
+    const isDoc = allowedDocMimeTypes.has(file.type) || allowedDocExtensions.test(file.name);
+
+    if (isImage) {
+      if (selectedImages.length >= maxImages) {
+        setStatus(`You can attach up to ${maxImages} images per claim.`);
+        continue;
+      }
+      if (!isValidClientImage(file)) {
+        continue;
+      }
+      const duplicate = selectedImages.some(
+        (item) => item.file.name === file.name && item.file.size === file.size
+      );
+      if (duplicate) {
+        continue;
+      }
+      const dataUrl = await readFileAsDataUrl(file);
+      // an image starts tagged as a damage photo; the user can re-categorize
+      selectedImages.push({ file, dataUrl, evidenceTag: "photos" });
+      addedImages += 1;
+    } else if (isDoc) {
+      if (file.size > maxClientUploadBytes) {
+        setStatus("Each file must be smaller than 8 MB.");
+        continue;
+      }
+      const duplicate = supportingDocs.some(
+        (doc) => doc.file.name === file.name && doc.file.size === file.size
+      );
+      if (duplicate) {
+        continue;
+      }
+      // a document has no obvious default category, so the user picks one
+      supportingDocs.push({ file, tag: "" });
+      addedDocs += 1;
+    } else {
+      setStatus("Use images (JPG, PNG, WebP) or PDF, TXT, or DOC files.");
     }
-    if (!isValidClientImage(file)) {
-      continue;
-    }
-    const duplicate = selectedImages.some(
-      (item) => item.file.name === file.name && item.file.size === file.size
-    );
-    if (duplicate) {
-      continue;
-    }
-    const dataUrl = await readFileAsDataUrl(file);
-    // dropped into the claim-photo zone, so it starts tagged as one
-    selectedImages.push({ file, dataUrl, evidenceTag: "photos" });
-    added += 1;
   }
 
-  if (added === 0 && selectedImages.length === 0) {
+  if (addedImages === 0 && addedDocs === 0) {
     return;
   }
 
   // New images invalidate any prior assessment.
-  latestAssessment = null;
-  reviewState = null;
-  elements.damageOverlay.innerHTML = "";
-  elements.downloadReport?.classList.add("hidden");
-  elements.downloadHtmlReport?.classList.add("hidden");
-  elements.saveCase?.classList.add("hidden");
-  if (activeImageIndex >= selectedImages.length) {
-    activeImageIndex = Math.max(0, selectedImages.length - 1);
+  if (addedImages) {
+    latestAssessment = null;
+    reviewState = null;
+    elements.damageOverlay.innerHTML = "";
+    elements.downloadReport?.classList.add("hidden");
+    elements.downloadHtmlReport?.classList.add("hidden");
+    elements.saveCase?.classList.add("hidden");
+    if (activeImageIndex >= selectedImages.length) {
+      activeImageIndex = Math.max(0, selectedImages.length - 1);
+    }
   }
   renderThumbs();
   renderQueue();
   showActiveImage();
   updateDropLabel();
-  setStatus(`${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} ready.`);
+  const total = selectedImages.length + supportingDocs.length;
+  setStatus(`${total} file${total === 1 ? "" : "s"} ready.`);
 };
 
 const removeImage = (index) => {
@@ -1039,18 +1097,30 @@ const removeImage = (index) => {
   renderQueue();
   showActiveImage();
   updateDropLabel();
+  const total = selectedImages.length + supportingDocs.length;
   setStatus(
-    selectedImages.length
-      ? `${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} ready.`
-      : "No claim photos selected."
+    total
+      ? `${total} file${total === 1 ? "" : "s"} ready.`
+      : "No files selected."
   );
+};
+
+// Non-image attachments removed from the shared list.
+const removeDoc = (index) => {
+  supportingDocs.splice(index, 1);
+  renderQueue();
+  updateDropLabel();
+  const total = selectedImages.length + supportingDocs.length;
+  setStatus(total ? `${total} file${total === 1 ? "" : "s"} ready.` : "No files selected.");
 };
 
 const clearQueue = () => {
   selectedImages = [];
+  supportingDocs = [];
   activeImageIndex = 0;
   latestAssessment = null;
   reviewState = null;
+  releaseSupportingDocUrls();
   elements.downloadReport?.classList.add("hidden");
   elements.downloadHtmlReport?.classList.add("hidden");
   elements.saveCase?.classList.add("hidden");
@@ -1058,7 +1128,7 @@ const clearQueue = () => {
   renderQueue();
   showActiveImage();
   updateDropLabel();
-  setStatus("No claim photos selected.");
+  setStatus("No files selected.");
 };
 
 const setActiveImage = (index) => {
@@ -1969,15 +2039,12 @@ elements.form.addEventListener("submit", async (event) => {
   const failedFields = validateRequiredFields();
 
   // An upload with no evidence type tells us nothing about what was
-  // supplied, so it blocks submit the same way an empty field does.
-  const untaggedDocs = Array.from(elements.supportingDocumentsInput?.files || [])
-    .filter((_, index) => !supportingDocTags[index]).length;
+  // supplied, so it blocks submit the same way an empty field does. Both
+  // photos and documents now live in the one upload list.
+  const untaggedDocs = supportingDocs.filter((doc) => !doc.tag).length;
   const untaggedPhotos = selectedImages.filter((item) => !item.evidenceTag).length;
 
   if (untaggedDocs || untaggedPhotos) {
-    document.getElementById("supporting-doc-links")
-      ?.querySelectorAll(".evidence-link-row.untagged")
-      .forEach((row) => row.classList.add("field-invalid"));
     elements.queueList?.querySelectorAll(".queue-item.untagged")
       .forEach((row) => row.classList.add("field-invalid"));
   }
@@ -2081,15 +2148,15 @@ elements.saveDraft?.addEventListener("click", saveConsumerDraft);
   elements.vehicleYearInput,
   elements.incidentDateInput,
   elements.incidentDescriptionInput,
-  elements.supportingDocumentsInput,
 ].forEach((input) => input?.addEventListener("input", updateEvidenceChecklist));
 
-// Picking files replaces the FileList outright, so the tags start over.
-elements.supportingDocumentsInput?.addEventListener("change", () => {
-  supportingDocTags = Array.from(elements.supportingDocumentsInput.files || []).map(() => "");
-  renderSupportingDocLinks();
-  updateEvidenceChecklist();
+// The dropzone is a div now (so it can hold a real Upload button without the
+// button double-opening the picker), so wire the click through ourselves.
+elements.uploadTrigger?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  elements.fileInput.click();
 });
+elements.dropzone?.addEventListener("click", () => elements.fileInput.click());
 
 elements.previewImage.addEventListener("load", renderActiveOverlay);
 

@@ -62,11 +62,12 @@
           </div>
           <form id="upload-form" class="upload-form">
             <div class="intake-main">
-              <label class="dropzone" for="claim-image" id="dropzone">
-                <input id="claim-image" name="files" type="file" accept="image/*" multiple hidden />
-                <span class="drop-title">Drop claim photos here</span>
-                <span class="drop-subtitle">JPG, PNG, or WebP · up to 8 images</span>
-              </label>
+              <div class="dropzone" id="dropzone">
+                <input id="claim-image" name="files" type="file" accept="image/*,.pdf,.txt,.doc,.docx" multiple hidden />
+                <span class="drop-title">Drop claim files here</span>
+                <span class="drop-subtitle">Photos, PDFs, estimates or documents · up to 8 files</span>
+                <button type="button" id="upload-trigger" class="upload-trigger">Upload files</button>
+              </div>
               <div class="intake-actions">
                 <button type="submit" class="cta">Submit claim</button>
                 <button id="save-draft" type="button" class="secondary-action">Continue later</button>
@@ -111,17 +112,6 @@
                 <label class="vehicle-notes">
                   <span>What happened?</span>
                   <textarea id="incident-description-input" name="incident_description" rows="3" placeholder="Describe where the impact occurred and what damage you noticed."></textarea>
-                </label>
-                <label class="vehicle-notes">
-                  <span>Supporting documents</span>
-                  <input
-                    id="supporting-documents"
-                    name="supporting_documents"
-                    type="file"
-                    accept="image/*,.pdf,.doc,.docx"
-                    multiple
-                  />
-                  <div id="supporting-doc-links" class="evidence-link-list hidden" aria-label="Evidence type for each document"></div>
                 </label>
               </div>
               <section class="evidence-checklist-card claim-form-checklist" aria-label="Evidence checklist">
