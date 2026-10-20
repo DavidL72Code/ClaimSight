@@ -449,6 +449,12 @@ const normalize = (docId, payload = {}) => {
     reasoning: payload.total_loss_reason || payload.summary || "Reasoning will appear after review.",
     reviewer_name: review.reviewer_name || payload.reviewer_name || "",
     assigned_agent: payload.assigned_agent || null,
+    // The reviewer's working trail, and whether that reviewer is the demo
+    // stand-in. Only a simulated assignment turns on the "watch the adjuster
+    // work" panel, so a real human-reviewed claim never shows it even on a
+    // deployment that also serves the demo.
+    review_steps: Array.isArray(payload.review_steps) ? payload.review_steps : [],
+    is_simulated_review: Boolean(payload.assigned_agent?.simulated),
     adjuster_note: adjusterNote,
     supporting_documents: payload.supporting_documents || [],
     reviewer_evidence: payload.reviewer_evidence || payload.internal_reviewer_evidence || [],
@@ -880,6 +886,9 @@ if (dataEnabled) {
     detailStatusCopy: document.getElementById("consumer-detail-status-copy"),
     detailEmpty: document.getElementById("consumer-claim-detail-empty"),
     detailCard: document.getElementById("consumer-claim-detail"),
+    reviewProcess: document.getElementById("consumer-review-process"),
+    reviewProcessStatus: document.getElementById("consumer-review-process-status"),
+    reviewProcessSteps: document.getElementById("consumer-review-process-steps"),
     detailReference: document.getElementById("consumer-detail-reference"),
     detailVehicle: document.getElementById("consumer-detail-vehicle"),
     detailReviewer: document.getElementById("consumer-detail-reviewer"),
@@ -1486,18 +1495,96 @@ if (dataEnabled) {
     await refreshPortal();
   };
 
+  // Plain-English gerund for the step about to run, for the "working now" cue.
+  const demoWorkingPhrase = (title = "") => {
+    const t = title.toLowerCase();
+    if (t.includes("pick up")) return "Opening your claim from the queue…";
+    if (t.includes("first pass")) return "Reading the AI's first-pass assessment…";
+    if (t.includes("verify")) return "Reviewing your damage photos…";
+    if (t.includes("challenge")) return "Pressure-testing the AI estimate…";
+    if (t.includes("adjust") || t.includes("accept")) return "Recalculating the repair cost…";
+    if (t.includes("decide") || t.includes("decision")) return "Recording the decision…";
+    if (t.includes("release")) return "Finalizing and releasing to you…";
+    return "Working your claim…";
+  };
+
+  const money = (value) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? `$${Math.round(value).toLocaleString()}`
+      : "";
+
+  // Demo only: the simulated adjuster's working trail, streamed as it happens.
+  // Mirrors the employee portal's step cards (shared CSS) and adds the
+  // before→after cost so "recalculated the damage" is shown, not just said.
+  const renderReviewProcess = (selected) => {
+    if (!elements.reviewProcess) return;
+
+    const steps = Array.isArray(selected?.review_steps) ? selected.review_steps : [];
+    const show =
+      Boolean(selected?.is_simulated_review) &&
+      !selected?.report_ready &&
+      (steps.length > 0 || demoDriveActive);
+
+    elements.reviewProcess.classList.toggle("hidden", !show);
+    if (!show) return;
+
+    const ordered = [...steps].sort((a, b) => (a.seq || 0) - (b.seq || 0));
+    elements.reviewProcessSteps.innerHTML = ordered.length
+      ? ordered
+          .map((step) => {
+            const findings =
+              Array.isArray(step.findings) && step.findings.length
+                ? `<ul class="review-step-findings">${step.findings
+                    .map((f) => `<li>${escapeHtml(String(f))}</li>`)
+                    .join("")}</ul>`
+                : "";
+            const prev = money(step.previous_cost_usd);
+            const next = money(step.reviewed_cost_usd);
+            const cost =
+              prev && next
+                ? `<p class="review-step-cost">${escapeHtml(prev)} <span aria-hidden="true">→</span> <strong>${escapeHtml(next)}</strong></p>`
+                : "";
+            return `
+      <article class="review-step">
+        <span class="review-step-seq" aria-hidden="true">${escapeHtml(String(step.seq || "•"))}</span>
+        <div class="review-step-body">
+          <strong>${escapeHtml(step.title || "Review step")}</strong>
+          <p>${escapeHtml(step.detail || "")}</p>
+          ${cost}
+          ${findings}
+          <span class="review-step-meta">Simulated reviewer · ${escapeHtml(formatDate(step.at))}</span>
+        </div>
+      </article>`;
+          })
+          .join("")
+      : '<article class="review-step empty">Starting the review…</article>';
+
+    // While the loop is driving, it owns the status line (the live "working
+    // now" cue). Otherwise summarise where the trail got to.
+    if (!demoDriveActive && elements.reviewProcessStatus) {
+      const total = STEP_TOTAL;
+      elements.reviewProcessStatus.textContent =
+        ordered.length >= total
+          ? "Review complete"
+          : `${ordered.length} of ${total} steps`;
+    }
+  };
+
   const renderSelectedClaim = () => {
     const selected = ensureSelectedClaim();
     if (!selected) {
       setClaimReviewStatus(elements.detailStatus, "Waiting for selection", "submitted");
       elements.detailEmpty?.classList.remove("hidden");
       elements.detailCard?.classList.add("hidden");
+      elements.reviewProcess?.classList.add("hidden");
       if (elements.finalStatus) elements.finalStatus.textContent = "Read-only report access";
       elements.finalEmpty?.classList.remove("hidden");
       elements.finalCard?.classList.add("hidden");
       elements.finalExport?.classList.add("hidden");
       return;
     }
+
+    renderReviewProcess(selected);
 
     setClaimReviewStatus(elements.detailStatus, selected.status_label, selected.status_code);
     if (elements.detailStatusCopy) elements.detailStatusCopy.textContent = selected.status_label;
@@ -1736,9 +1823,103 @@ if (dataEnabled) {
 
   window.addEventListener("beforeunload", () => unsubscribeClaims?.());
 
+  // ── demo: drive the simulated adjuster ──────────────────────────────────
+  // app.js enrolls a freshly submitted claim with the demo reviewer, then
+  // redirects here and leaves a flag naming it. There is no real adjuster in
+  // the demo, so nothing advances the review unless we do it from the customer
+  // side. We step it to completion here, where the live subscription animates
+  // each step and finally unlocks Decision Review and the Final Report.
+  //
+  // Everything here is a demo nicety: any failure (not a demo backend, storage
+  // blocked, model hiccup) is swallowed, because the claim is already safely
+  // submitted and a broken extra must never read as a broken submission.
+  const demoAutoAdvanceStorageKey = "claimsight.demo-autoadvance";
+  const STEP_TOTAL = 7; // matches STEP_PLAN in app/services/demo_reviewer.py
+  let demoDriveActive = false;
+
+  const demoStep = async (caseId, token) => {
+    const base = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
+    const response = await fetch(`${base}/api/demo/review/step`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ case_id: caseId }),
+    });
+    // 404: not a demo deployment. 409: already complete. Either way, stop.
+    if (response.status === 404 || response.status === 409) return null;
+    if (!response.ok) throw new Error(`demo step ${response.status}`);
+    return response.json();
+  };
+
+  const autoAdvanceDemoReview = async () => {
+    if (demoDriveActive) return;
+
+    let caseId = "";
+    try {
+      caseId = window.localStorage.getItem(demoAutoAdvanceStorageKey) || "";
+    } catch {
+      caseId = "";
+    }
+    if (!caseId) return;
+
+    // Clear up front so a reload or a second tab cannot double-drive the same
+    // claim; if it turns out not to be ours we simply never started.
+    try {
+      window.localStorage.removeItem(demoAutoAdvanceStorageKey);
+    } catch {
+      /* ignore */
+    }
+    if (!ownClaims.some((claim) => claim.id === caseId)) return;
+
+    demoDriveActive = true;
+    // The first step is always the queue pickup; later cues come from the
+    // server's next_step_title as each step reports what comes next.
+    let nextTitle = "Pick up from queue";
+    const showCue = (title) => {
+      if (!elements.reviewProcess || !elements.reviewProcessStatus) return;
+      elements.reviewProcess.classList.remove("hidden");
+      elements.reviewProcessStatus.textContent = demoWorkingPhrase(title);
+    };
+    try {
+      // One extra past the known step count is the safety cap: the server is
+      // the real stop, via the null it returns once the review is done.
+      for (let i = 0; i < STEP_TOTAL + 1; i += 1) {
+        const token = await window.sbAuth?.accessToken?.();
+        if (!token) break;
+
+        // Say what the adjuster is doing now, before the result lands.
+        showCue(nextTitle);
+
+        const state = await demoStep(caseId, token);
+        if (!state) break;
+
+        // Reflect the step the subscription may not have pushed yet, and pace
+        // the loop so a watcher sees the adjuster work rather than a blur.
+        await refreshPortal();
+        if (state.done) {
+          if (elements.reviewProcessStatus) {
+            elements.reviewProcessStatus.textContent = "Review complete";
+          }
+          break;
+        }
+        nextTitle = state.next_step_title || "";
+        showCue(nextTitle); // keep the cue up through the pause
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    } catch (error) {
+      console.debug("Demo auto-advance stopped:", error);
+    } finally {
+      demoDriveActive = false;
+    }
+  };
+
   window.sbAuth.onChange((user) => {
     currentCustomer = user;
-    refreshPortal();
+    refreshPortal().then(() => {
+      if (user) autoAdvanceDemoReview();
+    });
     subscribeToClaims(user);
   });
 } else {

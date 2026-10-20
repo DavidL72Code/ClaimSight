@@ -296,6 +296,17 @@ const requestDemoReview = async (claimReference) => {
         `Claim ${claimReference} submitted. An adjuster will pick it up shortly.`,
       );
     }
+
+    // The demo has no second person to work the queue, so hand the claim to
+    // the portal page: it drives the simulated adjuster step by step once the
+    // customer lands there, which is where they can watch each step arrive.
+    // Flag-based so only this freshly enrolled claim is auto-advanced, never
+    // an unrelated one the customer already had.
+    try {
+      window.localStorage.setItem("claimsight.demo-autoadvance", claimReference);
+    } catch {
+      // Private-mode storage failure just means no auto-advance; harmless.
+    }
   } catch (error) {
     console.debug("Demo enrol request failed:", error);
   }
@@ -2048,7 +2059,10 @@ elements.form.addEventListener("submit", async (event) => {
         setStatus(`Assessment complete. Claim ${claimReference} submitted.`);
         await requestDemoReview(claimReference);
         window.ClaimSightConsumer?.refreshPortal?.();
-        window.location.href = `./messages.html?claim=${encodeURIComponent(claimReference)}`;
+        // Land on Decision Review, not Messages: in the demo this is where the
+        // live "adjuster review in progress" panel streams each step, so the
+        // customer watches the review happen instead of arriving after it.
+        window.location.href = `./case-review.html?claim=${encodeURIComponent(claimReference)}`;
       } else {
         setStatus("Assessment complete.");
       }

@@ -59,6 +59,20 @@
           <strong id="consumer-detail-status" class="claim-review-status">Waiting for selection</strong>
         </header>
 
+        <!-- Demo only: shown by consumer-case.js when the claim is assigned to
+             the simulated reviewer. Streams the adjuster's work (checks run,
+             estimate recalculated) step by step while the review runs, so the
+             visitor watches it happen instead of waiting on a locked page. A
+             real human-reviewed claim never has a simulated assignment, so this
+             stays hidden there. -->
+        <section id="consumer-review-process" class="review-process-live hidden" aria-live="polite">
+          <div class="review-process-live-head">
+            <span class="review-process-live-title">Adjuster review in progress</span>
+            <span id="consumer-review-process-status" class="review-process-live-status"></span>
+          </div>
+          <div id="consumer-review-process-steps" class="review-step-list"></div>
+        </section>
+
         <div id="consumer-claim-detail-empty" class="consumer-detail-empty claim-review-empty">
           <strong>No decision is ready yet</strong>
           <p>This page unlocks after an adjuster completes the human review.</p>
