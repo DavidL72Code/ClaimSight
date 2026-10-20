@@ -184,33 +184,41 @@ customerForgotPassword?.addEventListener("click", async () => {
 // One-click trial: no email, no password, no confirmation step. The visitor
 // gets a real Supabase session, so the app behaves exactly as it does for a
 // signed-up customer and RLS scopes them to their own claims.
-const demoStart = document.getElementById("home-demo-start");
-const demoStatus = document.getElementById("home-demo-status");
-
-demoStart?.addEventListener("click", async () => {
+// The demo entry lives in two places now: the hero (so a signed-out visitor
+// bounced back here by the portal guard has an obvious one-click way in) and
+// the login modal. Both run the same anonymous sign-in.
+const startDemo = async (button, status) => {
   if (!authEnabled) {
-    if (demoStatus) demoStatus.textContent = "The demo is not configured yet.";
+    if (status) status.textContent = "The demo is not configured yet.";
     return;
   }
-  demoStart.disabled = true;
-  const original = demoStart.textContent;
-  demoStart.textContent = "Starting demo...";
+  button.disabled = true;
+  const original = button.textContent;
+  button.textContent = "Starting demo...";
   try {
     await window.sbAuth.signInAnonymously();
     window.location.href = "./dashboard.html";
   } catch (error) {
-    demoStart.disabled = false;
-    demoStart.textContent = original;
+    button.disabled = false;
+    button.textContent = original;
     // Anonymous sign-ins are a project setting, so say which one when it is
     // off rather than showing the raw provider error.
     const disabled = String(error?.code || error?.message || "").includes("anonymous");
-    if (demoStatus) {
-      demoStatus.textContent = disabled
+    if (status) {
+      status.textContent = disabled
         ? "The demo is turned off. Enable Anonymous sign-ins in Supabase to switch it on."
         : (error?.message || "Could not start the demo.");
     }
   }
-});
+};
+
+const demoStart = document.getElementById("home-demo-start");
+const demoStatus = document.getElementById("home-demo-status");
+demoStart?.addEventListener("click", () => startDemo(demoStart, demoStatus));
+
+const heroDemoStart = document.getElementById("hero-demo-start");
+const heroDemoStatus = document.getElementById("hero-demo-status");
+heroDemoStart?.addEventListener("click", () => startDemo(heroDemoStart, heroDemoStatus));
 
 customerLoginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
