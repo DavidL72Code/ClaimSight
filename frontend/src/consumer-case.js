@@ -1874,6 +1874,17 @@ if (dataEnabled) {
     if (!ownClaims.some((claim) => claim.id === caseId)) return;
 
     demoDriveActive = true;
+    // Reveal the panel and bring it on-screen before the first step lands, so
+    // the streaming is impossible to miss even if the page opened scrolled
+    // past it.
+    if (elements.reviewProcess) {
+      elements.reviewProcess.classList.remove("hidden");
+      try {
+        elements.reviewProcess.scrollIntoView({ block: "center", behavior: "smooth" });
+      } catch {
+        /* older browsers: ignore */
+      }
+    }
     // The first step is always the queue pickup; later cues come from the
     // server's next_step_title as each step reports what comes next.
     let nextTitle = "Pick up from queue";
@@ -1906,7 +1917,8 @@ if (dataEnabled) {
         }
         nextTitle = state.next_step_title || "";
         showCue(nextTitle); // keep the cue up through the pause
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        // Paced so a watcher sees each step arrive rather than a blur.
+        await new Promise((resolve) => setTimeout(resolve, 1600));
       }
     } catch (error) {
       console.debug("Demo auto-advance stopped:", error);
