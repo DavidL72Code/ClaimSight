@@ -582,70 +582,174 @@ const buildReportPdf = (item = {}) => {
     || raw.valuation_comparable_prices_usd || [];
   const sources = item.sources || raw.sources || [];
 
-  // Every line the report wants to print, in order. Pagination happens
-  // afterwards, so nothing is dropped to fit — the previous version
-  // capped at 44 lines and 12 line items and silently discarded the
-  // rest, which on a long total-loss write-up removed the whole
-  // itemisation section including its heading.
-  const lines = [
-    { text: "ClaimSight Final Report", size: 20, bold: true, gap: 26 },
-    { text: `Claim: ${item.claim_reference || item.id || "Unavailable"}`, bold: true },
-    { text: `Vehicle: ${item.vehicle_type || "Unavailable"}` },
-    { text: `Status: ${item.status_label || "Finalized"}` },
-    { text: `Adjuster: ${item.reviewer_name || item.assigned_agent?.name || "Unavailable"}` },
+  // Fields that make the document read like an official settlement report
+  // rather than a flat dump of lines.
+  const ctx = raw.claim_context || {};
+  const vehicleLabel = item.vehicle_type
+    || [item.year || ctx.year, item.make || ctx.make, item.model || ctx.model].filter(Boolean).join(" ")
+    || "Unavailable";
+  const mileage = item.mileage ?? ctx.mileage ?? null;
+  const severity = raw.overall_severity || item.overall_severity || "";
+  const summary = raw.summary || "";
+  const photoCount = raw.meta?.image_count ?? raw.image_count ?? 0;
+  const docs = item.supporting_documents || raw.supporting_documents || [];
+  const evidenceLabel = {
+    photos: "Damage photo",
+    vin: "VIN / odometer photo",
+    estimate: "Repair estimate / invoice",
+    documents: "Police, tow or storage doc",
+  };
+  const today = new Date().toLocaleDateString("en-US", {
+    year: "numeric", month: "long", day: "numeric",
+  });
 
-    // ── the settlement decision, and the numbers behind it ────────
-    { text: "Settlement", bold: true, gap: 22 },
-    {
-      text: `Outcome: ${outcomePending
-        ? "Pending - adjuster to set vehicle value"
-        : (isTotalLoss ? "Total loss" : "Repair")}`,
-      bold: true,
-    },
-    { text: `Assessed vehicle value: ${money(vehicleValue)}` },
-    { text: `AI first-pass estimate: ${money(aiTotal)}` },
-    { text: `Reviewed estimate: ${money(reviewedTotal)}`, bold: true },
-  ];
+  // Each entry is a text line, a horizontal rule, or a two-column row. The
+  // renderer and the paginator below both understand all three. Pagination
+  // happens afterwards so nothing is dropped to fit.
+  const lines = [];
+  const heading = (text) => {
+    lines.push({ text, bold: true, size: 12, gap: 26 });
+    lines.push({ rule: true, gap: 6 });
+  };
+  const kv = (label, value) =>
+    lines.push({
+      cols: [
+        { text: label, x: 54 },
+        { text: value === "" || value == null ? "—" : String(value), x: 250, bold: true },
+      ],
+      gap: 15,
+    });
+  const para = (text, size = 10) =>
+    wrapReportText(text || "—").forEach((t) => lines.push({ text: t, size, gap: size <= 8 ? 11 : 13 }));
 
+  // ── letterhead ────────────────────────────────────────────────
+  lines.push({ text: "CLAIM SETTLEMENT REPORT", bold: true, size: 20, gap: 30 });
+  lines.push({ text: "ClaimSight — AI first-pass assessment with mandatory human adjuster review", size: 9, gap: 14 });
+  lines.push({ rule: true, gap: 10 });
+  lines.push({
+    cols: [
+      { text: `Claim ${item.claim_reference || item.id || "—"}`, x: 54, bold: true },
+      { text: `Issued ${today}`, x: 320 },
+    ],
+    gap: 16,
+  });
+  lines.push({
+    cols: [
+      { text: `Status: ${item.status_label || "Finalized"}`, x: 54 },
+      { text: `Adjuster: ${item.reviewer_name || item.assigned_agent?.name || "—"}`, x: 320 },
+    ],
+    gap: 15,
+  });
+
+  // ── the headline decision ─────────────────────────────────────
+  heading("SETTLEMENT DECISION");
+  kv("Outcome", outcomePending
+    ? "Pending — adjuster to set vehicle value"
+    : (isTotalLoss ? "Total loss" : "Repair"));
+  kv("Final action", item.final_action);
+  kv("Reviewed settlement", money(reviewedTotal || aiTotal));
+
+  // ── vehicle ───────────────────────────────────────────────────
+  heading("VEHICLE INFORMATION");
+  kv("Vehicle", vehicleLabel);
+  if (item.trim || ctx.trim) kv("Trim", item.trim || ctx.trim);
+  kv("Mileage", mileage != null ? `${Number(mileage).toLocaleString()} mi` : "Not provided");
+  kv("Assessed market value", money(vehicleValue));
+
+  // ── evidence ──────────────────────────────────────────────────
+  heading("EVIDENCE REVIEWED");
+  kv("Damage photos", photoCount ? `${photoCount} image${photoCount === 1 ? "" : "s"}` : "On file");
+  if (docs.length) {
+    docs.forEach((d) => lines.push({
+      cols: [
+        { text: `• ${d.name || "Document"}`, x: 54 },
+        { text: evidenceLabel[d.evidence_type] || "Supporting document", x: 320 },
+      ],
+      gap: 14,
+    }));
+  } else {
+    lines.push({ text: "No additional documents were submitted.", gap: 14 });
+  }
+
+  // ── AI first pass ─────────────────────────────────────────────
+  heading("AI FIRST PASS");
+  kv("Overall severity", severity);
+  kv("AI estimated repair", money(aiTotal));
+  kv("AI recommended action", item.ai_action);
+  if (summary) {
+    lines.push({ text: "Summary", bold: true, gap: 18 });
+    para(summary);
+  }
+
+  // ── adjuster review and rationale ─────────────────────────────
+  heading("ADJUSTER REVIEW");
+  kv("Reviewed by", item.reviewer_name || item.assigned_agent?.name || "—");
+  kv("Reviewed estimate", money(reviewedTotal));
+  lines.push({ text: "Rationale", bold: true, gap: 18 });
+  para(item.reasoning || totalLossReason);
+  if (item.adjuster_note) {
+    lines.push({ text: "Adjuster note", bold: true, gap: 18 });
+    para(item.adjuster_note);
+  }
   if (isTotalLoss) {
-    lines.push({ text: "Why this is a total loss", bold: true, gap: 20 });
-    lines.push(...wrapReportText(
-      totalLossReason
+    lines.push({ text: "Why this is a total loss", bold: true, gap: 18 });
+    para(totalLossReason
       || (vehicleValue > 0
         ? `Repair cost of ${money(reviewedTotal || aiTotal)} is uneconomic against an assessed vehicle value of ${money(vehicleValue)}.`
-        : "The vehicle was assessed as uneconomic to repair.")
-    ).map((text) => ({ text })));
+        : "The vehicle was assessed as uneconomic to repair."));
+  }
+  if (methodology || comparables.length) {
+    lines.push({ text: "How the vehicle was valued", bold: true, gap: 18 });
+    if (methodology) para(methodology);
+    if (comparables.length) kv("Comparable listings", comparables.map(money).join(", "));
   }
 
-  // ── how the vehicle was valued ────────────────────────────────
-  if (methodology || comparables.length || sources.length) {
-    lines.push({ text: "How the vehicle was valued", bold: true, gap: 20 });
-    if (methodology) lines.push(...wrapReportText(methodology).map((text) => ({ text })));
-    if (comparables.length) {
-      lines.push({ text: `Comparable listings: ${comparables.map(money).join(", ")}` });
-    }
-    sources.slice(0, 6).forEach((source) => {
-      const label = source.title || source.name || source.uri || source.url || "";
-      if (label) lines.push(...wrapReportText(`Source: ${label}`).map((text) => ({ text })));
-    });
-  }
-
-  lines.push({ text: "Final action", bold: true, gap: 20 });
-  lines.push(...wrapReportText(item.final_action).map((text) => ({ text })));
-  lines.push({ text: "Adjuster note", bold: true, gap: 20 });
-  lines.push(...wrapReportText(item.adjuster_note).map((text) => ({ text })));
-  lines.push({ text: "Claim reasoning", bold: true, gap: 20 });
-  lines.push(...wrapReportText(item.reasoning).map((text) => ({ text })));
-
-  lines.push({ text: "Reviewed estimate items", bold: true, gap: 20 });
+  // ── itemised quote ────────────────────────────────────────────
+  heading("REPAIR QUOTE BREAKDOWN");
+  lines.push({
+    cols: [
+      { text: "ITEM", x: 54, bold: true, size: 9 },
+      { text: "AMOUNT", x: 460, bold: true, size: 9 },
+    ],
+    gap: 16,
+  });
+  lines.push({ rule: true, gap: 4 });
   if (lineItems.length) {
     lineItems.forEach((entry) => {
       const label = entry.description || entry.panel || entry.category || "Estimate item";
-      lines.push({ text: `${label} - ${money(entry.total_usd ?? entry.estimated_repair_cost_usd)}` });
+      lines.push({
+        cols: [
+          { text: label, x: 54 },
+          { text: money(entry.total_usd ?? entry.estimated_repair_cost_usd), x: 460 },
+        ],
+        gap: 15,
+      });
     });
   } else {
-    lines.push({ text: "No itemised estimate recorded." });
+    lines.push({ text: "No itemised estimate was recorded for this claim.", gap: 15 });
   }
+  lines.push({ rule: true, gap: 10 });
+  lines.push({
+    cols: [
+      { text: "AI first-pass total", x: 54 },
+      { text: money(aiTotal), x: 460 },
+    ],
+    gap: 15,
+  });
+  lines.push({
+    cols: [
+      { text: "Reviewed settlement total", x: 54, bold: true },
+      { text: money(reviewedTotal || aiTotal), x: 460, bold: true },
+    ],
+    gap: 15,
+  });
+
+  // ── footer note ───────────────────────────────────────────────
+  lines.push({ rule: true, gap: 28 });
+  para(
+    "This report was produced by ClaimSight from an AI first-pass assessment reviewed and adjusted by a human adjuster. Figures are estimates provided for claim settlement purposes.",
+    8,
+  );
 
   // ── paginate ──────────────────────────────────────────────────
   const TOP = 748;
@@ -669,13 +773,27 @@ const buildReportPdf = (item = {}) => {
   if (current.length) pages.push(current);
 
   const pageCount = pages.length;
+  const drawText = (text, x, y, bold, size) =>
+    `BT /${bold ? "F2" : "F1"} ${size || 10} Tf ${x} ${y} Td (${pdfSafeText(text)}) Tj ET`;
   const contentStreams = pages.map((page, pageIndex) => {
     const body = page
-      .map((line) => `BT /${line.bold ? "F2" : "F1"} ${line.size || 10} Tf 54 ${line.y} Td (${pdfSafeText(line.text)}) Tj ET`)
+      .map((line) => {
+        if (line.rule) {
+          // A thin rule under a heading or above a total.
+          return `0.6 w 54 ${line.y + 3} m 558 ${line.y + 3} l S`;
+        }
+        if (line.cols) {
+          return line.cols
+            .map((c) => drawText(c.text, c.x, line.y, c.bold, c.size || line.size))
+            .join("\n");
+        }
+        return drawText(line.text, line.x || 54, line.y, line.bold, line.size);
+      })
       .join("\n");
-    const footer = `BT /F1 8 Tf 54 36 Td (${pdfSafeText(
-      `${item.claim_reference || item.id || "Claim"} - page ${pageIndex + 1} of ${pageCount}`
-    )}) Tj ET`;
+    const footer = drawText(
+      `${item.claim_reference || item.id || "Claim"}  ·  ClaimSight settlement report  ·  page ${pageIndex + 1} of ${pageCount}`,
+      54, 36, false, 8
+    );
     return `${body}\n${footer}`;
   });
 
